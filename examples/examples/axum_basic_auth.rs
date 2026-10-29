@@ -16,8 +16,8 @@ use axum_auth_chained::{
     authentication::{Authenticated, RequestAuthenticatorExt},
     authorization::{AuthenticatedAuthorizationProvider, empty_context_mapper},
     basic::{
-        AsyncStringPasswordManager, BasicRequestAuthenticator, InMemoryUserDetailService,
-        UserDetail, UserDetailAuthenticationProvider,
+        AsyncStringPasswordManager, Authority, BasicRequestAuthenticator,
+        InMemoryUserDetailService, UserDetail, UserDetailAuthenticationProvider,
     },
 };
 use std::{num::NonZeroUsize, sync::Arc, thread};
@@ -101,8 +101,12 @@ async fn create_basic_authenticator<'a>() -> BasicRequestAuthenticator<
     let manager: AsyncStringPasswordManager<Argon2> =
         AsyncStringPasswordManager::new(Handle::current(), argon2, max_concurrent);
     let raw_users = vec![
-        UserDetail::new("alex", "alex123"),
-        UserDetail::new("max", "max123"),
+        UserDetail::new(
+            "alex",
+            "alex123",
+            vec![Authority::new("Admin"), Authority::new("Reader")],
+        ),
+        UserDetail::new("max", "max123", vec![Authority::new("Reader")]),
     ];
     let user_detail_service = InMemoryUserDetailService::new((&manager, raw_users))
         .await

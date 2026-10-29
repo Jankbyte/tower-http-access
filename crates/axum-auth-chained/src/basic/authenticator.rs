@@ -60,8 +60,8 @@ pub trait UsernamePasswordAuthenticationProvider: Send + Sync {
 /// ```rust
 /// use argon2::Argon2;
 /// use axum_auth_chained::basic::{
-///     AsyncStringPasswordManager, BasicRequestAuthenticator, InMemoryUserDetailService,
-///     UserDetail, UserDetailAuthenticationProvider,
+///     Authority, AsyncStringPasswordManager, BasicRequestAuthenticator,
+///     InMemoryUserDetailService, UserDetail, UserDetailAuthenticationProvider,
 /// };
 /// use std::num::NonZeroUsize;
 /// use tokio::runtime::Handle;
@@ -72,8 +72,8 @@ pub trait UsernamePasswordAuthenticationProvider: Send + Sync {
 ///     AsyncStringPasswordManager::new(Handle::current(), Argon2::default(), NonZeroUsize::new(2).unwrap());
 ///
 /// let raw_users = vec![
-///     UserDetail::new("alex", "alex123"),
-///     UserDetail::new("max", "max123"),
+///     UserDetail::new("alex", "alex123", vec![Authority::new("Admin")]),
+///     UserDetail::new("max", "max123", vec![Authority::new("Reader")]),
 /// ];
 ///
 /// let user_detail_service = InMemoryUserDetailService::new((&manager, raw_users))

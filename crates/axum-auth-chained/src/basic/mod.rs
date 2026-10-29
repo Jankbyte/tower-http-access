@@ -15,6 +15,6 @@ pub use authenticator::{
 };
 pub use base64::BasicCredentials;
 pub use user_detail::{
-    InMemoryUserDetailService, UserDetail, UserDetailAuthenticationError,
+    Authority, InMemoryUserDetailService, UserDetail, UserDetailAuthenticationError,
     UserDetailAuthenticationProvider, UserDetailService,
 };

@@ -7,6 +7,17 @@ use std::error::Error as StdError;
 use std::pin::Pin;
 use std::sync::Arc;
 
+/// A named role, permission, or other authority granted to a user.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct Authority(pub String);
+
+impl Authority {
+    /// Create a named authority.
+    pub fn new(name: impl Into<String>) -> Self {
+        Self(name.into())
+    }
+}
+
 /// The base representation of authenticated user, used by [`BasicRequestAuthenticator`].
 ///
 /// [`BasicRequestAuthenticator`]: crate::basic::BasicRequestAuthenticator
@@ -18,16 +29,19 @@ pub struct UserDetail {
     ///
     /// [`AsyncPasswordHasher`]: crate::basic::AsyncPasswordHasher
     pub hashed_password: String,
+    /// Roles, permissions, and other authorities granted to the user.
+    pub authorities: Vec<Authority>,
 }
 
 impl UserDetail {
     /// Create new user detail with username and hashed password.
     ///
     /// Password must be hashed with [`AsyncPasswordHasher`].
-    pub fn new(username: &str, hashed_password: &str) -> Self {
+    pub fn new(username: &str, hashed_password: &str, authorities: Vec<Authority>) -> Self {
         Self {
             username: username.to_owned(),
             hashed_password: hashed_password.to_owned(),
+            authorities,
         }
     }
 }
@@ -56,7 +70,7 @@ pub trait UserDetailService: Send + Sync {
 ///
 /// ```rust
 /// use argon2::Argon2;
-/// use axum_auth_chained::basic::{AsyncStringPasswordManager, InMemoryUserDetailService, UserDetail};
+/// use axum_auth_chained::basic::{Authority, AsyncStringPasswordManager, InMemoryUserDetailService, UserDetail};
 /// use std::num::NonZeroUsize;
 /// use tokio::runtime::Handle;
 ///
@@ -67,8 +81,8 @@ pub trait UserDetailService: Send + Sync {
 ///
 /// // Do not encrypt passwords on this phase
 /// let raw_users = vec![
-///     UserDetail::new("alex", "alex123"),
-///     UserDetail::new("max", "max123"),
+///     UserDetail::new("alex", "alex123", vec![Authority::new("Admin")]),
+///     UserDetail::new("max", "max123", vec![Authority::new("Reader")]),
 /// ];
 ///
 /// let user_detail_service = InMemoryUserDetailService::new((&manager, raw_users))
@@ -242,6 +256,7 @@ mod tests {
         let user_detail = UserDetail {
             username: username.to_owned(),
             hashed_password: "alex123".to_owned(),
+            authorities: vec![Authority::new("WATCH_SELF")],
         };
 
         users.insert(username.to_owned(), user_detail);
@@ -254,6 +269,7 @@ mod tests {
             .expect("User exists");
 
         assert_eq!(user_detail.username.as_str(), username);
+        assert_eq!(user_detail.authorities, [Authority::new("WATCH_SELF")]);
     }
 
     #[test]

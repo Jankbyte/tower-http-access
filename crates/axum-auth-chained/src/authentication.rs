@@ -283,6 +283,15 @@ where
 
 /// The implementation of [`RequestAuthenticator`], that accept another
 /// authenticators and build ordered chain.
+///
+/// # Single authenticator per method
+///
+/// It recommends to keep one authenticator per required method, otherwise next authenticator will be
+/// skipped after first failed.
+///
+/// For example, you *can* add multiple authenticators, that process basic-authentication. But other authenticators
+/// in this chain will useless, except first, because first authenticator will return [`AuthenticationErrorReason::WrongCredentials`]
+/// and that out of the chain.
 pub struct DelegatingRequestAuthenticator<A> {
     authenticators: Vec<Arc<dyn RequestAuthenticator<Authentication = A>>>,
 }
