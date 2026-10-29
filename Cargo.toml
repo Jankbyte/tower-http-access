@@ -1,0 +1,31 @@
+[package]
+name = "axum-auth-chained"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+description = "Composable authentication and authorization middleware for Axum"
+license = "MIT"
+repository = "https://github.com/Jankbyte/axum-auth-chained"
+documentation = "https://docs.rs/axum-auth-chained"
+readme = "README.md"
+keywords = ["axum", "authentication", "authorization", "middleware", "tower"]
+categories = ["authentication", "web-programming::http-server"]
+
+[dependencies]
+http = {version = "1.5.0" }
+tower-service = { version = "0.3.3" }
+tower-layer = { version = "0.3.3" }
+tower = { version = "0.5.3" }
+thiserror = { version = "2.0.21" }
+axum = { version = "0.8.9" }
+base64 = { version = "0.23.1", optional = true }
+tokio = { version = "1", features = ["rt", "sync"] }
+password-hash = { version = "0.6.1", features = ["getrandom", "phc"], optional = true }
+argon2 = { version = "0.6.0", optional = true }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full"] }
+
+[features]
+argon2_encoder = ["basic_auth", "dep:argon2"]
+basic_auth = ["dep:base64", "dep:password-hash"]
