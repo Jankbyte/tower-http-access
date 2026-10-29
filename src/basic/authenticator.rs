@@ -1,5 +1,5 @@
+use super::BasicCredentials;
 use super::base64::extract_credentials;
-use super::{AsyncPasswordVerifier, UserDetail, UserDetailService};
 use crate::{
     authentication::{
         AuthenticationAttempt, AuthenticationErrorReason, AuthenticatorError, RequestAuthenticator,
@@ -13,23 +13,42 @@ use axum::{
 };
 use std::{error::Error, future::Future, pin::Pin};
 
+/// The result of username/password authentication.
+pub type UsernamePasswordAuthenticationFuture<'a, A, E> =
+    Pin<Box<dyn Future<Output = Result<Option<A>, E>> + Send + 'a>>;
+
+/// Authenticates decoded username/password credentials.
+///
+/// `Ok(Some(authentication))` means the credentials are valid, `Ok(None)` means they are invalid,
+/// and `Err(error)` represents an internal backend failure.
+pub trait UsernamePasswordAuthenticationProvider: Send + Sync {
+    /// Identity produced by successful authentication.
+    type Authentication: Clone + Send + Sync + 'static;
+    /// Internal authentication backend error.
+    type Error: Error + Send + Sync + 'static;
+
+    fn authenticate<'a>(
+        &'a self,
+        credentials: &'a BasicCredentials,
+    ) -> UsernamePasswordAuthenticationFuture<'a, Self::Authentication, Self::Error>;
+}
+
 /// HTTP Basic authentication for Axum requests.
 ///
 /// This authenticator implements the [`Basic` authentication scheme defined by RFC 7617](https://www.rfc-editor.org/rfc/rfc7617.html). Basic
 /// credentials are only Base64-encoded, not encrypted, so applications must use HTTPS when sending
 /// them over a network.
 ///
-/// Authenticator based on two components:
-///
-/// * [`AsyncPasswordVerifier`] - compare raw password with hashed.
-/// * [`UserDetailService`] - source with users.
+/// Credential verification is delegated to a [`UsernamePasswordAuthenticationProvider`]. The
+/// provider chooses the resulting identity type and can use local password hashes, a database, or
+/// an external authentication service.
 ///
 /// # Behavior
 ///
 /// When request is coming, authenticator check `Authorization` header, and if header is missed or does not start with `Basic`
 /// schema - skip this request with [`AuthenticationAttempt::NotApplicable`] as result.
 ///
-/// Otherwise, extract credentials, find user by his username and compare raw password with hashed.
+/// Otherwise, decode the credentials and pass them to the configured provider.
 /// A malformed Basic header, unknown user, or wrong password stops the authenticator chain and
 /// returns `401 Unauthorized` with a `WWW-Authenticate: Basic` challenge. This follows the
 /// [HTTP authentication requirements in RFC 9110](https://www.rfc-editor.org/rfc/rfc9110.html#section-11.4). A missing header or a different authentication
@@ -40,7 +59,10 @@ use std::{error::Error, future::Future, pin::Pin};
 ///
 /// ```rust
 /// use argon2::Argon2;
-/// use axum_auth_chained::basic::{AsyncStringPasswordManager, InMemoryUserDetailService, UserDetail, BasicRequestAuthenticator};
+/// use axum_auth_chained::basic::{
+///     AsyncStringPasswordManager, BasicRequestAuthenticator, InMemoryUserDetailService,
+///     UserDetail, UserDetailAuthenticationProvider,
+/// };
 /// use std::num::NonZeroUsize;
 /// use tokio::runtime::Handle;
 ///
@@ -58,32 +80,30 @@ use std::{error::Error, future::Future, pin::Pin};
 ///     .await
 ///     .unwrap();
 ///
-/// let basic_authenticator = BasicRequestAuthenticator::new(manager, user_detail_service);
+/// let provider = UserDetailAuthenticationProvider::new(manager, user_detail_service)
+///     .await
+///     .unwrap();
+/// let basic_authenticator = BasicRequestAuthenticator::new(provider);
 /// # }
 /// ```
 ///
 #[derive(Clone)]
-pub struct BasicRequestAuthenticator<V, U> {
-    password_verifier: V,
-    user_detail_service: U,
+pub struct BasicRequestAuthenticator<P> {
+    provider: P,
 }
 
-impl<V, U> BasicRequestAuthenticator<V, U> {
-    /// Create new basic authenticator from password verifier and users store.
-    pub fn new(password_verifier: V, user_detail_service: U) -> Self {
-        Self {
-            password_verifier,
-            user_detail_service,
-        }
+impl<P> BasicRequestAuthenticator<P> {
+    /// Create a Basic authenticator backed by a username/password provider.
+    pub fn new(provider: P) -> Self {
+        Self { provider }
     }
 }
 
-impl<V, U> RequestAuthenticator for BasicRequestAuthenticator<V, U>
+impl<P> RequestAuthenticator for BasicRequestAuthenticator<P>
 where
-    V: AsyncPasswordVerifier,
-    U: UserDetailService,
+    P: UsernamePasswordAuthenticationProvider,
 {
-    type Authentication = UserDetail;
+    type Authentication = P::Authentication;
 
     fn authenticate<'a>(
         &'a self,
@@ -104,32 +124,20 @@ where
             else {
                 return Ok(AuthenticationAttempt::NotApplicable);
             };
-            let user = self
-                .user_detail_service
-                .load_user_by_name(&credentials.username)
-                .await
-                .map_err(internal_error)?;
-            let Some(user) = user else {
-                return Err(wrong_credentials());
-            };
-            let matches = self
-                .password_verifier
-                .matches(&credentials.password, &user.hashed_password)
-                .await
-                .map_err(internal_error)?;
-            if !matches {
-                return Err(wrong_credentials());
+            match self.provider.authenticate(&credentials).await {
+                Ok(Some(authentication)) => {
+                    Ok(AuthenticationAttempt::Authenticated(authentication))
+                }
+                Ok(None) => Err(wrong_credentials()),
+                Err(error) => Err(internal_error(error)),
             }
-
-            Ok(AuthenticationAttempt::Authenticated(user))
         })
     }
 }
 
-impl<V, U> AuthenticationEntryPoint for BasicRequestAuthenticator<V, U>
+impl<P> AuthenticationEntryPoint for BasicRequestAuthenticator<P>
 where
-    V: Send + Sync + 'static,
-    U: Send + Sync + 'static,
+    P: Send + Sync + 'static,
 {
     fn commence(&self, _: Request) -> Response {
         basic_challenge()

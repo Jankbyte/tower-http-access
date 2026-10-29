@@ -1,4 +1,7 @@
-use super::AsyncPasswordHasher;
+use super::{
+    AsyncPasswordError, AsyncPasswordHasher, AsyncPasswordVerifier, BasicCredentials,
+    UsernamePasswordAuthenticationFuture, UsernamePasswordAuthenticationProvider,
+};
 use std::collections::HashMap;
 use std::error::Error as StdError;
 use std::pin::Pin;
@@ -101,9 +104,7 @@ impl InMemoryUserDetailService {
             user.hashed_password = encoded;
             mapped_users.insert(user.username.clone(), user);
         }
-        Ok(InMemoryUserDetailService::with_shared_users(Arc::new(
-            mapped_users,
-        )))
+        Ok(Self::with_shared_users(Arc::new(mapped_users)))
     }
 }
 
@@ -120,11 +121,112 @@ impl UserDetailService for InMemoryUserDetailService {
     }
 }
 
+/// Errors produced while authenticating a user loaded from a [`UserDetailService`].
+#[derive(Debug, thiserror::Error)]
+pub enum UserDetailAuthenticationError {
+    /// Loading the user failed.
+    #[error("failed to load user: {0}")]
+    UserLoading(#[from] UserLoadingError),
+    /// Password verification failed internally.
+    #[error("failed to verify password: {0}")]
+    Password(#[from] AsyncPasswordError),
+}
+
+/// Authenticates users loaded from a [`UserDetailService`] using stored password hashes.
+///
+/// Construction creates a dummy password hash. Missing users are verified against that hash so an
+/// unknown username performs the same expensive password operation as a known username with a
+/// wrong password.
+#[derive(Clone)]
+pub struct UserDetailAuthenticationProvider<V, U> {
+    password_verifier: V,
+    user_detail_service: U,
+    dummy_password_hash: String,
+}
+
+impl<V, U> UserDetailAuthenticationProvider<V, U>
+where
+    V: AsyncPasswordHasher,
+{
+    /// Create a provider and prepare the dummy hash used for missing users.
+    pub async fn new(
+        password_verifier: V,
+        user_detail_service: U,
+    ) -> Result<Self, AsyncPasswordError> {
+        let dummy_password_hash = password_verifier.hash_password("invalid password").await?;
+
+        Ok(Self {
+            password_verifier,
+            user_detail_service,
+            dummy_password_hash,
+        })
+    }
+}
+
+impl<V, U> UsernamePasswordAuthenticationProvider for UserDetailAuthenticationProvider<V, U>
+where
+    V: AsyncPasswordVerifier,
+    U: UserDetailService,
+{
+    type Authentication = UserDetail;
+    type Error = UserDetailAuthenticationError;
+
+    fn authenticate<'a>(
+        &'a self,
+        credentials: &'a BasicCredentials,
+    ) -> UsernamePasswordAuthenticationFuture<'a, Self::Authentication, Self::Error> {
+        Box::pin(async move {
+            let user = self
+                .user_detail_service
+                .load_user_by_name(&credentials.username)
+                .await?;
+            let password_hash = user
+                .as_ref()
+                .map(|user| user.hashed_password.as_str())
+                .unwrap_or(&self.dummy_password_hash);
+            let matches = self
+                .password_verifier
+                .matches(&credentials.password, password_hash)
+                .await?;
+
+            Ok(if matches { user } else { None })
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::collections::HashMap;
-    use std::sync::Arc;
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+
+    #[derive(Clone)]
+    struct CountingPasswordManager {
+        verifications: Arc<AtomicUsize>,
+    }
+
+    impl AsyncPasswordHasher for CountingPasswordManager {
+        fn hash_password<'a>(
+            &'a self,
+            password: &'a str,
+        ) -> Pin<Box<dyn Future<Output = Result<String, AsyncPasswordError>> + Send + 'a>> {
+            Box::pin(async move { Ok(password.to_owned()) })
+        }
+    }
+
+    impl AsyncPasswordVerifier for CountingPasswordManager {
+        fn matches<'a>(
+            &'a self,
+            password: &'a str,
+            password_hash: &'a str,
+        ) -> Pin<Box<dyn Future<Output = Result<bool, AsyncPasswordError>> + Send + 'a>> {
+            self.verifications.fetch_add(1, Ordering::Relaxed);
+            Box::pin(async move { Ok(password == password_hash) })
+        }
+    }
 
     #[tokio::test]
     async fn in_memory_uds_retrive_existing_user() {
@@ -156,5 +258,26 @@ mod tests {
 
         // NOTE: just check, UserDetailService trait still dyn compatible.
         let _: Box<dyn UserDetailService> = Box::new(user_detail_service);
+    }
+
+    #[tokio::test]
+    async fn missing_user_is_verified_against_dummy_password_hash() {
+        let verifications = Arc::new(AtomicUsize::new(0));
+        let password_manager = CountingPasswordManager {
+            verifications: Arc::clone(&verifications),
+        };
+        let users = InMemoryUserDetailService::with_shared_users(Arc::new(HashMap::new()));
+        let provider = UserDetailAuthenticationProvider::new(password_manager, users)
+            .await
+            .unwrap();
+        let credentials = BasicCredentials {
+            username: "missing".to_owned(),
+            password: "wrong".to_owned(),
+        };
+
+        let authentication = provider.authenticate(&credentials).await.unwrap();
+
+        assert!(authentication.is_none());
+        assert_eq!(verifications.load(Ordering::Relaxed), 1);
     }
 }

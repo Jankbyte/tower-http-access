@@ -10,7 +10,8 @@
 //! Tower service.
 
 use axum::{
-    extract::Request,
+    Extension,
+    extract::{FromRequestParts, OptionalFromRequestParts, Request, rejection::ExtensionRejection},
     http::request::Parts,
     response::{IntoResponse, Response},
 };
@@ -33,6 +34,26 @@ pub type BoxError = Box<dyn Error + Send + Sync>;
 /// Authentication middleware stores this wrapper in request extensions instead of storing `A`
 /// directly. This distinguishes an authenticated identity from unrelated extension values of the
 /// same type.
+///
+/// Use it directly as an Axum extractor when authentication is required, or wrap it in [`Option`]
+/// when a handler also accepts anonymous requests:
+///
+/// ```rust
+/// use axum_auth_chained::authentication::Authenticated;
+///
+/// # #[derive(Clone)]
+/// # struct User;
+/// # async fn required_example(
+/// Authenticated(user): Authenticated<User>,
+/// # ) {}
+/// # async fn optional_example(
+/// authentication: Option<Authenticated<User>>,
+/// # ) {}
+/// ```
+///
+/// A missing required identity uses Axum's standard extension rejection. Scheme-specific
+/// unauthenticated responses, such as a Basic `WWW-Authenticate` challenge, remain the
+/// authorization layer's responsibility.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Authenticated<A>(pub A);
 
@@ -50,6 +71,32 @@ impl<A> Authenticated<A> {
     /// Consume the wrapper and return the authenticated identity.
     pub fn into_inner(self) -> A {
         self.0
+    }
+}
+
+impl<S, A> FromRequestParts<S> for Authenticated<A>
+where
+    S: Send + Sync,
+    A: Clone + Send + Sync + 'static,
+{
+    type Rejection = ExtensionRejection;
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        <Extension<Self> as FromRequestParts<S>>::from_request_parts(parts, state)
+            .await
+            .map(|Extension(authentication)| authentication)
+    }
+}
+
+impl<S, A> OptionalFromRequestParts<S> for Authenticated<A>
+where
+    S: Send + Sync,
+    A: Clone + Send + Sync + 'static,
+{
+    type Rejection = std::convert::Infallible;
+
+    async fn from_request_parts(parts: &mut Parts, _: &S) -> Result<Option<Self>, Self::Rejection> {
+        Ok(parts.extensions.get::<Self>().cloned())
     }
 }
 

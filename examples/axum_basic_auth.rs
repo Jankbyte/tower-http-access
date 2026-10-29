@@ -12,14 +12,14 @@
 //! ```
 
 use argon2::{Algorithm, Argon2, Params, Version};
-use axum::{Extension, Router, response::Html, routing::get};
+use axum::{Router, response::Html, routing::get};
 use axum_auth_chained::{
     SecurityLayerBuilder,
     authentication::{Authenticated, RequestAuthenticatorExt},
     authorization::{AuthenticatedAuthorizationProvider, empty_context_mapper},
     basic::{
         AsyncStringPasswordManager, BasicRequestAuthenticator, InMemoryUserDetailService,
-        UserDetail,
+        UserDetail, UserDetailAuthenticationProvider,
     },
 };
 use std::{num::NonZeroUsize, sync::Arc, thread};
@@ -66,18 +66,20 @@ impl From<UserDetail> for AuthenticatedSession {
     }
 }
 
-async fn handler(
-    authentication: Option<Extension<Authenticated<AuthenticatedSession>>>,
-) -> Html<String> {
+async fn handler(authentication: Option<Authenticated<AuthenticatedSession>>) -> Html<String> {
     let username = authentication
-        .map(|Extension(Authenticated(authentication))| authentication.0)
+        .map(|Authenticated(authentication)| authentication.0)
         .unwrap_or_else(|| "anonymous".to_owned());
 
     Html(format!("<h1>Hello, {username}</h1>"))
 }
 
-async fn create_basic_authenticator<'a>()
--> BasicRequestAuthenticator<AsyncStringPasswordManager<Argon2<'a>>, InMemoryUserDetailService> {
+async fn create_basic_authenticator<'a>() -> BasicRequestAuthenticator<
+    UserDetailAuthenticationProvider<
+        AsyncStringPasswordManager<Argon2<'a>>,
+        InMemoryUserDetailService,
+    >,
+> {
     const ARGON2_MEMORY_KIB: usize = 19 * 1024;
     const PASSWORD_MEMORY_BUDGET_KIB: usize = 128 * 1024;
 
@@ -89,7 +91,10 @@ async fn create_basic_authenticator<'a>()
     let max_concurrent = thread::available_parallelism()
         .expect("available CPU parallelism must be detectable")
         .min(memory_limit);
-    println!("Concurrent threads for AsyncStringPasswordManager: {}", max_concurrent);
+    println!(
+        "Concurrent threads for AsyncStringPasswordManager: {}",
+        max_concurrent
+    );
     let manager: AsyncStringPasswordManager<Argon2> =
         AsyncStringPasswordManager::new(Handle::current(), argon2, max_concurrent);
     let raw_users = vec![
@@ -99,6 +104,9 @@ async fn create_basic_authenticator<'a>()
     let user_detail_service = InMemoryUserDetailService::new((&manager, raw_users))
         .await
         .unwrap();
+    let provider = UserDetailAuthenticationProvider::new(manager, user_detail_service)
+        .await
+        .unwrap();
 
-    BasicRequestAuthenticator::new(manager, user_detail_service)
+    BasicRequestAuthenticator::new(provider)
 }

@@ -5,9 +5,16 @@ mod password;
 mod user_detail;
 
 pub use password::{
-    AsyncPasswordHasher, AsyncPasswordVerifier, AsyncStringPasswordManager,
+    AsyncPasswordError, AsyncPasswordHasher, AsyncPasswordVerifier, AsyncStringPasswordManager,
     PlainHashPasswordManager,
 };
 
-pub use authenticator::BasicRequestAuthenticator;
-pub use user_detail::{InMemoryUserDetailService, UserDetail, UserDetailService};
+pub use authenticator::{
+    BasicRequestAuthenticator, UsernamePasswordAuthenticationFuture,
+    UsernamePasswordAuthenticationProvider,
+};
+pub use base64::BasicCredentials;
+pub use user_detail::{
+    InMemoryUserDetailService, UserDetail, UserDetailAuthenticationError,
+    UserDetailAuthenticationProvider, UserDetailService,
+};
