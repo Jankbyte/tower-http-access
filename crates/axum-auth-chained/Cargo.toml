@@ -1,0 +1,33 @@
+[package]
+name = "axum-auth-chained"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "Composable authentication and authorization middleware for Axum"
+license.workspace = true
+repository.workspace = true
+documentation = "https://docs.rs/axum-auth-chained"
+readme = "../../README.md"
+keywords = ["axum", "authentication", "authorization", "middleware", "tower"]
+categories = ["authentication", "web-programming::http-server"]
+
+[dependencies]
+http.workspace = true
+tower-service.workspace = true
+tower-layer.workspace = true
+tower.workspace = true
+thiserror.workspace = true
+axum.workspace = true
+base64 = { workspace = true, optional = true }
+tokio = { workspace = true, features = ["rt", "sync"] }
+password-hash = { workspace = true, features = ["getrandom", "phc"], optional = true }
+argon2 = { workspace = true, optional = true }
+tracing = { workspace = true, optional = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full"] }
+
+[features]
+tracing = ["dep:tracing"]
+argon2_encoder = ["basic_auth", "dep:argon2"]
+basic_auth = ["dep:base64", "dep:password-hash"]

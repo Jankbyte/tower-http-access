@@ -189,6 +189,11 @@ where
                 .matches(&credentials.password, password_hash)
                 .await?;
 
+            #[cfg(feature = "tracing")]
+            if user.is_none() {
+                tracing::debug!(username = %credentials.username, "user not found");
+            }
+
             Ok(if matches { user } else { None })
         })
     }

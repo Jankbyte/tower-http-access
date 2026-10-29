@@ -196,7 +196,8 @@ impl<E> AuthorizationFailureHandler<E> for DefaultAuthorizationFailureHandler {
     fn handle(&self, _: Request, failure: AuthorizationFailure<E>) -> Response {
         match failure {
             AuthorizationFailure::Denied(AuthorizationDenial::AuthenticationRequired) => {
-                StatusCode::UNAUTHORIZED // NOTE: never happens, because will be delegated to authentication entry point
+                // NOTE: never happens, because will be delegated to authentication entry point
+                StatusCode::UNAUTHORIZED
             }
             AuthorizationFailure::Denied(AuthorizationDenial::InsufficientPermissions) => {
                 StatusCode::FORBIDDEN

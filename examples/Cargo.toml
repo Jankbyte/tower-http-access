@@ -1,0 +1,14 @@
+[package]
+name = "axum-auth-chained-examples"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dev-dependencies]
+argon2.workspace = true
+axum.workspace = true
+axum-auth-chained = { path = "../crates/axum-auth-chained", features = ["tracing", "argon2_encoder"] }
+tokio = { workspace = true, features = ["full"] }
+tracing-subscriber = { workspace = true }
+tracing = { workspace = true }

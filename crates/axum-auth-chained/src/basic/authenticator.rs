@@ -126,10 +126,23 @@ where
             };
             match self.provider.authenticate(&credentials).await {
                 Ok(Some(authentication)) => {
+                    #[cfg(feature = "tracing")]
+                    tracing::debug!(username = %credentials.username, "success authenticated");
+
                     Ok(AuthenticationAttempt::Authenticated(authentication))
                 }
-                Ok(None) => Err(wrong_credentials()),
-                Err(error) => Err(internal_error(error)),
+                Ok(None) => {
+                    #[cfg(feature = "tracing")]
+                    tracing::warn!(username = %credentials.username, "invalid or wrong credentials");
+
+                    Err(wrong_credentials())
+                }
+                Err(error) => {
+                    #[cfg(feature = "tracing")]
+                    tracing::warn!(error = %error, "authentication failed by internal error");
+
+                    Err(internal_error(error))
+                }
             }
         })
     }

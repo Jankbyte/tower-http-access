@@ -1,9 +1,7 @@
 //! Run with
 //!
 //! ```not_rust
-//! cargo run --example axum_basic_auth --features basic_auth,argon2_encoder
-//! # if you care about perfomance
-//! cargo run --example axum_basic_auth --features basic_auth,argon2_encoder --release
+//! cargo run --package axum-auth-chained-examples --example axum_basic_auth --features argon2_encoder
 //! # testing with
 //! curl http://localhost:3000/public
 //! curl -vu alex:alex123 http://localhost:3000/protected
@@ -27,6 +25,10 @@ use tokio::runtime::Handle;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
+    tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::TRACE)
+        .init();
+
     let basic_authenticator = Arc::new(
         create_basic_authenticator()
             .await
@@ -53,7 +55,8 @@ async fn main() {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
         .await
         .unwrap();
-    println!("listening on {}", listener.local_addr().unwrap());
+
+    tracing::info!("listening on {}", listener.local_addr().unwrap());
     let _ = axum::serve(listener, app).await;
 }
 
@@ -91,7 +94,7 @@ async fn create_basic_authenticator<'a>() -> BasicRequestAuthenticator<
     let max_concurrent = thread::available_parallelism()
         .expect("available CPU parallelism must be detectable")
         .min(memory_limit);
-    println!(
+    tracing::info!(
         "Concurrent threads for AsyncStringPasswordManager: {}",
         max_concurrent
     );
