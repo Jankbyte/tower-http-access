@@ -16,7 +16,8 @@ pub use authenticator::{
 };
 pub use authorization::{
     HasAuthorities, InvalidRequestPattern, PendingRuleBuilder, RequestAuthorizationBuilder,
-    RequestAuthorizationProvider, RequestContext, request_context_mapper,
+    RequestAuthorizationError, RequestAuthorizationProvider, RequestContext,
+    request_context_mapper,
 };
 pub use base64::BasicCredentials;
 pub use user_detail::{

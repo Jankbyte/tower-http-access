@@ -36,6 +36,53 @@
 //! would never be evaluated. Method matching also applies: the public exception
 //! above only permits `GET`, not `PUT` or `DELETE`.
 //!
+//! # Custom authorization managers
+//!
+//! Use `.access(manager)` to delegate a rule to an [`AuthorizationProvider`] with
+//! the same identity type and [`RequestContext`]. The manager may perform async I/O
+//! and decides how to handle anonymous callers. It receives the method and URI;
+//! matched path parameters are not extracted into the context.
+//!
+//! ```rust
+//! use std::{convert::Infallible, future::Future, pin::Pin};
+//! use axum_auth_chained::{
+//!     authorization::{AuthorizationDecision, AuthorizationDenial, AuthorizationProvider},
+//!     basic::{RequestAuthorizationProvider, RequestContext, UserDetail},
+//! };
+//!
+//! struct NamedUserManager;
+//!
+//! impl AuthorizationProvider for NamedUserManager {
+//!     type Authentication = UserDetail;
+//!     type Context = RequestContext;
+//!     type Error = Infallible;
+//!
+//!     fn authorize<'a>(
+//!         &'a self,
+//!         user: Option<&'a UserDetail>,
+//!         context: RequestContext,
+//!     ) -> Pin<Box<dyn Future<Output = Result<AuthorizationDecision, Infallible>> + Send + 'a>> {
+//!         Box::pin(async move {
+//!             Ok(match user {
+//!                 None => AuthorizationDecision::Deny(AuthorizationDenial::AuthenticationRequired),
+//!                 Some(user) if user.username == "admin" => AuthorizationDecision::Allow,
+//!                 Some(_) => AuthorizationDecision::Deny(AuthorizationDenial::InsufficientPermissions),
+//!             })
+//!         })
+//!     }
+//! }
+//!
+//! let provider = RequestAuthorizationProvider::<UserDetail>::builder()
+//!     .request_matchers("/notes/{id}").access(NamedUserManager)
+//!     .any_request().deny_all()
+//!     .build()?;
+//! # Ok::<(), axum_auth_chained::basic::InvalidRequestPattern>(())
+//! ```
+//!
+//! Manager errors are wrapped in [`RequestAuthorizationError`], preserving the
+//! original error as its source. The default failure handler returns HTTP 500.
+//! Returning a denial or error stops evaluation, just as for built-in policies.
+//!
 //! # Layer integration
 //!
 //! ```rust
@@ -55,7 +102,7 @@
 //! # Ok::<(), axum_auth_chained::basic::InvalidRequestPattern>(())
 //! ```
 
-use std::{convert::Infallible, future::Future, marker::PhantomData, pin::Pin};
+use std::{future::Future, marker::PhantomData, pin::Pin};
 
 use axum::http::{Method, Uri, request::Parts};
 
@@ -125,19 +172,66 @@ impl RequestPathMatcher {
     }
 }
 
-enum AccessPolicy {
+/// An error returned by a custom request authorization manager.
+///
+/// The original error is preserved as the source. The default authorization failure
+/// handler returns HTTP 500 for these errors; denials remain authorization decisions.
+#[derive(Debug, thiserror::Error)]
+#[error("custom authorization manager failed")]
+pub struct RequestAuthorizationError {
+    #[source]
+    source: Box<dyn std::error::Error + Send + Sync>,
+}
+
+type CustomManager<A> = Box<
+    dyn AuthorizationProvider<
+            Authentication = A,
+            Context = RequestContext,
+            Error = RequestAuthorizationError,
+        >,
+>;
+
+struct CustomManagerAdapter<M>(M);
+
+impl<M> AuthorizationProvider for CustomManagerAdapter<M>
+where
+    M: AuthorizationProvider<Context = RequestContext>,
+    M::Error: 'static,
+{
+    type Authentication = M::Authentication;
+    type Context = RequestContext;
+    type Error = RequestAuthorizationError;
+
+    fn authorize<'a>(
+        &'a self,
+        authentication: Option<&'a Self::Authentication>,
+        context: RequestContext,
+    ) -> Pin<Box<dyn Future<Output = Result<AuthorizationDecision, Self::Error>> + Send + 'a>> {
+        Box::pin(async move {
+            self.0
+                .authorize(authentication, context)
+                .await
+                .map_err(|error| RequestAuthorizationError {
+                    source: Box::new(error),
+                })
+        })
+    }
+}
+
+enum AccessPolicy<A> {
     PermitAll,
     DenyAll,
     Authenticated,
     HasAuthority(String),
     HasAnyAuthority(Vec<String>),
     HasAllAuthorities(Vec<String>),
+    Custom(CustomManager<A>),
 }
 
-struct Rule {
+struct Rule<A> {
     method: Option<Method>,
     path: RequestPathMatcher,
-    policy: AccessPolicy,
+    policy: AccessPolicy<A>,
 }
 
 /// An ordered, first-match authorization provider. Unmatched requests are denied.
@@ -145,13 +239,13 @@ struct Rule {
 /// Declaration order determines priority, regardless of path specificity. The first
 /// matching rule's decision is final. See the [module documentation](self) for an example.
 pub struct RequestAuthorizationProvider<A> {
-    rules: Vec<Rule>,
+    rules: Vec<Rule<A>>,
     identity: PhantomData<fn() -> A>,
 }
 
 /// Builds an ordered list of request policies.
 pub struct RequestAuthorizationBuilder<A> {
-    rules: Vec<(Option<Method>, Option<String>, AccessPolicy)>,
+    rules: Vec<(Option<Method>, Option<String>, AccessPolicy<A>)>,
     identity: PhantomData<fn() -> A>,
 }
 
@@ -227,9 +321,26 @@ impl<A> RequestAuthorizationBuilder<A> {
 }
 
 impl<A> PendingRuleBuilder<A> {
-    fn policy(mut self, policy: AccessPolicy) -> RequestAuthorizationBuilder<A> {
+    fn policy(mut self, policy: AccessPolicy<A>) -> RequestAuthorizationBuilder<A> {
         self.builder.rules.push((self.method, self.path, policy));
         self.builder
+    }
+
+    /// Delegates the complete decision to a custom async authorization provider.
+    ///
+    /// The manager receives the optional identity and request method/URI, including
+    /// for anonymous requests. It is responsible for deciding whether authentication
+    /// is required. Only the first matching rule runs; errors and denials do not fall
+    /// through to later rules. Errors retain their source in [`RequestAuthorizationError`].
+    /// No authority check is added automatically.
+    pub fn access<M>(self, manager: M) -> RequestAuthorizationBuilder<A>
+    where
+        M: AuthorizationProvider<Authentication = A, Context = RequestContext> + 'static,
+        M::Error: 'static,
+    {
+        self.policy(AccessPolicy::Custom(Box::new(CustomManagerAdapter(
+            manager,
+        ))))
     }
 
     pub fn permit_all(self) -> RequestAuthorizationBuilder<A> {
@@ -276,13 +387,13 @@ impl<A> PendingRuleBuilder<A> {
 impl<A: HasAuthorities + Send + Sync> AuthorizationProvider for RequestAuthorizationProvider<A> {
     type Authentication = A;
     type Context = RequestContext;
-    type Error = Infallible;
+    type Error = RequestAuthorizationError;
 
     fn authorize<'a>(
         &'a self,
         authentication: Option<&'a A>,
         context: RequestContext,
-    ) -> Pin<Box<dyn Future<Output = Result<AuthorizationDecision, Infallible>> + Send + 'a>> {
+    ) -> Pin<Box<dyn Future<Output = Result<AuthorizationDecision, Self::Error>> + Send + 'a>> {
         Box::pin(async move {
             let policy = self
                 .rules
@@ -295,6 +406,9 @@ impl<A: HasAuthorities + Send + Sync> AuthorizationProvider for RequestAuthoriza
                 })
                 .map(|rule| &rule.policy);
             let allowed = match policy {
+                Some(AccessPolicy::Custom(manager)) => {
+                    return manager.authorize(authentication, context).await;
+                }
                 Some(AccessPolicy::PermitAll) => true,
                 Some(AccessPolicy::Authenticated) => authentication.is_some(),
                 Some(AccessPolicy::HasAuthority(authority)) => {
@@ -330,195 +444,5 @@ impl<A: HasAuthorities + Send + Sync> AuthorizationProvider for RequestAuthoriza
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::basic::Authority;
-
-    async fn decision(
-        provider: &RequestAuthorizationProvider<UserDetail>,
-        user: Option<&UserDetail>,
-        method: Method,
-        uri: &str,
-    ) -> AuthorizationDecision {
-        provider
-            .authorize(
-                user,
-                RequestContext {
-                    method,
-                    uri: uri.parse().unwrap(),
-                },
-            )
-            .await
-            .unwrap()
-    }
-
-    #[tokio::test]
-    async fn ordered_policies_and_identity_requirements() {
-        let provider = RequestAuthorizationProvider::<UserDetail>::builder()
-            .request_matchers("/public")
-            .permit_all()
-            .request_matchers("/admin/{*rest}")
-            .has_authority("ADMIN")
-            .method_matchers(Method::GET, "/notes/{id}")
-            .has_any_authority(["ReadNote", "ReadAnyNote"])
-            .request_matchers("/private")
-            .authenticated()
-            .any_request()
-            .deny_all()
-            .build()
-            .unwrap();
-        let reader = UserDetail::new("reader", "hash", vec![Authority::new("ReadNote")]);
-        let admin = UserDetail::new("admin", "hash", vec![Authority::new("ADMIN")]);
-        let allow = AuthorizationDecision::Allow;
-        let forbidden = AuthorizationDecision::Deny(AuthorizationDenial::InsufficientPermissions);
-        let unauthorized = AuthorizationDecision::Deny(AuthorizationDenial::AuthenticationRequired);
-        assert_eq!(
-            decision(&provider, None, Method::GET, "/public").await,
-            allow
-        );
-        assert_eq!(
-            decision(&provider, None, Method::GET, "/private").await,
-            unauthorized
-        );
-        assert_eq!(
-            decision(&provider, Some(&reader), Method::GET, "/private").await,
-            allow
-        );
-        assert_eq!(
-            decision(&provider, Some(&reader), Method::GET, "/admin/a").await,
-            forbidden
-        );
-        assert_eq!(
-            decision(&provider, Some(&admin), Method::GET, "/admin/dashboard").await,
-            allow
-        );
-        assert_eq!(
-            decision(&provider, Some(&reader), Method::GET, "/notes/1?q=x").await,
-            allow
-        );
-        assert_eq!(
-            decision(&provider, Some(&reader), Method::DELETE, "/notes/1").await,
-            forbidden
-        );
-        assert_eq!(
-            decision(&provider, Some(&admin), Method::GET, "/unknown").await,
-            forbidden
-        );
-    }
-
-    #[tokio::test]
-    async fn first_match_is_final_and_unmatched_requests_are_denied() {
-        let user = UserDetail::new("user", "hash", vec![]);
-        let provider = RequestAuthorizationProvider::builder()
-            .request_matchers("/blocked")
-            .deny_all()
-            .any_request()
-            .permit_all()
-            .build()
-            .unwrap();
-        assert_eq!(
-            decision(&provider, Some(&user), Method::GET, "/blocked").await,
-            AuthorizationDecision::Deny(AuthorizationDenial::InsufficientPermissions)
-        );
-        assert_eq!(
-            decision(&provider, None, Method::GET, "/").await,
-            AuthorizationDecision::Allow
-        );
-        let overlapping = RequestAuthorizationProvider::builder()
-            .request_matchers("/notes/{*rest}")
-            .deny_all()
-            .request_matchers("/notes/public")
-            .permit_all()
-            .build()
-            .unwrap();
-        assert_eq!(
-            decision(&overlapping, Some(&user), Method::GET, "/notes/public").await,
-            AuthorizationDecision::Deny(AuthorizationDenial::InsufficientPermissions)
-        );
-        let empty = RequestAuthorizationProvider::builder().build().unwrap();
-        assert_eq!(
-            decision(&empty, None, Method::GET, "/anything").await,
-            AuthorizationDecision::Deny(AuthorizationDenial::AuthenticationRequired)
-        );
-    }
-
-    #[tokio::test]
-    async fn all_authorities_requires_authentication_and_every_authority() {
-        let provider = RequestAuthorizationProvider::builder()
-            .request_matchers("/notes")
-            .has_all_authorities(["ReadNote", "WriteNote"])
-            .request_matchers("/empty")
-            .has_all_authorities(Vec::<String>::new())
-            .build()
-            .unwrap();
-        let reader = UserDetail::new("reader", "hash", vec![Authority::new("ReadNote")]);
-        let editor = UserDetail::new(
-            "editor",
-            "hash",
-            vec![Authority::new("ReadNote"), Authority::new("WriteNote")],
-        );
-        let writer = UserDetail::new("writer", "hash", vec![Authority::new("WriteNote")]);
-        let no_authorities = UserDetail::new("user", "hash", vec![]);
-        for user in [&reader, &writer, &no_authorities] {
-            assert_eq!(
-                decision(&provider, Some(user), Method::GET, "/notes").await,
-                AuthorizationDecision::Deny(AuthorizationDenial::InsufficientPermissions)
-            );
-        }
-        assert_eq!(
-            decision(&provider, Some(&editor), Method::GET, "/notes").await,
-            AuthorizationDecision::Allow
-        );
-        for path in ["/notes", "/empty"] {
-            assert_eq!(
-                decision(&provider, None, Method::GET, path).await,
-                AuthorizationDecision::Deny(AuthorizationDenial::AuthenticationRequired)
-            );
-        }
-        assert_eq!(
-            decision(&provider, Some(&no_authorities), Method::GET, "/empty").await,
-            AuthorizationDecision::Allow
-        );
-    }
-
-    #[test]
-    fn patterns_have_segment_boundaries_and_validate_at_build_time() {
-        for (pattern, path, expected) in [
-            ("/{*rest}", "/", false),
-            ("/notes/{*rest}", "/notes", false),
-            ("/notes/{*rest}", "/notes/", false),
-            ("/notes/{*rest}", "/notes/1/a", true),
-            ("/notes/{*rest}", "/notes-other", false),
-            ("/notes/{id}", "/notes/", false),
-            ("/notes/{id}", "/notes/1/a", false),
-            ("/notes/{id}", "/notes/1/", false),
-            ("/", "/", true),
-            ("/notes", "/notes/", false),
-            ("/Notes", "/notes", false),
-        ] {
-            assert_eq!(
-                RequestPathMatcher::compile(Some(pattern.to_owned()))
-                    .unwrap()
-                    .matches(path),
-                expected,
-                "{pattern}: {path}"
-            );
-        }
-        for pattern in [
-            "notes",
-            "/notes/{*rest}/child",
-            "/notes/{}",
-            "/notes/{id",
-            "/notes?q=1",
-        ] {
-            assert!(
-                RequestAuthorizationProvider::<UserDetail>::builder()
-                    .request_matchers(pattern)
-                    .permit_all()
-                    .build()
-                    .is_err(),
-                "{pattern}"
-            );
-        }
-    }
-}
+#[path = "authorization_tests.rs"]
+mod tests;

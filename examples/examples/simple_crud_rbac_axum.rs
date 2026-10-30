@@ -11,7 +11,7 @@
 //! curl -v -X POST -u "admin:admin123" -H "Content-Type: application/json" --data '{"title":"Test","content":"Hello"}' "http://127.0.0.1:3000/v1/notes"
 //! # Create note as reader (403)
 //! curl -v -X POST -u "onlyreader:onlyreader123" -H "Content-Type: application/json" --data '{"title":"Test","content":"Hello"}' "http://127.0.0.1:3000/v1/notes"
-//! 
+//!
 //! ```
 use axum::{
     Json, Router,
@@ -22,7 +22,7 @@ use axum::{
 use axum_auth_chained::{
     SecurityLayerBuilder,
     authorization::{
-        AuthorizationLayer, DefaultAuthenticationEntryPoint, DefaultAuthorizationFailureHandler,
+        AuthenticationEntryPoint, AuthorizationLayer, DefaultAuthorizationFailureHandler,
     },
     basic::{
         Authority, BasicRequestAuthenticator, InMemoryUserDetailService, PlainHashPasswordManager,
@@ -47,12 +47,10 @@ async fn main() {
     ]);
 
     let basic_authenticator = Arc::new(create_basic_authenticator().await);
-    let authorization_layer = create_authorization_layer();
+    let authorization_layer = create_authorization_layer(Arc::clone(&basic_authenticator));
 
     let security_layer = SecurityLayerBuilder::builder()
-        .authenticators(|authenticators| {
-            authenticators.shared_authenticator(Arc::clone(&basic_authenticator))
-        })
+        .authenticators(|authenticators| authenticators.shared_authenticator(basic_authenticator))
         .authorization_layer(authorization_layer)
         .build();
 
@@ -66,11 +64,10 @@ async fn main() {
             "/{id}",
             get(read_note_by_id).put(replace_note).delete(delete_note),
         )
+        .layer(security_layer) // apply layer only for Notes API
         .with_state(note_repository);
 
-    let app = Router::new()
-        .nest("/v1/notes", notes_api)
-        .layer(security_layer);
+    let app = Router::new().nest("/v1/notes", notes_api);
 
     let _ = axum::serve(listener, app).await;
 }
@@ -238,14 +235,16 @@ async fn create_basic_authenticator() -> BasicRequestAuthenticator<
     BasicRequestAuthenticator::new(provider)
 }
 
-type NotesAuthorizationLayer = AuthorizationLayer<
+type NotesAuthorizationLayer<T> = AuthorizationLayer<
     RequestAuthorizationProvider<UserDetail>,
     fn(&Parts) -> RequestContext,
     DefaultAuthorizationFailureHandler,
-    DefaultAuthenticationEntryPoint,
+    T,
 >;
 
-fn create_authorization_layer() -> NotesAuthorizationLayer {
+fn create_authorization_layer<T: AuthenticationEntryPoint>(
+    authentication_entry_point: T,
+) -> NotesAuthorizationLayer<T> {
     let provider = RequestAuthorizationProvider::builder()
         .method_matchers(Method::GET, "/v1/notes/1")
         .permit_all() // any user can read first note
@@ -265,5 +264,6 @@ fn create_authorization_layer() -> NotesAuthorizationLayer {
         provider,
         request_context_mapper as fn(&Parts) -> RequestContext,
     )
+    .authentication_entry_point(authentication_entry_point)
     .build()
 }
