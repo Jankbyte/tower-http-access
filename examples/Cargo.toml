@@ -10,5 +10,7 @@ argon2.workspace = true
 axum.workspace = true
 axum-auth-chained = { path = "../crates/axum-auth-chained", features = ["tracing", "argon2_encoder"] }
 tokio = { workspace = true, features = ["full"] }
-tracing-subscriber = { workspace = true }
-tracing = { workspace = true }
+tracing-subscriber.workspace = true
+tracing.workspace = true
+serde_json.workspace = true
+serde = { workspace = true, features = ["serde_derive"] }

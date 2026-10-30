@@ -85,3 +85,40 @@ async fn security_layer_uses_configured_authentication_entry_point() {
 
     assert_eq!(response.status(), StatusCode::IM_A_TEAPOT);
 }
+
+#[tokio::test]
+async fn ready_authorization_layer_preserves_handlers_and_runs_after_authentication() {
+    for authenticated in [false, true] {
+        let authorization = AuthorizationLayer::builder(
+            AuthenticatedAuthorizationProvider::<String>::new(),
+            |_: &Parts| (),
+        )
+        .authentication_entry_point(|_: Request| StatusCode::IM_A_TEAPOT)
+        .build();
+        let security = SecurityLayerBuilder::builder()
+            .authenticators(|chain| {
+                chain.authenticator(move |_: &mut Parts| async move {
+                    Ok::<_, AuthenticatorError>(if authenticated {
+                        AuthenticationAttempt::Authenticated("alex".to_owned())
+                    } else {
+                        AuthenticationAttempt::NotApplicable
+                    })
+                })
+            })
+            .authorization_layer(authorization)
+            .build();
+        let response = security
+            .service(Inner)
+            .call(Request::new(Body::empty()))
+            .await
+            .unwrap();
+        assert_eq!(
+            response.status(),
+            if authenticated {
+                StatusCode::OK
+            } else {
+                StatusCode::IM_A_TEAPOT
+            }
+        );
+    }
+}

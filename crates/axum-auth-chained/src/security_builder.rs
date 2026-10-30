@@ -80,6 +80,11 @@ impl<P, F, E, H> AuthorizationCustomizer<P, F, E, H> {
     }
 }
 
+enum AuthorizationConfiguration<P, F, E, H> {
+    Configure(AuthorizationCustomizer<P, F, E, H>),
+    Ready(AuthorizationLayer<P, F, H, E>),
+}
+
 /// Builds authentication and authorization middleware.
 pub struct SecurityLayerBuilder<
     A = (),
@@ -89,7 +94,7 @@ pub struct SecurityLayerBuilder<
     H = DefaultAuthorizationFailureHandler,
 > {
     authenticators: DelegatingRequestAuthenticatorBuilder<A>,
-    authorization: AuthorizationCustomizer<P, F, E, H>,
+    authorization: AuthorizationConfiguration<P, F, E, H>,
 }
 
 impl SecurityLayerBuilder {
@@ -97,7 +102,7 @@ impl SecurityLayerBuilder {
     pub fn builder() -> Self {
         Self {
             authenticators: DelegatingRequestAuthenticator::builder(),
-            authorization: AuthorizationCustomizer::default(),
+            authorization: AuthorizationConfiguration::Configure(AuthorizationCustomizer::default()),
         }
     }
 
@@ -117,6 +122,20 @@ impl SecurityLayerBuilder {
 }
 
 impl<A> SecurityLayerBuilder<A> {
+    /// Uses an already configured authorization layer, preserving its handlers and provider.
+    pub fn authorization_layer<P, F, H, E>(
+        self,
+        layer: AuthorizationLayer<P, F, H, E>,
+    ) -> SecurityLayerBuilder<A, P, F, E, H>
+    where
+        P: AuthorizationProvider<Authentication = A>,
+    {
+        SecurityLayerBuilder {
+            authenticators: self.authenticators,
+            authorization: AuthorizationConfiguration::Ready(layer),
+        }
+    }
+
     /// Configures authorization.
     pub fn authorization<NewP, NewF, NewE, NewH, C>(
         self,
@@ -127,7 +146,9 @@ impl<A> SecurityLayerBuilder<A> {
     {
         SecurityLayerBuilder {
             authenticators: self.authenticators,
-            authorization: customize(AuthorizationCustomizer::default()),
+            authorization: AuthorizationConfiguration::Configure(customize(
+                AuthorizationCustomizer::default(),
+            )),
         }
     }
 }
@@ -142,13 +163,16 @@ where
 {
     /// Builds authentication followed by authorization.
     pub fn build(self) -> SecurityServiceBuilder<A, P, F, H, E> {
-        let authorization = self.authorization;
         let authentication = AuthenticationLayer::new(self.authenticators.build());
-        let authorization =
-            AuthorizationLayer::builder(authorization.provider, authorization.context)
-                .authentication_entry_point(authorization.authentication_entry_point)
-                .failure_handler(authorization.failure_handler)
-                .build();
+        let authorization = match self.authorization {
+            AuthorizationConfiguration::Ready(layer) => layer,
+            AuthorizationConfiguration::Configure(configuration) => {
+                AuthorizationLayer::builder(configuration.provider, configuration.context)
+                    .authentication_entry_point(configuration.authentication_entry_point)
+                    .failure_handler(configuration.failure_handler)
+                    .build()
+            }
+        };
 
         ServiceBuilder::new()
             .layer(authentication)
