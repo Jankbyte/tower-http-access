@@ -11,11 +11,8 @@ use axum::{
     http::{StatusCode, header, request::Parts},
     response::{IntoResponse, Response},
 };
+use futures_util::future::BoxFuture;
 use std::{error::Error, future::Future, pin::Pin};
-
-/// The result of username/password authentication.
-pub type UsernamePasswordAuthenticationFuture<'a, A, E> =
-    Pin<Box<dyn Future<Output = Result<Option<A>, E>> + Send + 'a>>;
 
 /// Authenticates decoded username/password credentials.
 ///
@@ -30,7 +27,7 @@ pub trait UsernamePasswordAuthenticationProvider: Send + Sync {
     fn authenticate<'a>(
         &'a self,
         credentials: &'a BasicCredentials,
-    ) -> UsernamePasswordAuthenticationFuture<'a, Self::Authentication, Self::Error>;
+    ) -> BoxFuture<'a, Result<Option<Self::Authentication>, Self::Error>>;
 }
 
 /// HTTP Basic authentication for Axum requests.

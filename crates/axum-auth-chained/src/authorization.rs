@@ -1,8 +1,8 @@
 //! Request authorization and unauthenticated-request handling.
 //!
 //! Authorization runs after authentication. It reads the typed identity stored in request
-//! extensions, maps the request into an application-defined context, and asks an
-//! [`AuthorizationProvider`] whether the request is allowed.
+//! extensions and passes the original request parts to an
+//! [`AuthorizationProvider`] to decide whether the request is allowed.
 //!
 //! [`AuthorizationLayer`] returns an [`AuthenticationEntryPoint`] response when authentication is
 //! required, or delegates other denials and provider errors to an [`AuthorizationFailureHandler`].
@@ -58,47 +58,25 @@ impl AuthenticationEntryPoint for DefaultAuthenticationEntryPoint {
     }
 }
 
-/// The context extractor, used by [`AuthorizationService`] for convert [`axum::http::request::Parts`] into context.
-pub trait AuthorizationContextMapper<C>: Clone + Send + Sync + 'static {
-    fn map(&self, parts: &Parts) -> C;
-}
-
-/// Create context mapper from closure.
-impl<C, F> AuthorizationContextMapper<C> for F
-where
-    F: Fn(&Parts) -> C + Clone + Send + Sync + 'static,
-{
-    fn map(&self, parts: &Parts) -> C {
-        self(parts)
-    }
-}
-
-/// The stub for empty context. Should be use with [`AuthenticatedAuthorizationProvider`] while creating [`AuthorizationLayer`].
-pub fn empty_context_mapper(_: &Parts) {}
-
-/// The authorization provider that authorize target authentication by context.
+/// Authorizes an identity against borrowed HTTP request parts.
 ///
 /// The source of permissions may be, for example:
 ///
 /// * [`Self::Authentication`] - we can store permissions/roles inside authentication, and extract
 ///   that on authentication layer, but verify here.
 /// * Database - we can store permissions in some database, find permissions by [`Self::Authentication`] principals
-///   and match with [`Self::Context`] data.
+///   and check the request metadata.
 ///
 pub trait AuthorizationProvider: Send + Sync {
     /// The authentication type.
     type Authentication: Send + Sync;
-    /// The context.
-    ///
-    /// For example: it may [`http::request::Parts`].
-    type Context: Send;
     /// Error produced by `authorize` method.
     type Error: std::error::Error + Send + Sync;
 
     fn authorize<'a>(
         &'a self,
         authentication: Option<&'a Self::Authentication>,
-        context: Self::Context,
+        request: &'a Parts,
     ) -> Pin<Box<dyn Future<Output = Result<AuthorizationDecision, Self::Error>> + Send + 'a>>;
 }
 
@@ -124,7 +102,7 @@ pub enum AuthorizationDenial {
 }
 
 /// Default implementation of [`AuthorizationProvider`], that checks only fact of authentication
-/// and does not verify context.
+/// and does not inspect request metadata.
 ///
 /// The behavior of implementation:
 ///
@@ -150,13 +128,12 @@ where
     A: Send + Sync,
 {
     type Authentication = A;
-    type Context = ();
     type Error = Infallible;
 
     fn authorize<'a>(
         &'a self,
         authentication: Option<&'a Self::Authentication>,
-        _: Self::Context,
+        _: &'a Parts,
     ) -> Pin<Box<dyn Future<Output = Result<AuthorizationDecision, Self::Error>> + Send + 'a>> {
         Box::pin(async move {
             Ok(match authentication {
@@ -208,45 +185,39 @@ impl<E> AuthorizationFailureHandler<E> for DefaultAuthorizationFailureHandler {
     }
 }
 
-pub struct AuthorizationLayer<P, F, H, E> {
+pub struct AuthorizationLayer<P, H, E> {
     provider: Arc<P>,
-    context: F,
     failure_handler: H,
     authentication_entry_point: Arc<E>,
 }
 
 pub struct AuthorizationLayerBuilder<
     P,
-    F,
     E = DefaultAuthenticationEntryPoint,
     H = DefaultAuthorizationFailureHandler,
 > {
     provider: P,
-    context: F,
     failure_handler: H,
     authentication_entry_point: E,
 }
 
-impl AuthorizationLayer<(), (), (), ()> {
-    pub fn builder<P, F>(
+impl AuthorizationLayer<(), (), ()> {
+    pub fn builder<P>(
         provider: P,
-        context: F,
     ) -> AuthorizationLayerBuilder<
         P,
-        F,
         DefaultAuthenticationEntryPoint,
         DefaultAuthorizationFailureHandler,
     > {
         AuthorizationLayerBuilder {
             provider,
-            context,
             failure_handler: DefaultAuthorizationFailureHandler,
             authentication_entry_point: DefaultAuthenticationEntryPoint,
         }
     }
 }
 
-impl<P, F, E, H> AuthorizationLayerBuilder<P, F, E, H>
+impl<P, E, H> AuthorizationLayerBuilder<P, E, H>
 where
     P: AuthorizationProvider,
 {
@@ -254,10 +225,9 @@ where
     pub fn failure_handler<NewHandler>(
         self,
         failure_handler: NewHandler,
-    ) -> AuthorizationLayerBuilder<P, F, E, NewHandler> {
+    ) -> AuthorizationLayerBuilder<P, E, NewHandler> {
         AuthorizationLayerBuilder {
             provider: self.provider,
-            context: self.context,
             failure_handler,
             authentication_entry_point: self.authentication_entry_point,
         }
@@ -267,31 +237,28 @@ where
     pub fn authentication_entry_point<NewEntrypoint>(
         self,
         authentication_entry_point: NewEntrypoint,
-    ) -> AuthorizationLayerBuilder<P, F, NewEntrypoint, H> {
+    ) -> AuthorizationLayerBuilder<P, NewEntrypoint, H> {
         AuthorizationLayerBuilder {
             provider: self.provider,
-            context: self.context,
             failure_handler: self.failure_handler,
             authentication_entry_point,
         }
     }
 
     /// Build authorization layer.
-    pub fn build(self) -> AuthorizationLayer<P, F, H, E> {
+    pub fn build(self) -> AuthorizationLayer<P, H, E> {
         AuthorizationLayer {
             provider: Arc::new(self.provider),
-            context: self.context,
             failure_handler: self.failure_handler,
             authentication_entry_point: Arc::new(self.authentication_entry_point),
         }
     }
 }
 
-impl<P, F: Clone, H: Clone, E> Clone for AuthorizationLayer<P, F, H, E> {
+impl<P, H: Clone, E> Clone for AuthorizationLayer<P, H, E> {
     fn clone(&self) -> Self {
         Self {
             provider: Arc::clone(&self.provider),
-            context: self.context.clone(),
             failure_handler: self.failure_handler.clone(),
             authentication_entry_point: Arc::clone(&self.authentication_entry_point),
         }
@@ -299,18 +266,16 @@ impl<P, F: Clone, H: Clone, E> Clone for AuthorizationLayer<P, F, H, E> {
 }
 
 /// Tower wrapper for [`AuthorizationService`].
-impl<S, P, F, H, E> Layer<S> for AuthorizationLayer<P, F, H, E>
+impl<S, P, H, E> Layer<S> for AuthorizationLayer<P, H, E>
 where
-    F: Clone,
     H: Clone,
 {
-    type Service = AuthorizationService<S, P, F, H, E>;
+    type Service = AuthorizationService<S, P, H, E>;
 
     fn layer(&self, inner: S) -> Self::Service {
         AuthorizationService {
             inner,
             provider: Arc::clone(&self.provider),
-            context: self.context.clone(),
             failure_handler: self.failure_handler.clone(),
             authentication_entry_point: Arc::clone(&self.authentication_entry_point),
         }
@@ -318,20 +283,18 @@ where
 }
 
 /// Service for authorize HTTP-request.
-pub struct AuthorizationService<S, P, F, H, E> {
+pub struct AuthorizationService<S, P, H, E> {
     inner: S,
     provider: Arc<P>,
-    context: F,
     failure_handler: H,
     authentication_entry_point: Arc<E>,
 }
 
-impl<S: Clone, P, F: Clone, H: Clone, E> Clone for AuthorizationService<S, P, F, H, E> {
+impl<S: Clone, P, H: Clone, E> Clone for AuthorizationService<S, P, H, E> {
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
             provider: Arc::clone(&self.provider),
-            context: self.context.clone(),
             failure_handler: self.failure_handler.clone(),
             authentication_entry_point: Arc::clone(&self.authentication_entry_point),
         }
@@ -348,16 +311,14 @@ where
     }
 }
 
-impl<S, P, F, H, E> Service<Request> for AuthorizationService<S, P, F, H, E>
+impl<S, P, H, E> Service<Request> for AuthorizationService<S, P, H, E>
 where
     S: Service<Request, Response = Response> + Clone + Send + 'static,
     S::Future: Send + 'static,
     S::Error: Send + 'static,
     P: AuthorizationProvider + 'static,
     P::Authentication: 'static,
-    P::Context: Send + 'static,
     P::Error: 'static,
-    F: AuthorizationContextMapper<P::Context>,
     H: AuthorizationFailureHandler<P::Error>,
     E: AuthenticationEntryPoint,
 {
@@ -371,7 +332,6 @@ where
 
     fn call(&mut self, request: Request) -> Self::Future {
         let provider = Arc::clone(&self.provider);
-        let context = self.context.clone();
         let failure_handler = self.failure_handler.clone();
         let authentication_entry_point = Arc::clone(&self.authentication_entry_point);
         let clone = self.inner.clone();
@@ -379,14 +339,13 @@ where
 
         Box::pin(async move {
             let (parts, body) = request.into_parts();
-            let authorization_context = context.map(&parts);
             let decision = provider
                 .authorize(
                     parts
                         .extensions
                         .get::<Authenticated<P::Authentication>>()
                         .map(Authenticated::as_inner),
-                    authorization_context,
+                    &parts,
                 )
                 .await;
             let request = Request::from_parts(parts, body);

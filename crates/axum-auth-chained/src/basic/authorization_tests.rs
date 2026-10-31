@@ -10,10 +10,13 @@ async fn decision(
     provider
         .authorize(
             user,
-            RequestContext {
-                method,
-                uri: uri.parse().unwrap(),
-            },
+            &http::Request::builder()
+                .method(method)
+                .uri(uri)
+                .body(())
+                .unwrap()
+                .into_parts()
+                .0,
         )
         .await
         .unwrap()
@@ -155,13 +158,12 @@ struct TestManager {
 
 impl AuthorizationProvider for TestManager {
     type Authentication = UserDetail;
-    type Context = RequestContext;
     type Error = std::io::Error;
 
     fn authorize<'a>(
         &'a self,
         user: Option<&'a UserDetail>,
-        context: RequestContext,
+        context: &'a Parts,
     ) -> Pin<Box<dyn Future<Output = Result<AuthorizationDecision, Self::Error>> + Send + 'a>> {
         Box::pin(async move {
             self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
@@ -250,10 +252,12 @@ async fn custom_manager_errors_preserve_source_and_return_internal_server_error(
     let error = provider
         .authorize(
             None,
-            RequestContext {
-                method: Method::GET,
-                uri: "/notes/7?shared=true".parse().unwrap(),
-            },
+            &http::Request::builder()
+                .uri("/notes/7?shared=true")
+                .body(())
+                .unwrap()
+                .into_parts()
+                .0,
         )
         .await
         .unwrap_err();
@@ -271,10 +275,7 @@ async fn custom_manager_errors_preserve_source_and_return_internal_server_error(
             "/notes/{id}",
             axum::routing::get(|| async { StatusCode::OK }),
         )
-        .layer(
-            crate::authorization::AuthorizationLayer::builder(provider, request_context_mapper)
-                .build(),
-        );
+        .layer(crate::authorization::AuthorizationLayer::builder(provider).build());
     let response = app
         .call(
             axum::extract::Request::builder()
@@ -303,20 +304,31 @@ fn patterns_have_segment_boundaries_and_validate_at_build_time() {
         ("/Notes", "/notes", false),
     ] {
         assert_eq!(
-            RequestPathMatcher::compile(Some(pattern.to_owned()))
-                .unwrap()
-                .matches(path),
+            PathPatternRequestMatcher::new(pattern).unwrap().matches(
+                &http::Request::builder()
+                    .uri(path)
+                    .body(())
+                    .unwrap()
+                    .into_parts()
+                    .0
+            ),
             expected,
             "{pattern}: {path}"
         );
     }
     for pattern in [
+        "",
         "notes",
         "/notes/{*rest}/child",
         "/notes/{}",
         "/notes/{id",
         "/notes?q=1",
+        "/notes#fragment",
     ] {
+        assert!(
+            PathPatternRequestMatcher::new(pattern).is_err(),
+            "{pattern}"
+        );
         assert!(
             RequestAuthorizationProvider::<UserDetail>::builder()
                 .request_matchers(pattern)
@@ -326,4 +338,177 @@ fn patterns_have_segment_boundaries_and_validate_at_build_time() {
             "{pattern}"
         );
     }
+}
+
+#[tokio::test]
+async fn explicit_path_matchers_preserve_order_and_ignore_queries_and_methods() {
+    let provider = RequestAuthorizationProvider::<UserDetail>::builder()
+        .matching(PathPatternRequestMatcher::new("/notes/private").unwrap())
+        .deny_all()
+        .matching(PathPatternRequestMatcher::new("/notes/{id}").unwrap())
+        .permit_all()
+        .build()
+        .unwrap();
+    let user = UserDetail::new("user", "hash", vec![]);
+    for method in [Method::GET, Method::POST] {
+        assert_eq!(
+            decision(&provider, None, method.clone(), "/notes/42?view=full").await,
+            AuthorizationDecision::Allow,
+        );
+        for path in ["/notes/private", "/other", "/notes/42/"] {
+            assert_eq!(
+                decision(&provider, Some(&user), method.clone(), path).await,
+                AuthorizationDecision::Deny(AuthorizationDenial::InsufficientPermissions),
+            );
+        }
+    }
+}
+
+#[tokio::test]
+async fn user_defined_matcher_can_select_rules() {
+    struct PostOnly;
+    impl RequestMatcher for PostOnly {
+        fn matches(&self, request: &http::request::Parts) -> bool {
+            request.method == Method::POST
+        }
+    }
+    let provider = RequestAuthorizationProvider::<UserDetail>::builder()
+        .matching(PostOnly)
+        .permit_all()
+        .any_request()
+        .deny_all()
+        .build()
+        .unwrap();
+    assert_eq!(
+        decision(&provider, None, Method::POST, "/anything").await,
+        AuthorizationDecision::Allow,
+    );
+    assert_eq!(
+        decision(&provider, None, Method::GET, "/anything").await,
+        AuthorizationDecision::Deny(AuthorizationDenial::AuthenticationRequired),
+    );
+}
+
+#[tokio::test]
+async fn middleware_matchers_borrow_original_headers_and_extensions() {
+    use axum::{body::Body, http::StatusCode};
+    use tower_service::Service;
+
+    #[derive(Clone)]
+    struct ClientAddress(std::net::IpAddr);
+
+    struct MetadataMatcher;
+    impl RequestMatcher for MetadataMatcher {
+        fn matches(&self, parts: &http::request::Parts) -> bool {
+            parts.method == Method::POST
+                && parts.uri.path() == "/notes"
+                && parts
+                    .headers
+                    .get("x-client-kind")
+                    .is_some_and(|v| v == "internal")
+                && parts
+                    .extensions
+                    .get::<ClientAddress>()
+                    .is_some_and(|address| address.0.is_loopback())
+        }
+    }
+
+    let provider = RequestAuthorizationProvider::<UserDetail>::builder()
+        .matching(MetadataMatcher)
+        .permit_all()
+        .any_request()
+        .deny_all()
+        .build()
+        .unwrap();
+    let mut app = axum::Router::new()
+        .route(
+            "/notes",
+            axum::routing::post(|request: axum::extract::Request| async move {
+                // Matching must preserve the metadata and streaming body for the handler.
+                assert!(request.extensions().get::<ClientAddress>().is_some());
+                let body = axum::body::to_bytes(request.into_body(), 100)
+                    .await
+                    .unwrap();
+                assert_eq!(body.as_ref(), b"payload");
+                StatusCode::OK
+            }),
+        )
+        .layer(crate::authorization::AuthorizationLayer::builder(provider).build());
+
+    for (header, address, expected) in [
+        (Some("internal"), Some("127.0.0.1"), StatusCode::OK),
+        (None, Some("127.0.0.1"), StatusCode::UNAUTHORIZED),
+        (Some("internal"), None, StatusCode::UNAUTHORIZED),
+        (
+            Some("internal"),
+            Some("192.0.2.1"),
+            StatusCode::UNAUTHORIZED,
+        ),
+    ] {
+        let mut request = http::Request::builder().method(Method::POST).uri("/notes");
+        if let Some(header) = header {
+            request = request.header("x-client-kind", header);
+        }
+        let mut request = request.body(Body::from("payload")).unwrap();
+        if let Some(address) = address {
+            request
+                .extensions_mut()
+                .insert(ClientAddress(address.parse().unwrap()));
+        }
+        assert_eq!(app.call(request).await.unwrap().status(), expected);
+    }
+}
+
+#[tokio::test]
+async fn custom_manager_borrows_original_parts_across_await() {
+    #[derive(Clone)]
+    struct Tenant(String);
+
+    struct TenantManager;
+    impl AuthorizationProvider for TenantManager {
+        type Authentication = UserDetail;
+        type Error = std::convert::Infallible;
+
+        fn authorize<'a>(
+            &'a self,
+            user: Option<&'a UserDetail>,
+            parts: &'a Parts,
+        ) -> Pin<Box<dyn Future<Output = Result<AuthorizationDecision, Self::Error>> + Send + 'a>>
+        {
+            Box::pin(async move {
+                let tenant = parts.extensions.get::<Tenant>().unwrap();
+                let header = parts.headers.get("x-tenant").unwrap();
+                tokio::task::yield_now().await;
+                assert_eq!(user.unwrap().username, "alice");
+                assert_eq!(tenant.0, "team-a");
+                assert_eq!(header, "team-a");
+                assert!(std::ptr::eq(
+                    tenant,
+                    parts.extensions.get::<Tenant>().unwrap()
+                ));
+                Ok(AuthorizationDecision::Allow)
+            })
+        }
+    }
+
+    let provider = RequestAuthorizationProvider::builder()
+        .request_matchers("/notes/{id}")
+        .access(TenantManager)
+        .build()
+        .unwrap();
+    // The same authorize entry point works through an object-safe provider.
+    let provider: &dyn AuthorizationProvider<Authentication = UserDetail, Error = RequestAuthorizationError> =
+        &provider;
+    let user = UserDetail::new("alice", "hash", vec![]);
+    let (mut parts, _) = http::Request::builder()
+        .uri("/notes/42")
+        .header("x-tenant", "team-a")
+        .body(())
+        .unwrap()
+        .into_parts();
+    parts.extensions.insert(Tenant("team-a".to_owned()));
+    assert_eq!(
+        provider.authorize(Some(&user), &parts).await.unwrap(),
+        AuthorizationDecision::Allow,
+    );
 }

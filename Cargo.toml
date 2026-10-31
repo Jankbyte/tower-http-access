@@ -10,6 +10,7 @@ license = "MIT"
 repository = "https://github.com/Jankbyte/axum-auth-chained"
 
 [workspace.dependencies]
+futures-util = { version = "0.3", default-features = false }
 matchit = "0.8.4"
 argon2 = "0.6.0"
 axum = "0.8.9"

@@ -22,12 +22,9 @@ impl Service<Request> for Inner {
     }
 }
 fn authenticated_service() -> impl Service<Request, Response = Response, Error = Infallible> {
-    AuthorizationLayer::builder(
-        AuthenticatedAuthorizationProvider::<String>::new(),
-        |_: &Parts| (),
-    )
-    .build()
-    .layer(Inner)
+    AuthorizationLayer::builder(AuthenticatedAuthorizationProvider::<String>::new())
+        .build()
+        .layer(Inner)
 }
 
 #[tokio::test]
@@ -42,18 +39,16 @@ async fn authenticated_provider_without_identity_returns_unauthorized() {
 
 #[tokio::test]
 async fn authentication_required_uses_configured_entry_point() {
-    let mut service = AuthorizationLayer::builder(
-        AuthenticatedAuthorizationProvider::<String>::new(),
-        |_: &Parts| (),
-    )
-    .authentication_entry_point(move |request: Request| {
-        (
-            StatusCode::UNAUTHORIZED,
-            [("x-request-path", request.uri().path().to_owned())],
-        )
-    })
-    .build()
-    .layer(Inner);
+    let mut service =
+        AuthorizationLayer::builder(AuthenticatedAuthorizationProvider::<String>::new())
+            .authentication_entry_point(move |request: Request| {
+                (
+                    StatusCode::UNAUTHORIZED,
+                    [("x-request-path", request.uri().path().to_owned())],
+                )
+            })
+            .build()
+            .layer(Inner);
     let request = Request::builder()
         .uri("/private")
         .body(Body::empty())
@@ -97,13 +92,12 @@ struct DenyProvider;
 
 impl AuthorizationProvider for DenyProvider {
     type Authentication = String;
-    type Context = ();
     type Error = Infallible;
 
     fn authorize<'a>(
         &'a self,
         _: Option<&'a Self::Authentication>,
-        _: Self::Context,
+        _: &'a Parts,
     ) -> Pin<Box<dyn Future<Output = Result<AuthorizationDecision, Self::Error>> + Send + 'a>> {
         Box::pin(async {
             Ok(AuthorizationDecision::Deny(
@@ -115,7 +109,7 @@ impl AuthorizationProvider for DenyProvider {
 
 #[tokio::test]
 async fn insufficient_permissions_returns_forbidden() {
-    let mut service = AuthorizationLayer::builder(DenyProvider, |_: &Parts| ())
+    let mut service = AuthorizationLayer::builder(DenyProvider)
         .build()
         .layer(Inner);
 
@@ -126,7 +120,7 @@ async fn insufficient_permissions_returns_forbidden() {
 
 #[tokio::test]
 async fn custom_failure_handler_receives_request_and_denial() {
-    let mut service = AuthorizationLayer::builder(DenyProvider, |_: &Parts| ())
+    let mut service = AuthorizationLayer::builder(DenyProvider)
         .failure_handler(
             |request: Request, failure: AuthorizationFailure<Infallible>| {
                 let denial = match failure {
@@ -163,13 +157,12 @@ struct ErrorProvider;
 
 impl AuthorizationProvider for ErrorProvider {
     type Authentication = String;
-    type Context = ();
     type Error = io::Error;
 
     fn authorize<'a>(
         &'a self,
         _: Option<&'a Self::Authentication>,
-        _: Self::Context,
+        _: &'a Parts,
     ) -> Pin<Box<dyn Future<Output = Result<AuthorizationDecision, Self::Error>> + Send + 'a>> {
         Box::pin(async { Err(io::Error::other("policy store unavailable")) })
     }
@@ -177,7 +170,7 @@ impl AuthorizationProvider for ErrorProvider {
 
 #[tokio::test]
 async fn provider_error_returns_internal_server_error() {
-    let mut service = AuthorizationLayer::builder(ErrorProvider, |_: &Parts| ())
+    let mut service = AuthorizationLayer::builder(ErrorProvider)
         .build()
         .layer(Inner);
 
@@ -191,12 +184,10 @@ async fn authentication_then_authorization_forwards_identity() {
     let authenticator = |_: &mut Parts| async {
         Ok::<_, AuthenticatorError>(AuthenticationAttempt::Authenticated("alex".to_owned()))
     };
-    let authorization = AuthorizationLayer::builder(
-        AuthenticatedAuthorizationProvider::<String>::new(),
-        |_: &Parts| (),
-    )
-    .build()
-    .layer(Inner);
+    let authorization =
+        AuthorizationLayer::builder(AuthenticatedAuthorizationProvider::<String>::new())
+            .build()
+            .layer(Inner);
     let mut service = AuthenticationLayer::new(authenticator).layer(authorization);
 
     let response = service.call(Request::new(Body::empty())).await.unwrap();

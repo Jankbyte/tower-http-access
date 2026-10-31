@@ -10,14 +10,10 @@ pub use password::{
     PlainHashPasswordManager,
 };
 
-pub use authenticator::{
-    BasicRequestAuthenticator, UsernamePasswordAuthenticationFuture,
-    UsernamePasswordAuthenticationProvider,
-};
+pub use authenticator::{BasicRequestAuthenticator, UsernamePasswordAuthenticationProvider};
 pub use authorization::{
     HasAuthorities, InvalidRequestPattern, PendingRuleBuilder, RequestAuthorizationBuilder,
-    RequestAuthorizationError, RequestAuthorizationProvider, RequestContext,
-    request_context_mapper,
+    RequestAuthorizationError, RequestAuthorizationProvider,
 };
 pub use base64::BasicCredentials;
 pub use user_detail::{

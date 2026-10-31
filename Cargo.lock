@@ -60,6 +60,7 @@ dependencies = [
  "argon2",
  "axum",
  "base64",
+ "futures-util",
  "http",
  "matchit",
  "password-hash",
@@ -81,6 +82,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+ "tower",
  "tracing",
  "tracing-subscriber",
 ]

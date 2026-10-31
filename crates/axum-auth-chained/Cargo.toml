@@ -12,6 +12,7 @@ keywords = ["axum", "authentication", "authorization", "middleware", "tower"]
 categories = ["authentication", "web-programming::http-server"]
 
 [dependencies]
+futures-util = { workspace = true, default-features = false, features = ["alloc"] }
 matchit = { workspace = true, optional = true }
 http.workspace = true
 tower-service.workspace = true
@@ -31,4 +32,5 @@ tokio = { workspace = true, features = ["full"] }
 [features]
 tracing = ["dep:tracing"]
 argon2_encoder = ["basic_auth", "dep:argon2"]
-basic_auth = ["dep:matchit", "dep:base64", "dep:password-hash"]
+request_matcher = ["dep:matchit"]
+basic_auth = ["request_matcher", "dep:base64", "dep:password-hash"]

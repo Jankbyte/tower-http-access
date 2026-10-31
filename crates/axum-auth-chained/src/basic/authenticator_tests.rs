@@ -14,7 +14,7 @@ impl UsernamePasswordAuthenticationProvider for CustomProvider {
     fn authenticate<'a>(
         &'a self,
         credentials: &'a BasicCredentials,
-    ) -> UsernamePasswordAuthenticationFuture<'a, Self::Authentication, Self::Error> {
+    ) -> BoxFuture<'a, Result<Option<Self::Authentication>, Self::Error>> {
         Box::pin(async move {
             Ok(
                 (credentials.username == "alex" && credentials.password == "alex123")

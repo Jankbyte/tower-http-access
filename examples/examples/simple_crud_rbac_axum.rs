@@ -1,6 +1,6 @@
 //! ```not_rust
 //! # Start
-//! cargo run --example simple_crud_rbac_axum
+//! cargo run --package axum-auth-chained-examples --example simple_crud_rbac_axum
 //! # Get note
 //! curl -v -X GET http://127.0.0.1:3000/v1/notes/1
 //! # Delete note
@@ -16,7 +16,7 @@
 use axum::{
     Json, Router,
     extract::{Path, State},
-    http::{Method, StatusCode, request::Parts},
+    http::{Method, StatusCode},
     routing::method_routing::{get, post},
 };
 use axum_auth_chained::{
@@ -27,8 +27,8 @@ use axum_auth_chained::{
     },
     basic::{
         Authority, BasicRequestAuthenticator, HasAuthorities, InMemoryUserDetailService,
-        PlainHashPasswordManager, RequestAuthorizationProvider, RequestContext, UserDetail,
-        UserDetailAuthenticationProvider, request_context_mapper,
+        PlainHashPasswordManager, RequestAuthorizationProvider, UserDetail,
+        UserDetailAuthenticationProvider,
     },
 };
 use serde::{Deserialize, Serialize};
@@ -42,6 +42,14 @@ async fn main() {
         .with_max_level(tracing::Level::TRACE)
         .init();
 
+    let app = create_app().await;
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
+        .await
+        .unwrap();
+    let _ = axum::serve(listener, app).await;
+}
+
+async fn create_app() -> Router {
     let note_repository = NoteRepository::new(vec![
         Note::new("About Rust", "Tech page about rust"),
         Note::new("Prepare to rust interview", "Preparing to rust interview"),
@@ -51,13 +59,9 @@ async fn main() {
     let authorization_layer = create_authorization_layer(Arc::clone(&basic_authenticator));
 
     let security_layer = SecurityLayerBuilder::builder()
-        .authenticators(|authenticators| authenticators.shared_authenticator(basic_authenticator))
+        .authenticator(basic_authenticator)
         .authorization_layer(authorization_layer)
         .build();
-
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
-        .await
-        .unwrap();
 
     let notes_api = Router::new()
         .route("/", post(create_note))
@@ -65,12 +69,12 @@ async fn main() {
             "/{id}",
             get(read_note_by_id).put(replace_note).delete(delete_note),
         )
-        .layer(security_layer) // apply layer only for Notes API
         .with_state(note_repository);
 
-    let app = Router::new().nest("/v1/notes", notes_api);
-
-    let _ = axum::serve(listener, app).await;
+    // Match full application paths before Axum strips the nesting prefix.
+    Router::new()
+        .nest("/v1/notes", notes_api)
+        .route_layer(security_layer) // apply security only to the existing Notes API routes
 }
 
 #[derive(Serialize)]
@@ -254,7 +258,6 @@ async fn create_basic_authenticator()
 
 type NotesAuthorizationLayer<T> = AuthorizationLayer<
     RequestAuthorizationProvider<SharedUser>,
-    fn(&Parts) -> RequestContext,
     DefaultAuthorizationFailureHandler,
     T,
 >;
@@ -277,10 +280,7 @@ fn create_authorization_layer<T: AuthenticationEntryPoint>(
         .deny_all()
         .build()
         .expect("build authorization provider");
-    AuthorizationLayer::builder(
-        provider,
-        request_context_mapper as fn(&Parts) -> RequestContext,
-    )
-    .authentication_entry_point(authentication_entry_point)
-    .build()
+    AuthorizationLayer::builder(provider)
+        .authentication_entry_point(authentication_entry_point)
+        .build()
 }

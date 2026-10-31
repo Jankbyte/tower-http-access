@@ -38,7 +38,7 @@ use axum_auth_chained::{
     basic::{
         AsyncStringPasswordManager, Authority, BasicRequestAuthenticator,
         InMemoryUserDetailService, RequestAuthorizationProvider, UserDetail,
-        UserDetailAuthenticationProvider, request_context_mapper,
+        UserDetailAuthenticationProvider,
     },
 };
 
@@ -73,10 +73,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         .build()?;
 
     let security = SecurityLayerBuilder::builder()
-        .authenticators(|chain| chain.shared_authenticator(Arc::clone(&authenticator)))
+        .chained_authenticators(|chain| chain.shared_authenticator(Arc::clone(&authenticator)))
         .authorization(|authorization| {
             authorization
-                .authorize_with(rules, request_context_mapper)
+                .authorize_with(rules)
                 .authentication_entry_point(authenticator)
         })
         .build();
@@ -151,6 +151,55 @@ Paths use `matchit` syntax, as in Axum:
 
 Matching is case-sensitive, ignores query strings, and distinguishes trailing slashes. Rules match the URI visible to the middleware; attach the layer outside nested routers when using full application paths.
 
+Axum strips the nesting prefix before middleware inside a nested router runs.
+For `/v1/notes/1`, security attached inside `.nest("/v1/notes", ...)` sees `/1`;
+a rule for `/v1/notes/1` will not match. Attach security after nesting to use full paths:
+
+```rust
+let app = Router::new()
+    .nest("/v1/notes", notes_api)
+    .route_layer(security_layer);
+```
+
+Alternatively, keep security inside the nested router and write local path rules
+such as `/1` and `/{id}`. The built-in path matcher reads `Parts.uri`, not Axum's
+`OriginalUri` extension.
+
+Use `.matching(...)` to supply a `RequestMatcher` explicitly:
+
+```rust
+use axum_auth_chained::{
+    basic::{RequestAuthorizationProvider, UserDetail},
+    request_matcher::PathPatternRequestMatcher,
+};
+
+let rules = RequestAuthorizationProvider::<UserDetail>::builder()
+    .matching(PathPatternRequestMatcher::new("/notes/{id}")?)
+    .has_authority("ReadNote")
+    .any_request()
+    .deny_all()
+    .build()?;
+```
+
+`PathPatternRequestMatcher` compiles its pattern when constructed and matches paths
+for every HTTP method by default. Use `.with_method(Method::GET)` to also restrict
+the method. Existing `.request_matchers(...)` and `.method_matchers(...)`
+helpers use the same implementation and validate patterns at `.build()`.
+Custom matchers implement `RequestMatcher::matches(&http::request::Parts)` and borrow
+the original method, URI, headers, and extensions. Authorization providers receive
+the same borrowed request parts through `authorize`. Matching is synchronous; permission decisions remain in the
+authorization policy. A nonmatching rule is skipped, not denied.
+
+Matchers run on the request's async executor thread and must be fast. Do not perform
+blocking I/O, database or network calls, or expensive CPU-bound work inside a matcher.
+Compile patterns and prepare lookup data during configuration. For async or CPU-bound
+access checks, use a custom `AuthorizationProvider` through `.access(provider)`.
+Offload CPU-bound work inside that provider to `spawn_blocking` or a dedicated worker
+pool; making a function async does not move CPU work off the executor.
+
+The `request_matcher` module uses `http` types and can be enabled independently with
+the `request_matcher` feature; `basic_auth` enables it automatically.
+
 Available policies:
 
 | Builder method | Requirement |
@@ -167,26 +216,34 @@ Custom identity types can implement `HasAuthorities`. Authority names are compar
 
 ## 🔐 Custom authorization
 
-Implement `AuthorizationProvider` for application-specific decisions. It receives an optional identity and an owned context, and may perform async I/O.
+Implement `AuthorizationProvider` for application-specific decisions. It receives an optional identity and borrowed `http::request::Parts`, and may perform async I/O.
 
-Use `.access(manager)` on a request rule when the manager uses the same identity type and `RequestContext`. The context contains the request method and URI; it does not currently expose matched path parameters. The manager decides how to handle anonymous callers and whether access is allowed. No authority check is added automatically.
+Use `.access(manager)` on a request rule when the manager uses the same identity type. Managers can inspect the method, URI, headers, and extensions without copying them; matched path parameters are not extracted automatically. The manager decides how to handle anonymous callers and whether access is allowed. No authority check is added automatically.
 
-Custom manager errors are wrapped in `RequestAuthorizationError`, preserving their source. For a different context or a complete policy engine, provide your own `AuthorizationProvider` and `AuthorizationContextMapper` through `.authorize_with(provider, mapper)`.
+Custom manager errors are wrapped in `RequestAuthorizationError`, preserving their source. For a complete policy engine, provide your own `AuthorizationProvider` through `.authorize_with(provider)`. Put application-specific request metadata in extensions before authorization runs.
 
 Check resource ownership and sharing rules in your application service or repository as well. For mutations, enforce access together with the write so a separate earlier check cannot become stale.
 
 ## 🧩 Reusing layers
 
+Use `.authenticator(my_authenticator)` to set a single authenticator directly,
+without wrapping it in a delegating chain. It does not need to implement `Clone`;
+the authentication layer shares it through `Arc`.
+Use `.chained_authenticators(|chain| ...)` to configure multiple authentication
+mechanisms in order, using the chain's `.authenticator(...)` or
+`.shared_authenticator(...)` methods. This replaces the former `.authenticators(...)`
+builder method.
+
 A preconfigured `AuthorizationLayer` can be supplied directly:
 
 ```rust
 let security = SecurityLayerBuilder::builder()
-    .authenticators(|chain| chain.authenticator(my_authenticator))
+    .authenticator(my_authenticator)
     .authorization_layer(my_authorization_layer)
     .build();
 ```
 
-Clone the resulting layer to attach it to multiple routers. Authentication providers, authorization rules, and entry points are shared through `Arc`; cloning does not duplicate them. Context mappers and failure handlers use their own `Clone` implementations.
+Clone the resulting layer to attach it to multiple routers. Authentication providers, authorization rules, and entry points are shared through `Arc`; cloning does not duplicate them. Failure handlers use their own `Clone` implementations.
 
 ## 🪪 Sessions and form login
 

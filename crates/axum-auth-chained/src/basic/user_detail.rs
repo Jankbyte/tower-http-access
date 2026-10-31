@@ -1,7 +1,8 @@
 use super::{
     AsyncPasswordError, AsyncPasswordHasher, AsyncPasswordVerifier, BasicCredentials,
-    UsernamePasswordAuthenticationFuture, UsernamePasswordAuthenticationProvider,
+    UsernamePasswordAuthenticationProvider,
 };
+use futures_util::future::BoxFuture;
 use std::collections::HashMap;
 use std::error::Error as StdError;
 use std::pin::Pin;
@@ -188,7 +189,7 @@ where
     fn authenticate<'a>(
         &'a self,
         credentials: &'a BasicCredentials,
-    ) -> UsernamePasswordAuthenticationFuture<'a, Self::Authentication, Self::Error> {
+    ) -> BoxFuture<'a, Result<Option<Self::Authentication>, Self::Error>> {
         Box::pin(async move {
             let user = self
                 .user_detail_service

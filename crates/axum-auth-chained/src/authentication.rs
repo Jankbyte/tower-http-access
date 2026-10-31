@@ -15,10 +15,10 @@ use axum::{
     http::request::Parts,
     response::{IntoResponse, Response},
 };
+use futures_util::future::BoxFuture;
 use std::{
     error::Error,
     future::Future,
-    pin::Pin,
     sync::Arc,
     task::{Context, Poll},
 };
@@ -183,9 +183,6 @@ impl<A> AuthenticationAttempt<A> {
     }
 }
 
-type AuthenticationFuture<'a, A> =
-    Pin<Box<dyn Future<Output = Result<AuthenticationAttempt<A>, AuthenticatorError>> + Send + 'a>>;
-
 /// Accept HTTP-request and tries to convert into authentication.
 ///
 /// # Contract
@@ -212,7 +209,20 @@ pub trait RequestAuthenticator: Send + Sync {
     fn authenticate<'a>(
         &'a self,
         parts: &'a mut Parts,
-    ) -> AuthenticationFuture<'a, Self::Authentication>;
+    ) -> BoxFuture<'a, Result<AuthenticationAttempt<Self::Authentication>, AuthenticatorError>>;
+}
+
+/// Forwards authentication to a shared authenticator, including trait objects.
+impl<A: RequestAuthenticator + ?Sized> RequestAuthenticator for Arc<A> {
+    type Authentication = A::Authentication;
+
+    fn authenticate<'a>(
+        &'a self,
+        parts: &'a mut Parts,
+    ) -> BoxFuture<'a, Result<AuthenticationAttempt<Self::Authentication>, AuthenticatorError>>
+    {
+        self.as_ref().authenticate(parts)
+    }
 }
 
 /// Convert type of authentication to another type.
@@ -247,7 +257,8 @@ where
     fn authenticate<'a>(
         &'a self,
         parts: &'a mut Parts,
-    ) -> AuthenticationFuture<'a, Self::Authentication> {
+    ) -> BoxFuture<'a, Result<AuthenticationAttempt<Self::Authentication>, AuthenticatorError>>
+    {
         Box::pin(async move {
             self.inner
                 .authenticate(parts)
@@ -276,7 +287,10 @@ where
 {
     type Authentication = A;
 
-    fn authenticate<'a>(&'a self, parts: &'a mut Parts) -> AuthenticationFuture<'a, A> {
+    fn authenticate<'a>(
+        &'a self,
+        parts: &'a mut Parts,
+    ) -> BoxFuture<'a, Result<AuthenticationAttempt<A>, AuthenticatorError>> {
         Box::pin(self(parts))
     }
 }
@@ -318,7 +332,8 @@ where
     fn authenticate<'a>(
         &'a self,
         parts: &'a mut Parts,
-    ) -> AuthenticationFuture<'a, Self::Authentication> {
+    ) -> BoxFuture<'a, Result<AuthenticationAttempt<Self::Authentication>, AuthenticatorError>>
+    {
         Box::pin(async move {
             for authenticator in &self.authenticators {
                 match authenticator.authenticate(parts).await? {
@@ -428,8 +443,6 @@ impl<S: Clone, A> Clone for AuthenticationService<S, A> {
     }
 }
 
-type ResponseFuture<E> = Pin<Box<dyn Future<Output = Result<Response, E>> + Send>>;
-
 impl<S, A> Service<Request> for AuthenticationService<S, A>
 where
     S: Service<Request, Response = Response> + Clone + Send + 'static,
@@ -439,7 +452,7 @@ where
 {
     type Response = Response;
     type Error = S::Error;
-    type Future = ResponseFuture<S::Error>;
+    type Future = BoxFuture<'static, Result<Response, S::Error>>;
 
     fn poll_ready(&mut self, context: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         self.inner.poll_ready(context)
