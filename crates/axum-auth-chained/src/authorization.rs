@@ -13,6 +13,7 @@ use axum::{
     http::{StatusCode, request::Parts},
     response::{IntoResponse, Response},
 };
+use futures_util::future::BoxFuture;
 use std::{
     convert::Infallible,
     future::Future,
@@ -78,6 +79,105 @@ pub trait AuthorizationProvider: Send + Sync {
         authentication: Option<&'a Self::Authentication>,
         request: &'a Parts,
     ) -> Pin<Box<dyn Future<Output = Result<AuthorizationDecision, Self::Error>> + Send + 'a>>;
+}
+
+/// Adapters for authorization providers.
+pub trait AuthorizationProviderExt: AuthorizationProvider + Sized {
+    /// Convert an authenticated identity before passing it to this provider.
+    ///
+    /// The mapper runs only for authenticated requests. Anonymous requests are passed through as
+    /// `None`, and the original identity in request extensions remains available to handlers.
+    /// Conversion is synchronous and produces an owned value used only during authorization.
+    ///
+    /// Use this when an authorization provider from an external crate expects its own principal
+    /// type, while your authenticator produces an application-specific identity. The adapted
+    /// provider accepts the application's identity and converts it to the external principal
+    /// without changing either type or replacing the identity stored by authentication middleware.
+    /// The underlying provider's decisions and errors are returned unchanged.
+    ///
+    /// ```
+    /// use axum_auth_chained::authorization::{
+    ///     AuthenticatedAuthorizationProvider, AuthorizationProviderExt,
+    /// };
+    ///
+    /// struct AppUser { id: u64 }
+    ///
+    /// let provider = AuthenticatedAuthorizationProvider::<String>::new()
+    ///     .map(|user: &AppUser| user.id.to_string());
+    /// ```
+    ///
+    /// For an external authorization integration, adapt a provider whose authentication type is
+    /// the external crate's principal. Here `ExternalPrincipal` stands in for that crate's type:
+    ///
+    /// ```
+    /// use axum_auth_chained::authorization::{AuthorizationProvider, AuthorizationProviderExt};
+    ///
+    /// struct AppUser {
+    ///     id: u64,
+    ///     roles: Vec<String>,
+    /// }
+    ///
+    /// struct ExternalPrincipal {
+    ///     subject: String,
+    ///     roles: Vec<String>,
+    /// }
+    ///
+    /// fn adapt_external_provider<P>(provider: P)
+    ///     -> impl AuthorizationProvider<Authentication = AppUser, Error = P::Error>
+    /// where
+    ///     P: AuthorizationProvider<Authentication = ExternalPrincipal>,
+    /// {
+    ///     provider.map(|user: &AppUser| ExternalPrincipal {
+    ///         subject: user.id.to_string(),
+    ///         roles: user.roles.clone(),
+    ///     })
+    /// }
+    /// ```
+    ///
+    /// The external provider must implement [`AuthorizationProvider`] directly or through a local
+    /// wrapper. This mapper performs local conversion; conversions requiring asynchronous I/O
+    /// need a custom provider implementation.
+    fn map<A, F>(self, mapper: F) -> MapAuthorization<Self, F, A>
+    where
+        A: Send + Sync,
+        F: Fn(&A) -> Self::Authentication + Send + Sync,
+    {
+        MapAuthorization {
+            inner: self,
+            mapper,
+            authentication: PhantomData,
+        }
+    }
+}
+
+impl<P: AuthorizationProvider> AuthorizationProviderExt for P {}
+
+/// An authorization provider that converts its input identity before delegating.
+pub struct MapAuthorization<P, F, A> {
+    inner: P,
+    mapper: F,
+    authentication: PhantomData<fn() -> A>,
+}
+
+impl<P, F, A> AuthorizationProvider for MapAuthorization<P, F, A>
+where
+    P: AuthorizationProvider,
+    A: Send + Sync,
+    F: Fn(&A) -> P::Authentication + Send + Sync,
+{
+    type Authentication = A;
+    type Error = P::Error;
+
+    fn authorize<'a>(
+        &'a self,
+        authentication: Option<&'a A>,
+        request: &'a Parts,
+    ) -> BoxFuture<'a, Result<AuthorizationDecision, Self::Error>> {
+        Box::pin(async move {
+            let mapped = authentication.map(&self.mapper);
+            self.inner.authorize(mapped.as_ref(), request).await
+        })
+    }
 }
 
 /// Authorization success result, with optional behavior.

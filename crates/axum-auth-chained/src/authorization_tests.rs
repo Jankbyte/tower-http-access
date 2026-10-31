@@ -194,3 +194,107 @@ async fn authentication_then_authorization_forwards_identity() {
 
     assert_eq!(response.status(), StatusCode::OK);
 }
+
+struct MappedIdentityProvider;
+
+impl AuthorizationProvider for MappedIdentityProvider {
+    type Authentication = usize;
+    type Error = io::Error;
+
+    fn authorize<'a>(
+        &'a self,
+        authentication: Option<&'a usize>,
+        request: &'a Parts,
+    ) -> BoxFuture<'a, Result<AuthorizationDecision, Self::Error>> {
+        Box::pin(async move {
+            // Yield so the adapter must retain the mapped value across an await.
+            tokio::task::yield_now().await;
+            if request.uri.path() == "/error" {
+                return Err(io::Error::other("external authorization failed"));
+            }
+            Ok(match authentication {
+                Some(4) => AuthorizationDecision::Allow,
+                Some(_) => {
+                    AuthorizationDecision::Deny(AuthorizationDenial::InsufficientPermissions)
+                }
+                None => AuthorizationDecision::Deny(AuthorizationDenial::AuthenticationRequired),
+            })
+        })
+    }
+}
+
+#[tokio::test]
+async fn mapped_provider_preserves_decisions_errors_and_request_parts() {
+    let provider = MappedIdentityProvider.map(|identity: &String| identity.len());
+    let (parts, _) = Request::new(Body::empty()).into_parts();
+
+    for (identity, expected) in [
+        ("alex", AuthorizationDecision::Allow),
+        (
+            "a",
+            AuthorizationDecision::Deny(AuthorizationDenial::InsufficientPermissions),
+        ),
+    ] {
+        assert_eq!(
+            provider
+                .authorize(Some(&identity.to_owned()), &parts)
+                .await
+                .unwrap(),
+            expected
+        );
+    }
+
+    let (parts, _) = Request::builder()
+        .uri("/error")
+        .body(Body::empty())
+        .unwrap()
+        .into_parts();
+    let error = provider
+        .authorize(Some(&"alex".to_owned()), &parts)
+        .await
+        .unwrap_err();
+    assert_eq!(error.to_string(), "external authorization failed");
+}
+
+#[tokio::test]
+async fn mapped_provider_passes_anonymous_requests_without_mapping() {
+    let provider = MappedIdentityProvider
+        .map(|_: &String| -> usize { panic!("anonymous requests must not invoke the mapper") });
+    let (parts, _) = Request::new(Body::empty()).into_parts();
+    assert_eq!(
+        provider.authorize(None, &parts).await.unwrap(),
+        AuthorizationDecision::Deny(AuthorizationDenial::AuthenticationRequired)
+    );
+}
+
+#[tokio::test]
+async fn mapped_provider_integrates_with_security_builder_and_preserves_handler_identity() {
+    let authenticator = |_: &mut Parts| async {
+        Ok::<_, AuthenticatorError>(AuthenticationAttempt::Authenticated("alex".to_owned()))
+    };
+    let authorization =
+        AuthorizationLayer::builder(MappedIdentityProvider.map(|identity: &String| identity.len()))
+            .build();
+    let security = crate::SecurityLayerBuilder::builder()
+        .authenticator(authenticator)
+        .authorization_layer(authorization)
+        .build();
+    let router = axum::Router::new().route(
+        "/",
+        axum::routing::get(
+            |Authenticated(identity): Authenticated<String>| async move { identity },
+        ),
+    );
+    let response = security
+        .service(router)
+        .call(Request::new(Body::empty()))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+        "alex"
+    );
+}
