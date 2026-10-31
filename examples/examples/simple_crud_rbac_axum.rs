@@ -21,13 +21,14 @@ use axum::{
 };
 use axum_auth_chained::{
     SecurityLayerBuilder,
+    authentication::{RequestAuthenticator, RequestAuthenticatorExt},
     authorization::{
         AuthenticationEntryPoint, AuthorizationLayer, DefaultAuthorizationFailureHandler,
     },
     basic::{
-        Authority, BasicRequestAuthenticator, InMemoryUserDetailService, PlainHashPasswordManager,
-        RequestAuthorizationProvider, RequestContext, UserDetail, UserDetailAuthenticationProvider,
-        request_context_mapper,
+        Authority, BasicRequestAuthenticator, HasAuthorities, InMemoryUserDetailService,
+        PlainHashPasswordManager, RequestAuthorizationProvider, RequestContext, UserDetail,
+        UserDetailAuthenticationProvider, request_context_mapper,
     },
 };
 use serde::{Deserialize, Serialize};
@@ -201,9 +202,25 @@ impl NoteRepository {
     }
 }
 
-async fn create_basic_authenticator() -> BasicRequestAuthenticator<
-    UserDetailAuthenticationProvider<PlainHashPasswordManager, InMemoryUserDetailService>,
-> {
+// A local wrapper lets us implement HasAuthorities while sharing the identity on clone.
+// We care about this, because user detail is "heavy" struct, that has many allocations on clone.
+#[derive(Clone)]
+struct SharedUser(Arc<UserDetail>);
+
+impl From<UserDetail> for SharedUser {
+    fn from(user_detail: UserDetail) -> Self {
+        SharedUser(Arc::new(user_detail))
+    }
+}
+
+impl HasAuthorities for SharedUser {
+    fn has_authority(&self, authority: &str) -> bool {
+        self.0.has_authority(authority)
+    }
+}
+
+async fn create_basic_authenticator()
+-> impl RequestAuthenticator<Authentication = SharedUser> + AuthenticationEntryPoint {
     let manager = PlainHashPasswordManager; // DONT use in production
 
     let create = Authority::new("CreateNote");
@@ -232,11 +249,11 @@ async fn create_basic_authenticator() -> BasicRequestAuthenticator<
         .await
         .unwrap();
 
-    BasicRequestAuthenticator::new(provider)
+    BasicRequestAuthenticator::new(provider).map(SharedUser::from)
 }
 
 type NotesAuthorizationLayer<T> = AuthorizationLayer<
-    RequestAuthorizationProvider<UserDetail>,
+    RequestAuthorizationProvider<SharedUser>,
     fn(&Parts) -> RequestContext,
     DefaultAuthorizationFailureHandler,
     T,

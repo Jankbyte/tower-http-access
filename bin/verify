@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+
+set -e
+
+doc_args=()
+for arg in "$@"; do
+    if [[ "$arg" == "--open-doc" ]]; then
+        doc_args=(--open)
+    fi
+done
+
+export RUSTFLAGS="-D warnings"
+export RUSTDOCFLAGS="$RUSTFLAGS"
+
+cargo fmt -- --check
+cargo clippy --workspace --all-targets --all-features
+cargo test --all-targets --all-features
+cargo doc --all-features --no-deps "${doc_args[@]}"
