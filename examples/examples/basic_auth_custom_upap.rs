@@ -8,10 +8,11 @@ use axum::{Router, routing::get};
 use futures_util::future::BoxFuture;
 use std::sync::Arc;
 use tower_http_access::{
-    SecurityLayer,
-    authentication::Authenticated,
-    authorization::AuthenticatedAuthorizationProvider,
-    basic::{BasicCredentials, BasicRequestAuthenticator, UsernamePasswordAuthenticationProvider},
+    SecurityLayer, authentication::Authenticated, authorization::AuthenticatedAuthorizationProvider,
+};
+
+use tower_http_access_basic::{
+    BasicCredentials, BasicRequestAuthenticator, UsernamePasswordAuthenticationProvider,
 };
 
 #[tokio::main(flavor = "current_thread")]

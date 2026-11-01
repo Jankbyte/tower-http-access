@@ -1,0 +1,36 @@
+[package]
+name = "tower-http-access-basic"
+version = "0.0.1"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "HTTP Basic authentication and password helpers for Tower HTTP Access"
+documentation = "https://docs.rs/tower-http-access-basic"
+readme = "README.md"
+keywords = ["authentication", "basic", "middleware", "tower"]
+categories = ["authentication", "web-programming::http-server"]
+
+[dependencies]
+tower-http-access = { version = "0.0.1", path = "../tower-http-access", default-features = false }
+bytes.workspace = true
+http.workspace = true
+futures-util = { workspace = true, features = ["alloc"] }
+base64.workspace = true
+password-hash = { workspace = true, features = ["getrandom", "phc"] }
+tokio = { workspace = true, features = ["rt", "sync"] }
+thiserror.workspace = true
+tracing = { workspace = true, optional = true }
+
+[dev-dependencies]
+argon2.workspace = true
+tower = { workspace = true, features = ["util"] }
+axum.workspace = true
+tower-http-access = { path = "../tower-http-access", features = ["axum", "request_matcher"] }
+tokio = { workspace = true, features = ["full"] }
+
+[features]
+tracing = ["dep:tracing"]
+
+[package.metadata.docs.rs]
+all-features = true

@@ -12,10 +12,11 @@ use tower_http_access::{
     SecurityLayer,
     authentication::{Authenticated, RequestAuthenticator},
     authorization::{AuthenticationEntryPoint, PermitAllAuthorizationProvider},
-    basic::{
-        Authority, BasicRequestAuthenticator, InMemoryUserDetailService, PlainHashPasswordManager,
-        UserDetail, UserDetailAuthenticationProvider,
-    },
+};
+
+use tower_http_access_basic::{
+    Authority, BasicRequestAuthenticator, InMemoryUserDetailService, PlainHashPasswordManager,
+    UserDetail, UserDetailAuthenticationProvider,
 };
 
 #[tokio::main(flavor = "current_thread")]

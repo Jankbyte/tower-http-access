@@ -21,20 +21,20 @@ impl Authority {
 
 /// The base representation of authenticated user, used by [`BasicRequestAuthenticator`].
 ///
-/// [`BasicRequestAuthenticator`]: crate::basic::BasicRequestAuthenticator
+/// [`BasicRequestAuthenticator`]: crate::BasicRequestAuthenticator
 #[derive(Clone, Debug)]
 pub struct UserDetail {
     /// Unique name of user.
     pub username: String,
     /// Hashed password by some algorithm (see [`AsyncPasswordHasher`])
     ///
-    /// [`AsyncPasswordHasher`]: crate::basic::AsyncPasswordHasher
+    /// [`AsyncPasswordHasher`]: crate::AsyncPasswordHasher
     pub hashed_password: String,
     /// Roles, permissions, and other authorities granted to the user.
     pub authorities: Vec<Authority>,
 }
 
-impl crate::authorization::HasAuthorities for UserDetail {
+impl tower_http_access::authorization::HasAuthorities for UserDetail {
     fn has_authority(&self, authority: &str) -> bool {
         self.authorities
             .iter()
@@ -78,10 +78,9 @@ pub trait UserDetailService: Send + Sync {
 /// # Example
 ///
 /// ```no_run
-/// # #[cfg(feature = "argon2_encoder")]
 /// # mod example {
 /// use argon2::Argon2;
-/// use tower_http_access::basic::{Authority, AsyncStringPasswordManager, InMemoryUserDetailService, UserDetail};
+/// use tower_http_access_basic::{Authority, AsyncStringPasswordManager, InMemoryUserDetailService, UserDetail};
 /// use std::num::NonZeroUsize;
 /// use tokio::runtime::Handle;
 ///

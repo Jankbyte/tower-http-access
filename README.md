@@ -22,13 +22,13 @@ This example uses HTTP Basic authentication with Argon2 password hashing. It exp
 ```toml
 [dependencies]
 axum = "0.8"
-tower-http-access = { version = "0.1", features = ["argon2_encoder"] }
+tower-http-access = { version = "0.0.1", features = ["request_matcher"] }
+tower-http-access-basic = "0.0.1"
 argon2 = "0.6"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "net"] }
 ```
 
 ```rust,no_run
-# #[cfg(all(feature = "argon2_encoder", feature = "axum"))]
 # mod example {
 use std::{num::NonZeroUsize, sync::Arc};
 
@@ -38,11 +38,10 @@ use tower_http_access::{
     SecurityLayer,
     authentication::Authenticated,
     authorization::RequestAuthorizationProvider,
-    basic::{
-        AsyncStringPasswordManager, Authority, BasicRequestAuthenticator,
-        InMemoryUserDetailService, UserDetail,
-        UserDetailAuthenticationProvider,
-    },
+};
+use tower_http_access_basic::{
+    AsyncStringPasswordManager, Authority, BasicRequestAuthenticator,
+    InMemoryUserDetailService, UserDetail, UserDetailAuthenticationProvider,
 };
 
 #[tokio::main]
@@ -100,7 +99,7 @@ curl http://127.0.0.1:3000/health
 curl -u alex:change-me http://127.0.0.1:3000/notes/1
 ```
 
-The credentials above are for local demonstration. Use HTTPS when sending Basic credentials. For password-hashing configuration and concurrency limits, see [`AsyncStringPasswordManager`](https://docs.rs/tower-http-access/latest/tower_http_access/basic/struct.AsyncStringPasswordManager.html).
+The credentials above are for local demonstration. Use HTTPS when sending Basic credentials. For password-hashing configuration and concurrency limits, see [`AsyncStringPasswordManager`](https://docs.rs/tower-http-access-basic/latest/tower_http_access_basic/struct.AsyncStringPasswordManager.html).
 
 ## 🔄 How requests are processed
 
@@ -127,10 +126,10 @@ Authorization runs after authentication. By default, authentication-required dec
 **The first matching rule decides access.** A denial or error is final. Declaration order determines priority, even when a later path is more specific.
 
 ```rust,no_run
-# #[cfg(feature = "basic_auth")]
 # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 use axum::http::Method;
-use tower_http_access::{authorization::RequestAuthorizationProvider, basic::UserDetail};
+use tower_http_access::authorization::RequestAuthorizationProvider;
+use tower_http_access_basic::UserDetail;
 
 let rules = RequestAuthorizationProvider::<UserDetail>::builder()
     .method_matchers(Method::GET, "/notes/1")
@@ -142,8 +141,6 @@ let rules = RequestAuthorizationProvider::<UserDetail>::builder()
     .build()?;
 # Ok(())
 # }
-# #[cfg(not(feature = "basic_auth"))]
-# fn main() {}
 ```
 
 Reversing the two note rules would require `ReadNote` for note `1` too. Put exceptions before broader patterns and `any_request()` last. Unmatched requests are denied even without an explicit fallback.
@@ -182,7 +179,6 @@ such as `/1` and `/{id}`. The built-in path matcher reads `Parts.uri`, not Axum'
 Use `.matching(...)` to supply a `RequestMatcher` explicitly:
 
 ```rust,no_run
-# #[cfg(feature = "request_matcher")]
 # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 use tower_http_access::{
     authorization::{RequestAuthorizationProvider, request_matcher::PathPatternRequestMatcher},
@@ -196,8 +192,6 @@ let rules = RequestAuthorizationProvider::<String>::builder()
     .build()?;
 # Ok(())
 # }
-# #[cfg(not(feature = "request_matcher"))]
-# fn main() {}
 ```
 
 `PathPatternRequestMatcher` compiles its pattern when constructed and matches paths
@@ -217,14 +211,13 @@ Offload CPU-bound work inside that provider to `spawn_blocking` or a dedicated w
 pool; making a function async does not move CPU work off the executor.
 
 The `authorization::request_matcher` module uses `http` types and can be enabled independently with
-the `request_matcher` feature; `basic_auth` enables it automatically.
+the core crate’s `request_matcher` feature.
 
 Request authorization is available independently of Basic authentication with
 `features = ["request_matcher"]`. Import its builders from `tower_http_access::authorization`.
 Authentication-only and custom rules work with any `Send + Sync + 'static` identity:
 
 ```rust,no_run
-# #[cfg(feature = "request_matcher")]
 # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 use tower_http_access::authorization::RequestAuthorizationProvider;
 
@@ -234,12 +227,10 @@ let rules = RequestAuthorizationProvider::<String>::builder()
     .build()?;
 # Ok(())
 # }
-# #[cfg(not(feature = "request_matcher"))]
-# fn main() {}
 ```
 
-Only authority methods require `authorization::HasAuthorities`. The existing
-`basic` and `basic::authorization` imports remain available for compatibility.
+Only authority methods require `authorization::HasAuthorities`. Basic authentication and
+user-detail helpers are provided by the separate `tower-http-access-basic` crate.
 
 Available policies:
 
@@ -260,7 +251,7 @@ Built-in rules delegate to reusable authorization providers:
 `PermitAllAuthorizationProvider`, `DenyAllAuthorizationProvider`,
 `AuthenticatedAuthorizationProvider`, `AuthorityAuthorizationProvider`,
 `AnyAuthorityAuthorizationProvider`, and `AllAuthoritiesAuthorizationProvider`.
-These providers are available without `request_matcher` or `basic_auth` and can be
+These providers are available without `request_matcher` and can be
 used directly, composed with `AllAuthorizationProvider`, or adapted with `.map(...)`.
 
 ## 🔐 Custom authorization
@@ -416,9 +407,12 @@ HTTP/Tower middleware without depending on Axum. Authentication and authorizatio
 | --- | --- |
 | `axum` (default) | Axum extractors for `Authenticated<A>` and `Option<Authenticated<A>>`, plus `IntoResponse` for authentication errors. |
 | `request_matcher` | Request matching and ordered request-rule authorization, independently of Basic authentication. |
-| `basic_auth` | HTTP Basic authentication, user-detail support, and password helpers; also enables `request_matcher`. |
-| `argon2_encoder` | Argon2 support; also enables `basic_auth`. |
-| `tracing` | Authentication tracing events. |
+
+The separate `tower-http-access-basic` crate provides Basic authentication, user-detail
+support, and password helpers. Its optional `tracing` feature enables authentication tracing.
+Add your chosen hashing implementation, such as `argon2`, directly to your application’s
+dependencies and pass it to `AsyncStringPasswordManager`. Import Basic types from `tower_http_access_basic`;
+the core crate does not re-export them.
 
 `PlainHashPasswordManager` is intended for demonstrations and tests; use a password-hashing implementation for real credentials.
 
@@ -429,7 +423,7 @@ HTTP/Tower middleware without depending on Axum. Authentication and authorizatio
 Run an example from this checkout:
 
 ```sh
-cargo run --package tower-http-access-examples --example simple_crud_rbac_axum --features tower-http-access/basic_auth
+cargo run --package tower-http-access-examples --example simple_crud_rbac_axum
 ```
 
 ## 🛠️ Development

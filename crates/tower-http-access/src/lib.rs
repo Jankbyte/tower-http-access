@@ -8,6 +8,3 @@ mod response;
 pub use authorization::request_matcher;
 pub use combined::{SecurityLayer, SecurityService};
 pub use response::{DefaultSecurityResponseAdapter, SecurityResponse, SecurityResponseAdapter};
-
-#[cfg(feature = "basic_auth")]
-pub mod basic;

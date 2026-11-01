@@ -7,7 +7,7 @@
 //!
 //! Authentication-only, permit, deny, and custom rules require no authority trait. Authority
 //! methods require [`HasAuthorities`] on the identity. This module needs only the
-//! `request_matcher` feature, independently of `basic_auth`.
+//! `request_matcher` feature, independently of the Basic authentication crate.
 //!
 //! ```
 //! use tower_http_access::authorization::RequestAuthorizationProvider;

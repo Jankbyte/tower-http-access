@@ -35,7 +35,7 @@ pub trait AsyncPasswordHasher: Send + Sync {
 ///
 /// For enconding use [`AsyncPasswordHasher`].
 ///
-/// [`BasicRequestAuthenticator`]: crate::basic::BasicRequestAuthenticator
+/// [`BasicRequestAuthenticator`]: crate::BasicRequestAuthenticator
 pub trait AsyncPasswordVerifier: Send + Sync {
     fn matches<'a>(
         &'a self,
@@ -82,10 +82,9 @@ pub trait AsyncPasswordVerifier: Send + Sync {
 /// # Example
 ///
 /// ```no_run
-/// # #[cfg(feature = "argon2_encoder")]
 /// # mod example {
 /// use argon2::{Algorithm, Argon2, Params, Version};
-/// use tower_http_access::basic::AsyncStringPasswordManager;
+/// use tower_http_access_basic::AsyncStringPasswordManager;
 /// use std::{error::Error, num::NonZeroUsize, thread};
 /// use tokio::runtime::Handle;
 ///
@@ -136,7 +135,7 @@ impl<H> AsyncStringPasswordManager<H> {
 /// # Example
 ///
 /// ```rust
-/// use tower_http_access::basic::{
+/// use tower_http_access_basic::{
 ///     AsyncPasswordHasher,
 ///     PlainHashPasswordManager,
 ///     AsyncPasswordVerifier
@@ -240,7 +239,7 @@ where
     }
 }
 
-#[cfg(all(test, feature = "argon2_encoder"))]
+#[cfg(test)]
 mod tests {
     use super::*;
     use argon2::{Algorithm, Argon2, Params, Version};

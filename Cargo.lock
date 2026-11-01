@@ -694,7 +694,25 @@ dependencies = [
 
 [[package]]
 name = "tower-http-access"
-version = "0.0.2"
+version = "0.0.1"
+dependencies = [
+ "axum",
+ "bytes",
+ "futures-util",
+ "http",
+ "http-body",
+ "http-body-util",
+ "matchit",
+ "thiserror",
+ "tokio",
+ "tower",
+ "tower-layer",
+ "tower-service",
+]
+
+[[package]]
+name = "tower-http-access-basic"
+version = "0.0.1"
 dependencies = [
  "argon2",
  "axum",
@@ -702,21 +720,17 @@ dependencies = [
  "bytes",
  "futures-util",
  "http",
- "http-body",
- "http-body-util",
- "matchit",
  "password-hash",
  "thiserror",
  "tokio",
  "tower",
- "tower-layer",
- "tower-service",
+ "tower-http-access",
  "tracing",
 ]
 
 [[package]]
 name = "tower-http-access-examples"
-version = "0.0.2"
+version = "0.0.1"
 dependencies = [
  "argon2",
  "axum",
@@ -726,6 +740,7 @@ dependencies = [
  "tokio",
  "tower",
  "tower-http-access",
+ "tower-http-access-basic",
  "tracing",
  "tracing-subscriber",
 ]

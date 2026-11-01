@@ -1,16 +1,16 @@
 use super::BasicCredentials;
 use super::base64::extract_credentials;
-use crate::{SecurityResponse, response::empty_response};
-use crate::{
+use bytes::Bytes;
+use futures_util::future::BoxFuture;
+use http::{StatusCode, header, request::Parts};
+use std::{error::Error, future::Future, pin::Pin};
+use tower_http_access::SecurityResponse;
+use tower_http_access::{
     authentication::{
         AuthenticationAttempt, AuthenticationErrorReason, AuthenticatorError, RequestAuthenticator,
     },
     authorization::AuthenticationEntryPoint,
 };
-use bytes::Bytes;
-use futures_util::future::BoxFuture;
-use http::{StatusCode, header, request::Parts};
-use std::{error::Error, future::Future, pin::Pin};
 
 /// Authenticates decoded username/password credentials.
 ///
@@ -53,10 +53,9 @@ pub trait UsernamePasswordAuthenticationProvider: Send + Sync {
 /// # Example
 ///
 /// ```no_run
-/// # #[cfg(feature = "argon2_encoder")]
 /// # mod example {
 /// use argon2::Argon2;
-/// use tower_http_access::basic::{
+/// use tower_http_access_basic::{
 ///     Authority, AsyncStringPasswordManager, BasicRequestAuthenticator,
 ///     InMemoryUserDetailService, UserDetail, UserDetailAuthenticationProvider,
 /// };
@@ -181,7 +180,9 @@ fn basic_challenge(realm: &str) -> SecurityResponse {
     let realm = realm.replace('\\', "\\\\").replace('"', "\\\"");
     let challenge = format!(r#"Basic realm="{realm}""#);
     let Ok(challenge) = http::HeaderValue::from_str(&challenge) else {
-        return empty_response(StatusCode::INTERNAL_SERVER_ERROR);
+        let mut response = SecurityResponse::new(Bytes::new());
+        *response.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
+        return response;
     };
     let mut response = SecurityResponse::new(Bytes::new());
     *response.status_mut() = StatusCode::UNAUTHORIZED;
