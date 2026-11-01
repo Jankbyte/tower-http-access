@@ -35,9 +35,10 @@ use axum::{Router, http::Method, routing::get};
 use axum_auth_chained::{
     SecurityLayerBuilder,
     authentication::Authenticated,
+    authorization::RequestAuthorizationProvider,
     basic::{
         AsyncStringPasswordManager, Authority, BasicRequestAuthenticator,
-        InMemoryUserDetailService, RequestAuthorizationProvider, UserDetail,
+        InMemoryUserDetailService, UserDetail,
         UserDetailAuthenticationProvider,
     },
 };
@@ -169,8 +170,8 @@ Use `.matching(...)` to supply a `RequestMatcher` explicitly:
 
 ```rust
 use axum_auth_chained::{
-    basic::{RequestAuthorizationProvider, UserDetail},
-    authorization::request_matcher::PathPatternRequestMatcher,
+    basic::UserDetail,
+    authorization::{RequestAuthorizationProvider, request_matcher::PathPatternRequestMatcher},
 };
 
 let rules = RequestAuthorizationProvider::<UserDetail>::builder()
@@ -200,6 +201,22 @@ pool; making a function async does not move CPU work off the executor.
 The `authorization::request_matcher` module uses `http` types and can be enabled independently with
 the `request_matcher` feature; `basic_auth` enables it automatically.
 
+Request authorization is available independently of Basic authentication with
+`features = ["request_matcher"]`. Import its builders from `axum_auth_chained::authorization`.
+Authentication-only and custom rules work with any `Send + Sync + 'static` identity:
+
+```rust
+use axum_auth_chained::authorization::RequestAuthorizationProvider;
+
+let rules = RequestAuthorizationProvider::<String>::builder()
+    .request_matchers("/health").permit_all()
+    .any_request().authenticated()
+    .build()?;
+```
+
+Only authority methods require `authorization::HasAuthorities`. The existing
+`basic` and `basic::authorization` imports remain available for compatibility.
+
 Available policies:
 
 | Builder method | Requirement |
@@ -212,7 +229,15 @@ Available policies:
 | `has_all_authorities(["ReadNote", "WriteNote"])` | Requires every listed authority; an empty list requires authentication only. |
 | `access(manager)` | Delegates the complete decision to a custom `AuthorizationProvider`. |
 
-Custom identity types can implement `HasAuthorities`. Authority names are compared exactly; no role prefix is added.
+Custom identity types can implement `authorization::HasAuthorities`; `UserDetail` already
+implements it. Authority names are compared exactly; no role prefix is added.
+
+Built-in rules delegate to reusable authorization providers:
+`PermitAllAuthorizationProvider`, `DenyAllAuthorizationProvider`,
+`AuthenticatedAuthorizationProvider`, `AuthorityAuthorizationProvider`,
+`AnyAuthorityAuthorizationProvider`, and `AllAuthoritiesAuthorizationProvider`.
+These providers are available without `request_matcher` or `basic_auth` and can be
+used directly, composed with `AllAuthorizationProvider`, or adapted with `.map(...)`.
 
 ## 🔐 Custom authorization
 

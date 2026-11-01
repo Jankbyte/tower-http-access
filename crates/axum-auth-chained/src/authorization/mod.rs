@@ -28,7 +28,24 @@ pub use all::{
 };
 
 mod default_auth;
-pub use default_auth::AuthenticatedAuthorizationProvider;
+pub use default_auth::{
+    AuthenticatedAuthorizationProvider, DenyAllAuthorizationProvider,
+    PermitAllAuthorizationProvider,
+};
+
+mod authorities;
+pub use authorities::{
+    AllAuthoritiesAuthorizationProvider, AnyAuthorityAuthorizationProvider,
+    AuthorityAuthorizationProvider, HasAuthorities,
+};
+
+#[cfg(feature = "request_matcher")]
+pub mod request;
+#[cfg(feature = "request_matcher")]
+pub use request::{
+    InvalidRequestPattern, PendingRuleBuilder, RequestAuthorizationBuilder,
+    RequestAuthorizationError, RequestAuthorizationProvider,
+};
 
 #[cfg(feature = "request_matcher")]
 pub mod request_matcher;

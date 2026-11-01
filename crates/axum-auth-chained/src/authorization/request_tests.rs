@@ -1,9 +1,35 @@
+use super::super::{AuthorizationDecision, AuthorizationDenial};
 use super::*;
-use crate::basic::Authority;
+use std::{future::Future, pin::Pin};
+
+struct TestAuthority(String);
+impl TestAuthority {
+    fn new(value: &str) -> Self {
+        Self(value.to_owned())
+    }
+}
+
+struct TestIdentity {
+    username: String,
+    authorities: Vec<TestAuthority>,
+}
+impl TestIdentity {
+    fn new(username: &str, _: &str, authorities: Vec<TestAuthority>) -> Self {
+        Self {
+            username: username.to_owned(),
+            authorities,
+        }
+    }
+}
+impl HasAuthorities for TestIdentity {
+    fn has_authority(&self, authority: &str) -> bool {
+        self.authorities.iter().any(|value| value.0 == authority)
+    }
+}
 
 async fn decision(
-    provider: &RequestAuthorizationProvider<UserDetail>,
-    user: Option<&UserDetail>,
+    provider: &RequestAuthorizationProvider<TestIdentity>,
+    user: Option<&TestIdentity>,
     method: Method,
     uri: &str,
 ) -> AuthorizationDecision {
@@ -24,7 +50,7 @@ async fn decision(
 
 #[tokio::test]
 async fn ordered_policies_and_identity_requirements() {
-    let provider = RequestAuthorizationProvider::<UserDetail>::builder()
+    let provider = RequestAuthorizationProvider::<TestIdentity>::builder()
         .request_matchers("/public")
         .permit_all()
         .request_matchers("/admin/{*rest}")
@@ -37,8 +63,8 @@ async fn ordered_policies_and_identity_requirements() {
         .deny_all()
         .build()
         .unwrap();
-    let reader = UserDetail::new("reader", "hash", vec![Authority::new("ReadNote")]);
-    let admin = UserDetail::new("admin", "hash", vec![Authority::new("ADMIN")]);
+    let reader = TestIdentity::new("reader", "hash", vec![TestAuthority::new("ReadNote")]);
+    let admin = TestIdentity::new("admin", "hash", vec![TestAuthority::new("ADMIN")]);
     let allow = AuthorizationDecision::Allow;
     let forbidden = AuthorizationDecision::Deny(AuthorizationDenial::InsufficientPermissions);
     let unauthorized = AuthorizationDecision::Deny(AuthorizationDenial::AuthenticationRequired);
@@ -78,7 +104,7 @@ async fn ordered_policies_and_identity_requirements() {
 
 #[tokio::test]
 async fn first_match_is_final_and_unmatched_requests_are_denied() {
-    let user = UserDetail::new("user", "hash", vec![]);
+    let user = TestIdentity::new("user", "hash", vec![]);
     let provider = RequestAuthorizationProvider::builder()
         .request_matchers("/blocked")
         .deny_all()
@@ -121,14 +147,17 @@ async fn all_authorities_requires_authentication_and_every_authority() {
         .has_all_authorities(Vec::<String>::new())
         .build()
         .unwrap();
-    let reader = UserDetail::new("reader", "hash", vec![Authority::new("ReadNote")]);
-    let editor = UserDetail::new(
+    let reader = TestIdentity::new("reader", "hash", vec![TestAuthority::new("ReadNote")]);
+    let editor = TestIdentity::new(
         "editor",
         "hash",
-        vec![Authority::new("ReadNote"), Authority::new("WriteNote")],
+        vec![
+            TestAuthority::new("ReadNote"),
+            TestAuthority::new("WriteNote"),
+        ],
     );
-    let writer = UserDetail::new("writer", "hash", vec![Authority::new("WriteNote")]);
-    let no_authorities = UserDetail::new("user", "hash", vec![]);
+    let writer = TestIdentity::new("writer", "hash", vec![TestAuthority::new("WriteNote")]);
+    let no_authorities = TestIdentity::new("user", "hash", vec![]);
     for user in [&reader, &writer, &no_authorities] {
         assert_eq!(
             decision(&provider, Some(user), Method::GET, "/notes").await,
@@ -157,12 +186,12 @@ struct TestManager {
 }
 
 impl AuthorizationProvider for TestManager {
-    type Authentication = UserDetail;
+    type Authentication = TestIdentity;
     type Error = std::io::Error;
 
     fn authorize<'a>(
         &'a self,
-        user: Option<&'a UserDetail>,
+        user: Option<&'a TestIdentity>,
         context: &'a Parts,
     ) -> Pin<Box<dyn Future<Output = Result<AuthorizationDecision, Self::Error>> + Send + 'a>> {
         Box::pin(async move {
@@ -201,8 +230,8 @@ async fn custom_manager_receives_context_and_its_decision_is_final() {
         .permit_all()
         .build()
         .unwrap();
-    let owner = UserDetail::new("owner", "hash", vec![]);
-    let other = UserDetail::new("other", "hash", vec![]);
+    let owner = TestIdentity::new("owner", "hash", vec![]);
+    let other = TestIdentity::new("other", "hash", vec![]);
     for (user, expected) in [
         (
             None,
@@ -239,7 +268,7 @@ async fn custom_manager_errors_preserve_source_and_return_internal_server_error(
         sync::{Arc, atomic::AtomicUsize},
     };
     use tower_service::Service;
-    let provider = RequestAuthorizationProvider::<UserDetail>::builder()
+    let provider = RequestAuthorizationProvider::<TestIdentity>::builder()
         .request_matchers("/notes/{id}")
         .access(TestManager {
             fail: true,
@@ -330,7 +359,7 @@ fn patterns_have_segment_boundaries_and_validate_at_build_time() {
             "{pattern}"
         );
         assert!(
-            RequestAuthorizationProvider::<UserDetail>::builder()
+            RequestAuthorizationProvider::<TestIdentity>::builder()
                 .request_matchers(pattern)
                 .permit_all()
                 .build()
@@ -342,14 +371,14 @@ fn patterns_have_segment_boundaries_and_validate_at_build_time() {
 
 #[tokio::test]
 async fn explicit_path_matchers_preserve_order_and_ignore_queries_and_methods() {
-    let provider = RequestAuthorizationProvider::<UserDetail>::builder()
+    let provider = RequestAuthorizationProvider::<TestIdentity>::builder()
         .matching(PathPatternRequestMatcher::new("/notes/private").unwrap())
         .deny_all()
         .matching(PathPatternRequestMatcher::new("/notes/{id}").unwrap())
         .permit_all()
         .build()
         .unwrap();
-    let user = UserDetail::new("user", "hash", vec![]);
+    let user = TestIdentity::new("user", "hash", vec![]);
     for method in [Method::GET, Method::POST] {
         assert_eq!(
             decision(&provider, None, method.clone(), "/notes/42?view=full").await,
@@ -372,7 +401,7 @@ async fn user_defined_matcher_can_select_rules() {
             request.method == Method::POST
         }
     }
-    let provider = RequestAuthorizationProvider::<UserDetail>::builder()
+    let provider = RequestAuthorizationProvider::<TestIdentity>::builder()
         .matching(PostOnly)
         .permit_all()
         .any_request()
@@ -413,7 +442,7 @@ async fn middleware_matchers_borrow_original_headers_and_extensions() {
         }
     }
 
-    let provider = RequestAuthorizationProvider::<UserDetail>::builder()
+    let provider = RequestAuthorizationProvider::<TestIdentity>::builder()
         .matching(MetadataMatcher)
         .permit_all()
         .any_request()
@@ -466,12 +495,12 @@ async fn custom_manager_borrows_original_parts_across_await() {
 
     struct TenantManager;
     impl AuthorizationProvider for TenantManager {
-        type Authentication = UserDetail;
+        type Authentication = TestIdentity;
         type Error = std::convert::Infallible;
 
         fn authorize<'a>(
             &'a self,
-            user: Option<&'a UserDetail>,
+            user: Option<&'a TestIdentity>,
             parts: &'a Parts,
         ) -> Pin<Box<dyn Future<Output = Result<AuthorizationDecision, Self::Error>> + Send + 'a>>
         {
@@ -497,9 +526,9 @@ async fn custom_manager_borrows_original_parts_across_await() {
         .build()
         .unwrap();
     // The same authorize entry point works through an object-safe provider.
-    let provider: &dyn AuthorizationProvider<Authentication = UserDetail, Error = RequestAuthorizationError> =
+    let provider: &dyn AuthorizationProvider<Authentication = TestIdentity, Error = RequestAuthorizationError> =
         &provider;
-    let user = UserDetail::new("alice", "hash", vec![]);
+    let user = TestIdentity::new("alice", "hash", vec![]);
     let (mut parts, _) = http::Request::builder()
         .uri("/notes/42")
         .header("x-tenant", "team-a")
@@ -510,5 +539,103 @@ async fn custom_manager_borrows_original_parts_across_await() {
     assert_eq!(
         provider.authorize(Some(&user), &parts).await.unwrap(),
         AuthorizationDecision::Allow,
+    );
+}
+
+#[tokio::test]
+async fn string_identities_support_rules_without_authorities() {
+    use crate::authorization::{AuthenticatedAuthorizationProvider, AuthorizationProviderExt};
+    let provider = RequestAuthorizationProvider::<String>::builder()
+        .request_matchers("/public")
+        .permit_all()
+        .request_matchers("/private")
+        .authenticated()
+        .request_matchers("/custom")
+        .access(
+            AuthenticatedAuthorizationProvider::<usize>::new()
+                .map(|identity: &String| identity.len()),
+        )
+        .request_matchers("/blocked")
+        .deny_all()
+        .build()
+        .unwrap();
+    let identity = "alex".to_owned();
+    for (path, anonymous, authenticated) in [
+        (
+            "/public",
+            AuthorizationDecision::Allow,
+            AuthorizationDecision::Allow,
+        ),
+        (
+            "/private",
+            AuthorizationDecision::Deny(AuthorizationDenial::AuthenticationRequired),
+            AuthorizationDecision::Allow,
+        ),
+        (
+            "/custom",
+            AuthorizationDecision::Deny(AuthorizationDenial::AuthenticationRequired),
+            AuthorizationDecision::Allow,
+        ),
+        (
+            "/blocked",
+            AuthorizationDecision::Deny(AuthorizationDenial::AuthenticationRequired),
+            AuthorizationDecision::Deny(AuthorizationDenial::InsufficientPermissions),
+        ),
+        (
+            "/unmatched",
+            AuthorizationDecision::Deny(AuthorizationDenial::AuthenticationRequired),
+            AuthorizationDecision::Deny(AuthorizationDenial::InsufficientPermissions),
+        ),
+    ] {
+        let (parts, _) = http::Request::builder()
+            .uri(path)
+            .body(())
+            .unwrap()
+            .into_parts();
+        assert_eq!(
+            provider.authorize(None, &parts).await.unwrap(),
+            anonymous,
+            "{path}"
+        );
+        assert_eq!(
+            provider.authorize(Some(&identity), &parts).await.unwrap(),
+            authenticated,
+            "{path}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn string_request_rules_integrate_with_combined_layer_without_basic_authentication() {
+    use crate::{
+        SecurityLayer,
+        authentication::{Authenticated, AuthenticationAttempt, AuthenticatorError},
+    };
+    use axum::{
+        body::{Body, to_bytes},
+        extract::Request,
+    };
+    use tower_service::Service;
+
+    let authenticator = |_: &mut Parts| async {
+        Ok::<_, AuthenticatorError>(AuthenticationAttempt::Authenticated("alex".to_owned()))
+    };
+    let rules = RequestAuthorizationProvider::<String>::builder()
+        .any_request()
+        .authenticated()
+        .build()
+        .unwrap();
+    let mut app = axum::Router::new()
+        .route(
+            "/",
+            axum::routing::get(
+                |Authenticated(identity): Authenticated<String>| async move { identity },
+            ),
+        )
+        .layer(SecurityLayer::new(authenticator, rules));
+    let response = app.call(Request::new(Body::empty())).await.unwrap();
+    assert_eq!(
+        to_bytes(response.into_body(), usize::MAX).await.unwrap(),
+        "alex"
     );
 }

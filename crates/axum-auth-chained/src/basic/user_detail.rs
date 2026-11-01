@@ -34,6 +34,14 @@ pub struct UserDetail {
     pub authorities: Vec<Authority>,
 }
 
+impl crate::authorization::HasAuthorities for UserDetail {
+    fn has_authority(&self, authority: &str) -> bool {
+        self.authorities
+            .iter()
+            .any(|granted| granted.0 == authority)
+    }
+}
+
 impl UserDetail {
     /// Create new user detail with username and hashed password.
     ///

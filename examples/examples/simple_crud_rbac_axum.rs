@@ -22,11 +22,10 @@ use axum::{
 use axum_auth_chained::{
     SecurityLayer,
     authentication::{RequestAuthenticator, RequestAuthenticatorExt},
-    authorization::AuthenticationEntryPoint,
+    authorization::{AuthenticationEntryPoint, HasAuthorities, RequestAuthorizationProvider},
     basic::{
-        Authority, BasicRequestAuthenticator, HasAuthorities, InMemoryUserDetailService,
-        PlainHashPasswordManager, RequestAuthorizationProvider, UserDetail,
-        UserDetailAuthenticationProvider,
+        Authority, BasicRequestAuthenticator, InMemoryUserDetailService, PlainHashPasswordManager,
+        UserDetail, UserDetailAuthenticationProvider,
     },
 };
 use serde::{Deserialize, Serialize};
