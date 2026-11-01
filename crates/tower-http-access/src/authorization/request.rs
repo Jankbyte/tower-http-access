@@ -10,13 +10,13 @@
 //! `request_matcher` feature, independently of `basic_auth`.
 //!
 //! ```
-//! use axum_auth_chained::authorization::RequestAuthorizationProvider;
+//! use tower_http_access::authorization::RequestAuthorizationProvider;
 //!
 //! let rules = RequestAuthorizationProvider::<String>::builder()
 //!     .request_matchers("/health").permit_all()
 //!     .any_request().authenticated()
 //!     .build()?;
-//! # Ok::<(), axum_auth_chained::authorization::InvalidRequestPattern>(())
+//! # Ok::<(), tower_http_access::authorization::InvalidRequestPattern>(())
 //! ```
 //!
 //! # Nested routers
@@ -145,7 +145,7 @@ impl<A> RequestAuthorizationBuilder<A> {
     /// async or CPU-bound access checks, offloading CPU work from the async executor.
     ///
     /// ```
-    /// use axum_auth_chained::{
+    /// use tower_http_access::{
     ///     authorization::RequestAuthorizationProvider,
     ///     authorization::request_matcher::PathPatternRequestMatcher,
     /// };
@@ -155,7 +155,7 @@ impl<A> RequestAuthorizationBuilder<A> {
     ///     .authenticated()
     ///     .any_request().deny_all()
     ///     .build()?;
-    /// # Ok::<(), axum_auth_chained::authorization::request_matcher::InvalidRequestPattern>(())
+    /// # Ok::<(), tower_http_access::authorization::request_matcher::InvalidRequestPattern>(())
     /// ```
     pub fn matching<M: RequestMatcher + 'static>(self, matcher: M) -> PendingRuleBuilder<A> {
         PendingRuleBuilder {
@@ -268,7 +268,7 @@ impl<A: Send + Sync + 'static> PendingRuleBuilder<A> {
     /// `.authenticated()`, `.permit_all()`, `.deny_all()`, and `.access(...)` instead.
     ///
     /// ```compile_fail,E0277
-    /// use axum_auth_chained::authorization::RequestAuthorizationProvider;
+    /// use tower_http_access::authorization::RequestAuthorizationProvider;
     /// let rules = RequestAuthorizationProvider::<String>::builder()
     ///     .any_request().has_authority("Admin");
     /// ```

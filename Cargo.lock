@@ -54,44 +54,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "axum-auth-chained"
-version = "0.0.2"
-dependencies = [
- "argon2",
- "axum",
- "base64",
- "bytes",
- "futures-util",
- "http",
- "http-body",
- "http-body-util",
- "matchit",
- "password-hash",
- "thiserror",
- "tokio",
- "tower",
- "tower-layer",
- "tower-service",
- "tracing",
-]
-
-[[package]]
-name = "axum-auth-chained-examples"
-version = "0.0.2"
-dependencies = [
- "argon2",
- "axum",
- "axum-auth-chained",
- "futures-util",
- "serde",
- "serde_json",
- "tokio",
- "tower",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "axum-core"
 version = "0.5.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -728,6 +690,44 @@ dependencies = [
  "tower-layer",
  "tower-service",
  "tracing",
+]
+
+[[package]]
+name = "tower-http-access"
+version = "0.0.2"
+dependencies = [
+ "argon2",
+ "axum",
+ "base64",
+ "bytes",
+ "futures-util",
+ "http",
+ "http-body",
+ "http-body-util",
+ "matchit",
+ "password-hash",
+ "thiserror",
+ "tokio",
+ "tower",
+ "tower-layer",
+ "tower-service",
+ "tracing",
+]
+
+[[package]]
+name = "tower-http-access-examples"
+version = "0.0.2"
+dependencies = [
+ "argon2",
+ "axum",
+ "futures-util",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tower",
+ "tower-http-access",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

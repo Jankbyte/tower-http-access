@@ -1,6 +1,6 @@
 //! ```not_rust
 //! # Start
-//! cargo run --package axum-auth-chained-examples --example simple_crud_rbac_axum
+//! cargo run --package tower-http-access-examples --example simple_crud_rbac_axum
 //! # Get note
 //! curl -v -X GET http://127.0.0.1:3000/v1/notes/1
 //! # Delete note
@@ -19,7 +19,11 @@ use axum::{
     http::{Method, StatusCode},
     routing::method_routing::{get, post},
 };
-use axum_auth_chained::{
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::RwLock;
+use tower_http_access::{
     SecurityLayer,
     authentication::{RequestAuthenticator, RequestAuthenticatorExt},
     authorization::{AuthenticationEntryPoint, HasAuthorities, RequestAuthorizationProvider},
@@ -28,10 +32,6 @@ use axum_auth_chained::{
         UserDetail, UserDetailAuthenticationProvider,
     },
 };
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::sync::Arc;
-use tokio::sync::RwLock;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() {

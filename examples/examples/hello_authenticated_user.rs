@@ -1,13 +1,14 @@
 //! The example where we can get authenticated user.
 //! ```bash
-//! cargo run --package axum-auth-chained-examples --example hello_authenticated_user
+//! cargo run --package tower-http-access-examples --example hello_authenticated_user
 //! # Authenticated
 //! curl -v -u alex:alex123 -X GET http://localhost:3000/hello
 //! # Anonymous
 //! curl -v -X GET http://localhost:3000/hello
 //! ```
 use axum::{Router, routing::method_routing::get};
-use axum_auth_chained::{
+use std::sync::Arc;
+use tower_http_access::{
     SecurityLayer,
     authentication::{Authenticated, RequestAuthenticator},
     authorization::{AuthenticationEntryPoint, PermitAllAuthorizationProvider},
@@ -16,7 +17,6 @@ use axum_auth_chained::{
         UserDetail, UserDetailAuthenticationProvider,
     },
 };
-use std::sync::Arc;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() {

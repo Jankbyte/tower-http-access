@@ -55,7 +55,7 @@ where
 /// [`AllAuthorizationError`] with their original source preserved.
 ///
 /// ```
-/// use axum_auth_chained::authorization::{
+/// use tower_http_access::authorization::{
 ///     AllAuthorizationProvider, AuthenticatedAuthorizationProvider, AuthorizationLayer,
 ///     AuthorizationProviderExt,
 /// };

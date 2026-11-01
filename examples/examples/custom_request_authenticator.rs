@@ -2,7 +2,7 @@
 //! These API keys are demonstration values.
 //!
 //! ```bash
-//! cargo run --package axum-auth-chained-examples --example custom_request_authenticator
+//! cargo run --package tower-http-access-examples --example custom_request_authenticator
 //! # Authenticated: Hello, alex!
 //! curl -v -H 'Api-Key: alex-api-key' http://127.0.0.1:3000/hello
 //! # Anonymous: Hello, anonymous!
@@ -11,7 +11,10 @@
 //! curl -v -H 'Api-Key: unknown' http://127.0.0.1:3000/hello
 //! ```
 use axum::{Router, http::request::Parts, routing::get};
-use axum_auth_chained::{
+use futures_util::future::BoxFuture;
+use std::{collections::HashMap, sync::Arc};
+use tokio::sync::RwLock;
+use tower_http_access::{
     SecurityLayer,
     authentication::{
         Authenticated, AuthenticationAttempt, AuthenticationErrorReason, AuthenticatorError,
@@ -19,9 +22,6 @@ use axum_auth_chained::{
     },
     authorization::AuthenticatedAuthorizationProvider,
 };
-use futures_util::future::BoxFuture;
-use std::{collections::HashMap, sync::Arc};
-use tokio::sync::RwLock;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {

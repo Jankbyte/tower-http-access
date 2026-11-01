@@ -56,7 +56,7 @@ pub trait UsernamePasswordAuthenticationProvider: Send + Sync {
 /// # #[cfg(feature = "argon2_encoder")]
 /// # mod example {
 /// use argon2::Argon2;
-/// use axum_auth_chained::basic::{
+/// use tower_http_access::basic::{
 ///     Authority, AsyncStringPasswordManager, BasicRequestAuthenticator,
 ///     InMemoryUserDetailService, UserDetail, UserDetailAuthenticationProvider,
 /// };

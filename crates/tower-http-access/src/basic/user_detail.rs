@@ -81,7 +81,7 @@ pub trait UserDetailService: Send + Sync {
 /// # #[cfg(feature = "argon2_encoder")]
 /// # mod example {
 /// use argon2::Argon2;
-/// use axum_auth_chained::basic::{Authority, AsyncStringPasswordManager, InMemoryUserDetailService, UserDetail};
+/// use tower_http_access::basic::{Authority, AsyncStringPasswordManager, InMemoryUserDetailService, UserDetail};
 /// use std::num::NonZeroUsize;
 /// use tokio::runtime::Handle;
 ///

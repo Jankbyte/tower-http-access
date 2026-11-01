@@ -49,7 +49,7 @@ use tower_service::Service;
 ///
 /// ```
 /// use http::request::Parts;
-/// use axum_auth_chained::{
+/// use tower_http_access::{
 ///     authentication::{AuthenticationAttempt, AuthenticatorError},
 ///     authorization::AuthenticatedAuthorizationProvider,
 ///     SecurityLayer,
@@ -125,9 +125,9 @@ impl<A, P, H, E, R> SecurityLayer<A, P, H, E, R> {
     /// `Send + Sync + 'static`.
     ///
     /// ```
-    /// use axum_auth_chained::{SecurityLayer, SecurityResponseAdapter};
-    /// use axum_auth_chained::authentication::{AuthenticationAttempt, AuthenticatorError};
-    /// use axum_auth_chained::authorization::AuthenticatedAuthorizationProvider;
+    /// use tower_http_access::{SecurityLayer, SecurityResponseAdapter};
+    /// use tower_http_access::authentication::{AuthenticationAttempt, AuthenticatorError};
+    /// use tower_http_access::authorization::AuthenticatedAuthorizationProvider;
     /// use http::request::Parts;
     ///
     /// fn configure<B, R: SecurityResponseAdapter<B>>(adapter: R) {

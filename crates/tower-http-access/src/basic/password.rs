@@ -85,7 +85,7 @@ pub trait AsyncPasswordVerifier: Send + Sync {
 /// # #[cfg(feature = "argon2_encoder")]
 /// # mod example {
 /// use argon2::{Algorithm, Argon2, Params, Version};
-/// use axum_auth_chained::basic::AsyncStringPasswordManager;
+/// use tower_http_access::basic::AsyncStringPasswordManager;
 /// use std::{error::Error, num::NonZeroUsize, thread};
 /// use tokio::runtime::Handle;
 ///
@@ -136,7 +136,7 @@ impl<H> AsyncStringPasswordManager<H> {
 /// # Example
 ///
 /// ```rust
-/// use axum_auth_chained::basic::{
+/// use tower_http_access::basic::{
 ///     AsyncPasswordHasher,
 ///     PlainHashPasswordManager,
 ///     AsyncPasswordVerifier

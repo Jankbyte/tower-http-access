@@ -74,7 +74,7 @@ pub trait AuthorizationProviderExt: AuthorizationProvider + Sized {
     /// The underlying provider's decisions and errors are returned unchanged.
     ///
     /// ```
-    /// use axum_auth_chained::authorization::{
+    /// use tower_http_access::authorization::{
     ///     AuthenticatedAuthorizationProvider, AuthorizationProviderExt,
     /// };
     ///
@@ -88,7 +88,7 @@ pub trait AuthorizationProviderExt: AuthorizationProvider + Sized {
     /// the external crate's principal. Here `ExternalPrincipal` stands in for that crate's type:
     ///
     /// ```
-    /// use axum_auth_chained::authorization::{AuthorizationProvider, AuthorizationProviderExt};
+    /// use tower_http_access::authorization::{AuthorizationProvider, AuthorizationProviderExt};
     ///
     /// struct AppUser {
     ///     id: u64,

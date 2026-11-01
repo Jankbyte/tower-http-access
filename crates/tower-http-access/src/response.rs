@@ -10,7 +10,7 @@ use http::{Response, StatusCode};
 /// Successful inner responses are forwarded unchanged, including streaming bodies.
 ///
 /// ```
-/// use axum_auth_chained::SecurityResponse;
+/// use tower_http_access::SecurityResponse;
 /// use bytes::Bytes;
 /// use http::StatusCode;
 ///
@@ -50,7 +50,7 @@ pub type SecurityResponse = Response<Bytes>;
 /// authorization layers continue to use their existing `From<Bytes>` conversion.
 ///
 /// ```
-/// use axum_auth_chained::{SecurityResponse, SecurityResponseAdapter};
+/// use tower_http_access::{SecurityResponse, SecurityResponseAdapter};
 ///
 /// fn convert<B>(
 ///     adapter: &impl SecurityResponseAdapter<B>,

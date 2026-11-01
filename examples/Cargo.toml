@@ -1,5 +1,5 @@
 [package]
-name = "axum-auth-chained-examples"
+name = "tower-http-access-examples"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -10,7 +10,7 @@ futures-util = { workspace = true, features = ["alloc"] }
 tower = { workspace = true, features = ["util"] }
 argon2.workspace = true
 axum.workspace = true
-axum-auth-chained = { path = "../crates/axum-auth-chained", features = ["tracing", "argon2_encoder"] }
+tower-http-access = { path = "../crates/tower-http-access", features = ["tracing", "argon2_encoder"] }
 tokio = { workspace = true, features = ["full"] }
 tracing-subscriber.workspace = true
 tracing.workspace = true

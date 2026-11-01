@@ -19,7 +19,7 @@ pub type BoxError = Box<dyn Error + Send + Sync>;
 /// when a handler also accepts anonymous requests:
 ///
 /// ```rust
-/// use axum_auth_chained::authentication::Authenticated;
+/// use tower_http_access::authentication::Authenticated;
 ///
 /// # #[derive(Clone)]
 /// # struct User;

@@ -1,18 +1,18 @@
 //! The example shows how to implement custom `UsernamePasswordAuthenticationProvider`.
 //!
 //! ```bash
-//! cargo run --package axum-auth-chained-examples --example basic_auth_custom_upap
+//! cargo run --package tower-http-access-examples --example basic_auth_custom_upap
 //! curl -X GET -u alex:alex123 -v http://localhost:3000/hello
 //! ```
 use axum::{Router, routing::get};
-use axum_auth_chained::{
+use futures_util::future::BoxFuture;
+use std::sync::Arc;
+use tower_http_access::{
     SecurityLayer,
     authentication::Authenticated,
     authorization::AuthenticatedAuthorizationProvider,
     basic::{BasicCredentials, BasicRequestAuthenticator, UsernamePasswordAuthenticationProvider},
 };
-use futures_util::future::BoxFuture;
-use std::sync::Arc;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {

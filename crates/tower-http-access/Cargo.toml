@@ -1,12 +1,12 @@
 [package]
-name = "axum-auth-chained"
+name = "tower-http-access"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
-description = "Composable authentication and authorization middleware for Axum"
+description = "Composable HTTP authentication and authorization middleware for Tower and Axum"
 license.workspace = true
 repository.workspace = true
-documentation = "https://docs.rs/axum-auth-chained"
+documentation = "https://docs.rs/tower-http-access"
 readme = "README.md"
 keywords = ["axum", "authentication", "authorization", "middleware", "tower"]
 categories = ["authentication", "web-programming::http-server"]
