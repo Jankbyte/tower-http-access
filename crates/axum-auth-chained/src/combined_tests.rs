@@ -1,6 +1,8 @@
 use super::*;
 use crate::{
-    authentication::{AuthenticationErrorReason, AuthenticatorError},
+    authentication::{
+        AuthenticationErrorReason, AuthenticatorError, DelegatingRequestAuthenticator,
+    },
     authorization::{
         AllAuthorizationProvider, AuthenticatedAuthorizationProvider, AuthorizationProviderExt,
     },
@@ -331,4 +333,72 @@ fn applies_to_axum_router() {
     let _: axum::Router = axum::Router::new()
         .route("/", axum::routing::get(async || "ok"))
         .route_layer(layer);
+}
+
+#[tokio::test]
+async fn accepts_shared_authenticator() {
+    let authenticator = Arc::new(Authenticator { outcome: 1 });
+    let calls = Arc::new(AtomicUsize::new(0));
+    let mut service = SecurityLayer::new(
+        Arc::clone(&authenticator),
+        Authorizer {
+            identity: Some("alex"),
+            outcome: 0,
+            calls: Arc::clone(&calls),
+        },
+    )
+    .layer(Inner {
+        ready: false,
+        calls: Arc::clone(&calls),
+        fail: false,
+    });
+    let response = execute(&mut service, request()).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        to_bytes(response.into_body(), usize::MAX).await.unwrap(),
+        "alex:payload"
+    );
+    assert_eq!(calls.load(Ordering::SeqCst), 2);
+}
+
+#[tokio::test]
+async fn delegates_to_next_authenticator_and_preserves_request_mutations() {
+    let authenticators = DelegatingRequestAuthenticator::builder()
+        .authenticator(|parts: &mut Parts| {
+            parts
+                .headers
+                .insert("x-first-attempt", "seen".parse().unwrap());
+            ready(Ok::<_, AuthenticatorError>(
+                AuthenticationAttempt::<String>::NotApplicable,
+            ))
+        })
+        .authenticator(|parts: &mut Parts| {
+            assert_eq!(parts.headers["x-first-attempt"], "seen");
+            parts.headers.insert("x-auth", "checked".parse().unwrap());
+            ready(Ok::<_, AuthenticatorError>(
+                AuthenticationAttempt::Authenticated("alex".to_owned()),
+            ))
+        })
+        .build();
+    let calls = Arc::new(AtomicUsize::new(0));
+    let mut service = SecurityLayer::new(
+        authenticators,
+        Authorizer {
+            identity: Some("alex"),
+            outcome: 0,
+            calls: Arc::clone(&calls),
+        },
+    )
+    .layer(Inner {
+        ready: false,
+        calls: Arc::clone(&calls),
+        fail: false,
+    });
+    let response = execute(&mut service, request()).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        to_bytes(response.into_body(), usize::MAX).await.unwrap(),
+        "alex:payload"
+    );
+    assert_eq!(calls.load(Ordering::SeqCst), 2);
 }

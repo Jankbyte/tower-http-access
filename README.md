@@ -33,7 +33,7 @@ use std::{num::NonZeroUsize, sync::Arc};
 use argon2::Argon2;
 use axum::{Router, http::Method, routing::get};
 use axum_auth_chained::{
-    SecurityLayerBuilder,
+    SecurityLayer,
     authentication::Authenticated,
     authorization::RequestAuthorizationProvider,
     basic::{
@@ -73,14 +73,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         .deny_all()
         .build()?;
 
-    let security = SecurityLayerBuilder::builder()
-        .chained_authenticators(|chain| chain.shared_authenticator(Arc::clone(&authenticator)))
-        .authorization(|authorization| {
-            authorization
-                .authorize_with(rules)
-                .authentication_entry_point(authenticator)
-        })
-        .build();
+    let security = SecurityLayer::new(Arc::clone(&authenticator), rules)
+        .authentication_entry_point(authenticator);
 
     let app = Router::new()
         .route("/health", get(|| async { "ok" }))
@@ -245,30 +239,71 @@ Implement `AuthorizationProvider` for application-specific decisions. It receive
 
 Use `.access(manager)` on a request rule when the manager uses the same identity type. Managers can inspect the method, URI, headers, and extensions without copying them; matched path parameters are not extracted automatically. The manager decides how to handle anonymous callers and whether access is allowed. No authority check is added automatically.
 
-Custom manager errors are wrapped in `RequestAuthorizationError`, preserving their source. For a complete policy engine, provide your own `AuthorizationProvider` through `.authorize_with(provider)`. Put application-specific request metadata in extensions before authorization runs.
+Custom manager errors are wrapped in `RequestAuthorizationError`, preserving their source. For a complete policy engine, pass your own `AuthorizationProvider` to `SecurityLayer::new(authenticator, provider)`. Put application-specific request metadata in extensions before authorization runs.
 
 Check resource ownership and sharing rules in your application service or repository as well. For mutations, enforce access together with the write so a separate earlier check cannot become stale.
 
 ## 🧩 Reusing layers
 
-Use `.authenticator(my_authenticator)` to set a single authenticator directly,
-without wrapping it in a delegating chain. It does not need to implement `Clone`;
-the authentication layer shares it through `Arc`.
-Use `.chained_authenticators(|chain| ...)` to configure multiple authentication
-mechanisms in order, using the chain's `.authenticator(...)` or
-`.shared_authenticator(...)` methods. This replaces the former `.authenticators(...)`
-builder method.
-
-A preconfigured `AuthorizationLayer` can be supplied directly:
+Use `SecurityLayer::new(authenticator, authorizer)` to authenticate and authorize in
+one service. The identity is passed directly to the authorizer and, after access is
+allowed, stored as `Authenticated<A>` for handlers. Authenticators and authorizers do
+not need to implement `Clone`; the layer shares them through `Arc`.
 
 ```rust
-let security = SecurityLayerBuilder::builder()
-    .authenticator(my_authenticator)
-    .authorization_layer(my_authorization_layer)
-    .build();
+let security = SecurityLayer::new(my_authenticator, my_authorizer)
+    .authentication_entry_point(my_entry_point)
+    .failure_handler(my_failure_handler);
 ```
 
-Clone the resulting layer to attach it to multiple routers. Authentication providers, authorization rules, and entry points are shared through `Arc`; cloning does not duplicate them. Failure handlers use their own `Clone` implementations.
+For multiple authentication mechanisms, build an ordered chain separately:
+
+```rust
+use axum_auth_chained::{SecurityLayer, authentication::DelegatingRequestAuthenticator};
+
+let authenticators = DelegatingRequestAuthenticator::builder()
+    .authenticator(session_authenticator)
+    .authenticator(basic_authenticator)
+    .build();
+let security = SecurityLayer::new(authenticators, my_authorizer);
+```
+
+The chain skips non-applicable authenticators and stops at the first authenticated
+identity or error. Use `.shared_authenticator(...)` to add an authenticator already
+held in an `Arc`.
+
+Use separate layers when authentication and authorization need independent placement,
+for example to authenticate once before applying different authorization rules to
+nested routers, or to run context-enrichment middleware between the stages.
+
+The following composition uses `tower::ServiceBuilder` (`tower = "0.5"`).
+
+```rust
+use axum_auth_chained::{
+    authentication::AuthenticationLayer,
+    authorization::AuthorizationLayer,
+};
+use tower::ServiceBuilder;
+
+let authentication = AuthenticationLayer::new(my_authenticator);
+let authorization = AuthorizationLayer::builder(my_authorizer)
+    .authentication_entry_point(my_entry_point)
+    .failure_handler(my_failure_handler)
+    .build();
+let security = ServiceBuilder::new()
+    .layer(authentication)
+    .layer(authorization);
+```
+
+For separate layers, authentication must run before authorization, and both must use
+the same identity type. They communicate through `Authenticated<A>` in request
+extensions. To insert middleware between them, add it between the two `.layer(...)`
+calls. Do not stack `AuthenticationLayer` before `SecurityLayer` for the same identity
+type; the combined layer obtains its identity from its own authenticator.
+
+Clone a configured layer to attach it to multiple routers. Authentication providers,
+authorization rules, and entry points are shared through `Arc`; failure handlers use
+their own `Clone` implementations.
 
 ## 🪪 Sessions and form login
 
@@ -278,11 +313,12 @@ Authenticators only inspect request parts, so parse login form bodies in a handl
 
 ## ✨ Features
 
-No optional features are enabled by default. Core authentication and authorization traits, layers, and the security builder are always available.
+No optional features are enabled by default. Core authentication and authorization traits, `SecurityLayer`, and the separate layers are always available.
 
 | Feature | Enables |
 | --- | --- |
-| `basic_auth` | HTTP Basic authentication, user-detail support, password helpers, and request-rule authorization. |
+| `request_matcher` | Request matching and ordered request-rule authorization, independently of Basic authentication. |
+| `basic_auth` | HTTP Basic authentication, user-detail support, and password helpers; also enables `request_matcher`. |
 | `argon2_encoder` | Argon2 support; also enables `basic_auth`. |
 | `tracing` | Authentication tracing events. |
 
@@ -290,7 +326,6 @@ No optional features are enabled by default. Core authentication and authorizati
 
 ## 📝 Examples
 
-- [Basic authentication with Argon2](examples/examples/axum_basic_auth.rs)
 - [CRUD API with authority-based access](examples/examples/simple_crud_rbac_axum.rs)
 
 Run an example from this checkout:

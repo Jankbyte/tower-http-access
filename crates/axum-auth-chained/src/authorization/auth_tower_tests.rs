@@ -281,25 +281,22 @@ async fn mapped_provider_passes_anonymous_requests_without_mapping() {
 }
 
 #[tokio::test]
-async fn mapped_provider_integrates_with_security_builder_and_preserves_handler_identity() {
+async fn mapped_provider_supports_separate_layers_and_preserves_handler_identity() {
     let authenticator = |_: &mut Parts| async {
         Ok::<_, AuthenticatorError>(AuthenticationAttempt::Authenticated("alex".to_owned()))
     };
     let authorization =
         AuthorizationLayer::builder(MappedIdentityProvider.map(|identity: &String| identity.len()))
             .build();
-    let security = crate::SecurityLayerBuilder::builder()
-        .authenticator(authenticator)
-        .authorization_layer(authorization)
-        .build();
+    let authentication = AuthenticationLayer::new(authenticator);
     let router = axum::Router::new().route(
         "/",
         axum::routing::get(
             |Authenticated(identity): Authenticated<String>| async move { identity },
         ),
     );
-    let response = security
-        .service(router)
+    let response = authentication
+        .layer(authorization.layer(router))
         .call(Request::new(Body::empty()))
         .await
         .unwrap();

@@ -35,8 +35,10 @@ use tower_service::Service;
 /// inserts the returned identity only after authorization allows access. It does not read or
 /// remove existing authentication extensions.
 ///
-/// This layer is independent of [`crate::SecurityLayerBuilder`]. Use an authentication delegator
-/// or an all-of authorizer to compose multiple checks.
+/// Use [`crate::authentication::DelegatingRequestAuthenticator`] to combine authentication
+/// mechanisms, or [`crate::authorization::AllAuthorizationProvider`] to combine authorization
+/// checks. Use the separate authentication and authorization layers when the stages need
+/// independent placement in the middleware stack.
 ///
 /// ```
 /// use axum::http::request::Parts;
