@@ -382,12 +382,26 @@ assert_eq!(error.into_security_response().status(), StatusCode::UNAUTHORIZED);
 # Ok::<(), http::Error>(())
 ```
 
-The Tower middleware accepts generic request and response bodies. Its inner service must return
-`http::Response<ResBody>` where `ResBody: From<Bytes>`. Axum's `Body`, `Bytes` itself, and
+The Tower middleware accepts generic request and response bodies. With the default combined-layer
+adapter, or the standalone layers, its inner service must return `http::Response<ResBody>` where
+`ResBody: From<Bytes>`. Axum's `Body`, `Bytes` itself, and
 `http_body_util::Full<Bytes>` support this conversion. Other body types can be wrapped in an
 application type implementing `From<Bytes>`. Successful handler responses are passed through
 unchanged, without buffering or polling streaming bodies. Use `Full<Bytes>` rather than plain
 `Bytes` when your HTTP transport requires an `http_body::Body` implementation.
+
+`SecurityResponseAdapter<B>` defines a contract for converting an entire security response to
+`http::Response<B>`, including protocol-specific changes to status, headers, and body. For example,
+an HTTP-to-gRPC adapter could map HTTP 401 to `Unauthenticated`, 403 to `PermissionDenied`, and
+500 to `Internal`, then generate a gRPC response using Tonic's `Status::into_http()`. Successful
+application responses should bypass adaptation so their streaming bodies remain untouched.
+Configure it with `SecurityLayer::new(authenticator, authorizer).response_adapter(adapter)`.
+The combined layer invokes the adapter for every security rejection, including authentication
+errors, and bypasses it for successful handler responses. Adapters are shared through `Arc` and
+need not implement `Clone`. The default `DefaultSecurityResponseAdapter` preserves HTTP metadata
+and converts the body through `From<Bytes>`; no gRPC-specific adapter is supplied. A custom adapter
+can produce a body type without `From<Bytes>`. The separate authentication and authorization
+layers retain their existing body conversion.
 
 For a core-only dependency, use `axum-auth-chained = { version = "0.1", default-features = false }`.
 Add `bytes = "1"` and `http = "1"` to your application when constructing custom responses directly.

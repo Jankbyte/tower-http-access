@@ -363,3 +363,139 @@ async fn successful_streaming_body_is_forwarded_without_polling_or_replacing_it(
         assert!(polls.load(Ordering::SeqCst) > 0);
     }
 }
+
+// Deliberately has no From<Bytes> implementation.
+struct AdaptedBody(Bytes);
+
+// Deliberately has no Clone implementation.
+struct RecordingAdapter {
+    calls: Arc<AtomicUsize>,
+}
+
+impl SecurityResponseAdapter<AdaptedBody> for RecordingAdapter {
+    fn adapt(&self, response: SecurityResponse) -> Response<AdaptedBody> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        let original_status = response.status();
+        let mut response = response.map(AdaptedBody);
+        *response.status_mut() = StatusCode::IM_A_TEAPOT;
+        response.headers_mut().insert(
+            "x-original-status",
+            original_status.as_str().parse().unwrap(),
+        );
+        response
+    }
+}
+
+#[tokio::test]
+async fn custom_adapter_handles_every_combined_rejection_once_and_supports_non_from_body() {
+    let inner_calls = Arc::new(AtomicUsize::new(0));
+    let adapter_calls = Arc::new(AtomicUsize::new(0));
+    let raw = inner(
+        || AdaptedBody(Bytes::from_static(b"unused")),
+        Arc::clone(&inner_calls),
+    );
+    let adapter = || RecordingAdapter {
+        calls: Arc::clone(&adapter_calls),
+    };
+    let handler = |_: &Parts, failure: AuthorizationFailure<io::Error>| match failure {
+        AuthorizationFailure::Denied(_) => challenge(StatusCode::FORBIDDEN, "denied"),
+        AuthorizationFailure::Provider(_) => {
+            challenge(StatusCode::INTERNAL_SERVER_ERROR, "backend failed")
+        }
+    };
+    let cases = [
+        (
+            BoxCloneService::new(
+                SecurityLayer::new(
+                    TokenAuthenticator,
+                    AuthenticatedAuthorizationProvider::<String>::new(),
+                )
+                .response_adapter(adapter())
+                .clone()
+                .layer(raw.clone()),
+            ),
+            Some("invalid"),
+            "401",
+            "invalid token",
+        ),
+        (
+            BoxCloneService::new(
+                SecurityLayer::new(
+                    TokenAuthenticator,
+                    AuthenticatedAuthorizationProvider::<String>::new(),
+                )
+                .response_adapter(adapter())
+                .authentication_entry_point(|_: &Parts| {
+                    challenge(StatusCode::UNAUTHORIZED, "authentication required")
+                })
+                .layer(raw.clone()),
+            ),
+            None,
+            "401",
+            "authentication required",
+        ),
+        (
+            BoxCloneService::new(
+                SecurityLayer::new(TokenAuthenticator, DenyProvider(false))
+                    .response_adapter(adapter())
+                    .failure_handler(handler)
+                    .layer(raw.clone()),
+            ),
+            Some("valid"),
+            "403",
+            "denied",
+        ),
+        (
+            BoxCloneService::new(
+                SecurityLayer::new(TokenAuthenticator, DenyProvider(true))
+                    .failure_handler(handler)
+                    .response_adapter(adapter())
+                    .layer(raw),
+            ),
+            Some("valid"),
+            "500",
+            "backend failed",
+        ),
+    ];
+    for (index, (service, token, original_status, message)) in cases.into_iter().enumerate() {
+        let response = service.clone().oneshot(request(token)).await.unwrap();
+        assert_eq!(response.status(), StatusCode::IM_A_TEAPOT);
+        assert_eq!(response.headers()["x-original-status"], original_status);
+        assert_eq!(
+            response.headers()[header::WWW_AUTHENTICATE],
+            "ApiKey realm=\"Notes\""
+        );
+        assert_eq!(
+            response.extensions().get::<ResponseMarker>(),
+            Some(&ResponseMarker)
+        );
+        assert_eq!(response.into_body().0, message);
+        assert_eq!(adapter_calls.load(Ordering::SeqCst), index + 1);
+    }
+    assert_eq!(inner_calls.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn custom_adapter_is_bypassed_for_successful_inner_responses() {
+    let inner_calls = Arc::new(AtomicUsize::new(0));
+    let adapter_calls = Arc::new(AtomicUsize::new(0));
+    let raw = inner(
+        || AdaptedBody(Bytes::from_static(b"success")),
+        Arc::clone(&inner_calls),
+    );
+    let service = SecurityLayer::new(
+        TokenAuthenticator,
+        AuthenticatedAuthorizationProvider::<String>::new(),
+    )
+    .response_adapter(RecordingAdapter {
+        calls: Arc::clone(&adapter_calls),
+    })
+    .layer(raw);
+    let response = service.oneshot(request(Some("valid"))).await.unwrap();
+    assert_eq!(response.status(), StatusCode::ACCEPTED);
+    assert_eq!(response.headers()["x-inner"], "preserved");
+    assert!(!response.headers().contains_key("x-original-status"));
+    assert_eq!(response.into_body().0, "success");
+    assert_eq!(inner_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(adapter_calls.load(Ordering::SeqCst), 0);
+}
