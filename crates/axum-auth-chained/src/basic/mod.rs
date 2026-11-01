@@ -18,5 +18,5 @@ pub use authorization::{
 pub use base64::BasicCredentials;
 pub use user_detail::{
     Authority, InMemoryUserDetailService, UserDetail, UserDetailAuthenticationError,
-    UserDetailAuthenticationProvider, UserDetailService,
+    UserDetailAuthenticationProvider, UserDetailService, UserLoadingError,
 };
