@@ -1,12 +1,13 @@
 use super::*;
-use axum::{body::Body, http::StatusCode};
+use crate::response::test_response;
+use axum::{body::Body, extract::Request, http::StatusCode};
 use std::io;
 
 #[test]
 fn authenticator_error_preserves_internal_reason_and_custom_response() {
     let error = AuthenticatorError::with_response(
         AuthenticationErrorReason::Internal(Box::new(io::Error::other("database unavailable"))),
-        StatusCode::SERVICE_UNAVAILABLE,
+        test_response(StatusCode::SERVICE_UNAVAILABLE, ""),
     );
 
     assert!(matches!(
@@ -14,19 +15,19 @@ fn authenticator_error_preserves_internal_reason_and_custom_response() {
         AuthenticationErrorReason::Internal(_)
     ));
     assert_eq!(
-        error.into_response().status(),
+        error.into_security_response().status(),
         StatusCode::SERVICE_UNAVAILABLE
     );
 }
 
 #[test]
 fn authenticator_error_uses_default_response_for_reason() {
-    let wrong_credentials =
-        AuthenticatorError::new(AuthenticationErrorReason::WrongCredentials).into_response();
+    let wrong_credentials = AuthenticatorError::new(AuthenticationErrorReason::WrongCredentials)
+        .into_security_response();
     let internal = AuthenticatorError::new(AuthenticationErrorReason::Internal(Box::new(
         io::Error::other("database unavailable"),
     )))
-    .into_response();
+    .into_security_response();
 
     assert_eq!(wrong_credentials.status(), StatusCode::UNAUTHORIZED);
     assert_eq!(internal.status(), StatusCode::INTERNAL_SERVER_ERROR);
@@ -74,7 +75,7 @@ async fn arc_authenticators_forward_attempts_errors_and_request_mutations() {
                     1 => Ok(AuthenticationAttempt::Authenticated("alex".to_owned())),
                     _ => Err(AuthenticatorError::with_response(
                         AuthenticationErrorReason::WrongCredentials,
-                        StatusCode::IM_A_TEAPOT,
+                        test_response(StatusCode::IM_A_TEAPOT, ""),
                     )),
                 }
             })

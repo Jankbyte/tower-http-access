@@ -1,5 +1,5 @@
 use ::base64::{DecodeError, Engine, engine::general_purpose::STANDARD};
-use axum::http::{header::AUTHORIZATION, request::Parts};
+use http::{header::AUTHORIZATION, request::Parts};
 use std::{fmt, str::Utf8Error};
 
 #[derive(Clone, Eq, PartialEq)]
@@ -21,7 +21,7 @@ impl fmt::Debug for BasicCredentials {
 #[derive(Debug, thiserror::Error)]
 pub enum BasicCredentialsError {
     #[error("Basic authorization header is not valid text")]
-    InvalidHeader(#[source] axum::http::header::ToStrError),
+    InvalidHeader(#[source] http::header::ToStrError),
     #[error("Basic credentials are not valid base64")]
     InvalidBase64(#[source] DecodeError),
     #[error("Basic credentials are not valid UTF-8")]

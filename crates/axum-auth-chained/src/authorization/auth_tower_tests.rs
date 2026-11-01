@@ -3,6 +3,7 @@ use crate::authentication::{
     Authenticated, AuthenticationAttempt, AuthenticationLayer, AuthenticatorError,
 };
 use crate::authorization::{AuthenticatedAuthorizationProvider, AuthorizationProviderExt};
+use crate::response::test_response;
 use axum::{
     body::Body,
     extract::Request,
@@ -54,11 +55,12 @@ async fn authenticated_provider_without_identity_returns_unauthorized() {
 async fn authentication_required_uses_configured_entry_point() {
     let mut service =
         AuthorizationLayer::builder(AuthenticatedAuthorizationProvider::<String>::new())
-            .authentication_entry_point(move |request: Request| {
-                (
-                    StatusCode::UNAUTHORIZED,
-                    [("x-request-path", request.uri().path().to_owned())],
-                )
+            .authentication_entry_point(move |request: &Parts| {
+                let mut response = test_response(StatusCode::UNAUTHORIZED, "");
+                response
+                    .headers_mut()
+                    .insert("x-request-path", request.uri.path().parse().unwrap());
+                response
             })
             .build()
             .layer(Inner);
@@ -135,16 +137,16 @@ async fn insufficient_permissions_returns_forbidden() {
 async fn custom_failure_handler_receives_request_and_denial() {
     let mut service = AuthorizationLayer::builder(DenyProvider)
         .failure_handler(
-            |request: Request, failure: AuthorizationFailure<Infallible>| {
+            |request: &Parts, failure: AuthorizationFailure<Infallible>| {
                 let denial = match failure {
                     AuthorizationFailure::Denied(denial) => format!("{denial:?}"),
                     AuthorizationFailure::Provider(error) => match error {},
                 };
-                (
-                    StatusCode::IM_A_TEAPOT,
-                    [("x-request-path", request.uri().path().to_owned())],
-                    denial,
-                )
+                let mut response = test_response(StatusCode::IM_A_TEAPOT, denial);
+                response
+                    .headers_mut()
+                    .insert("x-request-path", request.uri.path().parse().unwrap());
+                response
             },
         )
         .build()
@@ -280,6 +282,7 @@ async fn mapped_provider_passes_anonymous_requests_without_mapping() {
     );
 }
 
+#[cfg(feature = "axum")]
 #[tokio::test]
 async fn mapped_provider_supports_separate_layers_and_preserves_handler_identity() {
     let authenticator = |_: &mut Parts| async {

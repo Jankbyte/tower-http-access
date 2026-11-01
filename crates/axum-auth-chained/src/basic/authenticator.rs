@@ -1,17 +1,15 @@
 use super::BasicCredentials;
 use super::base64::extract_credentials;
+use crate::{SecurityResponse, response::empty_response};
 use crate::{
     authentication::{
         AuthenticationAttempt, AuthenticationErrorReason, AuthenticatorError, RequestAuthenticator,
     },
     authorization::AuthenticationEntryPoint,
 };
-use axum::{
-    extract::Request,
-    http::{StatusCode, header, request::Parts},
-    response::{IntoResponse, Response},
-};
+use bytes::Bytes;
 use futures_util::future::BoxFuture;
+use http::{StatusCode, header, request::Parts};
 use std::{error::Error, future::Future, pin::Pin};
 
 /// Authenticates decoded username/password credentials.
@@ -54,7 +52,9 @@ pub trait UsernamePasswordAuthenticationProvider: Send + Sync {
 ///
 /// # Example
 ///
-/// ```rust
+/// ```no_run
+/// # #[cfg(feature = "argon2_encoder")]
+/// # mod example {
 /// use argon2::Argon2;
 /// use axum_auth_chained::basic::{
 ///     Authority, AsyncStringPasswordManager, BasicRequestAuthenticator,
@@ -82,6 +82,8 @@ pub trait UsernamePasswordAuthenticationProvider: Send + Sync {
 ///     .unwrap();
 /// let basic_authenticator = BasicRequestAuthenticator::new(provider);
 /// # }
+/// # }
+/// # fn main() {}
 /// ```
 ///
 #[derive(Clone)]
@@ -163,7 +165,7 @@ impl<P> AuthenticationEntryPoint for BasicRequestAuthenticator<P>
 where
     P: Send + Sync + 'static,
 {
-    fn commence(&self, _: Request) -> Response {
+    fn commence(&self, _: &Parts) -> SecurityResponse {
         basic_challenge(&self.realm)
     }
 }
@@ -175,16 +177,18 @@ fn wrong_credentials(realm: &str) -> AuthenticatorError {
     )
 }
 
-fn basic_challenge(realm: &str) -> Response {
+fn basic_challenge(realm: &str) -> SecurityResponse {
     let realm = realm.replace('\\', "\\\\").replace('"', "\\\"");
-    (
-        StatusCode::UNAUTHORIZED,
-        [(
-            header::WWW_AUTHENTICATE,
-            format!(r#"Basic realm="{realm}""#),
-        )],
-    )
-        .into_response()
+    let challenge = format!(r#"Basic realm="{realm}""#);
+    let Ok(challenge) = http::HeaderValue::from_str(&challenge) else {
+        return empty_response(StatusCode::INTERNAL_SERVER_ERROR);
+    };
+    let mut response = SecurityResponse::new(Bytes::new());
+    *response.status_mut() = StatusCode::UNAUTHORIZED;
+    response
+        .headers_mut()
+        .insert(header::WWW_AUTHENTICATE, challenge);
+    response
 }
 
 fn internal_error(error: impl Error + Send + Sync + 'static) -> AuthenticatorError {

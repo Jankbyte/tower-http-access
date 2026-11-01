@@ -605,6 +605,7 @@ async fn string_identities_support_rules_without_authorities() {
     }
 }
 
+#[cfg(feature = "axum")]
 #[tokio::test]
 async fn string_request_rules_integrate_with_combined_layer_without_basic_authentication() {
     use crate::{

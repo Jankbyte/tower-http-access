@@ -1,8 +1,8 @@
 //! Ordered authentication chains.
 
 use super::{AuthenticationAttempt, AuthenticatorError, RequestAuthenticator};
-use axum::http::request::Parts;
 use futures_util::future::BoxFuture;
+use http::request::Parts;
 use std::sync::Arc;
 
 /// The implementation of [`RequestAuthenticator`], that accept another

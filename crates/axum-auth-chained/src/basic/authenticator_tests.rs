@@ -1,5 +1,5 @@
 use super::*;
-use axum::{body::Body, http::header::AUTHORIZATION};
+use axum::{body::Body, extract::Request, http::header::AUTHORIZATION};
 use std::convert::Infallible;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -50,7 +50,7 @@ async fn basic_authenticator_invalid_credentials_return_basic_challenge() {
     let (mut parts, _) = request("Basic YWxleDpiYWQ=").into_parts();
 
     let error = authenticator.authenticate(&mut parts).await.unwrap_err();
-    let response = error.into_response();
+    let response = error.into_security_response();
 
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     assert_eq!(
@@ -85,7 +85,7 @@ fn basic_entry_point_uses_configured_realm() {
             r#"Basic realm="\"private\"\\area""#,
         ),
     ] {
-        let response = authenticator.commence(Request::new(Body::empty()));
+        let response = authenticator.commence(&Request::new(Body::empty()).into_parts().0);
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
         assert_eq!(response.headers()[header::WWW_AUTHENTICATE], expected);
     }
@@ -100,7 +100,7 @@ async fn basic_authenticator_uses_configured_realm_for_invalid_and_malformed_cre
             .authenticate(&mut parts)
             .await
             .unwrap_err()
-            .into_response();
+            .into_security_response();
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
         assert_eq!(
             response.headers()[header::WWW_AUTHENTICATE],

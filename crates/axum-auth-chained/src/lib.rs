@@ -3,9 +3,11 @@
 pub mod authentication;
 pub mod authorization;
 mod combined;
+mod response;
 #[cfg(feature = "request_matcher")]
 pub use authorization::request_matcher;
 pub use combined::{SecurityLayer, SecurityService};
+pub use response::SecurityResponse;
 
 #[cfg(feature = "basic_auth")]
 pub mod basic;

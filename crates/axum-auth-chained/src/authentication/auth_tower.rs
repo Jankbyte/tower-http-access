@@ -7,11 +7,9 @@
 //! identity directly to authorization in a single service.
 
 use super::{Authenticated, AuthenticationAttempt, RequestAuthenticator};
-use axum::{
-    extract::Request,
-    response::{IntoResponse, Response},
-};
+use bytes::Bytes;
 use futures_util::future::BoxFuture;
+use http::{Request, Response};
 use std::{
     sync::Arc,
     task::{Context, Poll},
@@ -74,22 +72,24 @@ impl<S: Clone, A> Clone for AuthenticationService<S, A> {
     }
 }
 
-impl<S, A> Service<Request> for AuthenticationService<S, A>
+impl<S, A, ReqBody, ResBody> Service<Request<ReqBody>> for AuthenticationService<S, A>
 where
-    S: Service<Request, Response = Response> + Clone + Send + 'static,
+    S: Service<Request<ReqBody>, Response = Response<ResBody>> + Clone + Send + 'static,
     S::Future: Send + 'static,
     S::Error: Send + 'static,
+    ReqBody: Send + 'static,
+    ResBody: From<Bytes> + 'static,
     A: RequestAuthenticator + 'static,
 {
-    type Response = Response;
+    type Response = Response<ResBody>;
     type Error = S::Error;
-    type Future = BoxFuture<'static, Result<Response, S::Error>>;
+    type Future = BoxFuture<'static, Result<Response<ResBody>, S::Error>>;
 
     fn poll_ready(&mut self, context: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         self.inner.poll_ready(context)
     }
 
-    fn call(&mut self, request: Request) -> Self::Future {
+    fn call(&mut self, request: Request<ReqBody>) -> Self::Future {
         let authenticator = Arc::clone(&self.authenticator);
         let clone = self.inner.clone();
         let mut inner = std::mem::replace(&mut self.inner, clone);
@@ -101,7 +101,7 @@ where
                 Ok(AuthenticationAttempt::Authenticated(authentication)) => {
                     parts.extensions.insert(Authenticated(authentication));
                 }
-                Err(error) => return Ok(error.into_response()),
+                Err(error) => return Ok(error.into_security_response().map(ResBody::from)),
             }
             inner.call(Request::from_parts(parts, body)).await
         })

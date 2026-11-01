@@ -81,7 +81,9 @@ pub trait AsyncPasswordVerifier: Send + Sync {
 ///
 /// # Example
 ///
-/// ```rust
+/// ```no_run
+/// # #[cfg(feature = "argon2_encoder")]
+/// # mod example {
 /// use argon2::{Algorithm, Argon2, Params, Version};
 /// use axum_auth_chained::basic::AsyncStringPasswordManager;
 /// use std::{error::Error, num::NonZeroUsize, thread};
@@ -104,6 +106,8 @@ pub trait AsyncPasswordVerifier: Send + Sync {
 ///     max_concurrent,
 /// ))
 /// # }
+/// # }
+/// # fn main() {}
 /// ```
 #[derive(Clone)]
 pub struct AsyncStringPasswordManager<H> {

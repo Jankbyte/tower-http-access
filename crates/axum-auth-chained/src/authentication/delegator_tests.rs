@@ -2,6 +2,7 @@ use super::*;
 use crate::authentication::{
     AuthenticationErrorReason, AuthenticationLayer, auth_tower::tests::IdentityService,
 };
+use crate::response::test_response;
 use axum::{body::Body, extract::Request, http::StatusCode};
 use tower::{Layer, Service};
 
@@ -81,7 +82,7 @@ async fn authenticator_error_response_stops_chain_and_becomes_service_response()
     let reject = |_: &mut Parts| async {
         Err::<AuthenticationAttempt<String>, _>(AuthenticatorError::with_response(
             AuthenticationErrorReason::WrongCredentials,
-            (StatusCode::UNAUTHORIZED, "invalid token"),
+            test_response(StatusCode::UNAUTHORIZED, "invalid token"),
         ))
     };
     let authenticator = DelegatingRequestAuthenticator::builder()

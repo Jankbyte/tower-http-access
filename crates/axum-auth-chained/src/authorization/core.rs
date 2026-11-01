@@ -1,32 +1,29 @@
 //! Shared authorization contracts, identity adapters, decisions, and failure handling.
 
-use axum::{
-    extract::Request,
-    http::{StatusCode, request::Parts},
-    response::{IntoResponse, Response},
-};
+use crate::{SecurityResponse, response::empty_response};
 use futures_util::future::BoxFuture;
+use http::{StatusCode, request::Parts};
 use std::{future::Future, marker::PhantomData, pin::Pin, sync::Arc};
 
 /// The authentication entrypoint, that uses by [`super::AuthorizationService`]
-/// to delegate unauthenticated requests.
+/// to delegate unauthenticated requests. It borrows request metadata and returns buffered bytes.
+/// The middleware converts the response body to the type expected by the inner service.
 ///
 /// This should be used for providing schema of authentication, when credentials is not set.
 ///
 /// For example, if endpoint requires `Basic` authentication, but credentials (header) is not provided,
 /// service will execute this endpoint, that returns response with `WWW-Authenticate` header.
 pub trait AuthenticationEntryPoint: Send + Sync + 'static {
-    fn commence(&self, request: Request) -> Response;
+    fn commence(&self, request: &Parts) -> SecurityResponse;
 }
 
 /// Create authentication entrypoint from closure.
-impl<F, R> AuthenticationEntryPoint for F
+impl<F> AuthenticationEntryPoint for F
 where
-    F: Fn(Request) -> R + Send + Sync + 'static,
-    R: IntoResponse,
+    F: Fn(&Parts) -> SecurityResponse + Send + Sync + 'static,
 {
-    fn commence(&self, request: Request) -> Response {
-        self(request).into_response()
+    fn commence(&self, request: &Parts) -> SecurityResponse {
+        self(request)
     }
 }
 
@@ -35,8 +32,8 @@ where
 pub struct DefaultAuthenticationEntryPoint;
 
 impl AuthenticationEntryPoint for DefaultAuthenticationEntryPoint {
-    fn commence(&self, _: Request) -> Response {
-        StatusCode::UNAUTHORIZED.into_response()
+    fn commence(&self, _: &Parts) -> SecurityResponse {
+        empty_response(StatusCode::UNAUTHORIZED)
     }
 }
 
@@ -190,17 +187,17 @@ pub enum AuthorizationFailure<E> {
     Provider(#[source] E),
 }
 
+/// Renders authorization failures using borrowed request metadata and a byte-backed response.
 pub trait AuthorizationFailureHandler<E>: Clone + Send + Sync + 'static {
-    fn handle(&self, request: Request, failure: AuthorizationFailure<E>) -> Response;
+    fn handle(&self, request: &Parts, failure: AuthorizationFailure<E>) -> SecurityResponse;
 }
 
-impl<E, F, R> AuthorizationFailureHandler<E> for F
+impl<E, F> AuthorizationFailureHandler<E> for F
 where
-    F: Fn(Request, AuthorizationFailure<E>) -> R + Clone + Send + Sync + 'static,
-    R: IntoResponse,
+    F: Fn(&Parts, AuthorizationFailure<E>) -> SecurityResponse + Clone + Send + Sync + 'static,
 {
-    fn handle(&self, request: Request, failure: AuthorizationFailure<E>) -> Response {
-        self(request, failure).into_response()
+    fn handle(&self, request: &Parts, failure: AuthorizationFailure<E>) -> SecurityResponse {
+        self(request, failure)
     }
 }
 
@@ -208,8 +205,8 @@ where
 pub struct DefaultAuthorizationFailureHandler;
 
 impl<E> AuthorizationFailureHandler<E> for DefaultAuthorizationFailureHandler {
-    fn handle(&self, _: Request, failure: AuthorizationFailure<E>) -> Response {
-        match failure {
+    fn handle(&self, _: &Parts, failure: AuthorizationFailure<E>) -> SecurityResponse {
+        empty_response(match failure {
             AuthorizationFailure::Denied(AuthorizationDenial::AuthenticationRequired) => {
                 // NOTE: never happens, because will be delegated to authentication entry point
                 StatusCode::UNAUTHORIZED
@@ -218,8 +215,7 @@ impl<E> AuthorizationFailureHandler<E> for DefaultAuthorizationFailureHandler {
                 StatusCode::FORBIDDEN
             }
             AuthorizationFailure::Provider(_) => StatusCode::INTERNAL_SERVER_ERROR,
-        }
-        .into_response()
+        })
     }
 }
 
@@ -228,7 +224,7 @@ impl<T> AuthenticationEntryPoint for Arc<T>
 where
     T: AuthenticationEntryPoint,
 {
-    fn commence(&self, request: Request) -> Response {
+    fn commence(&self, request: &Parts) -> SecurityResponse {
         T::commence(self.as_ref(), request)
     }
 }

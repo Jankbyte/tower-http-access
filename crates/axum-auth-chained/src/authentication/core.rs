@@ -1,11 +1,8 @@
 //! Authentication contracts, typed identities, errors, and adapters.
 
-use axum::{
-    extract::Request,
-    http::request::Parts,
-    response::{IntoResponse, Response},
-};
+use crate::{SecurityResponse, response::empty_response};
 use futures_util::future::BoxFuture;
+use http::{StatusCode, request::Parts};
 use std::{error::Error, future::Future, sync::Arc};
 
 use crate::authorization::AuthenticationEntryPoint;
@@ -18,7 +15,7 @@ pub type BoxError = Box<dyn Error + Send + Sync>;
 /// directly. This distinguishes an authenticated identity from unrelated extension values of the
 /// same type.
 ///
-/// Use it directly as an Axum extractor when authentication is required, or wrap it in [`Option`]
+/// With the `axum` feature, use it as an extractor when authentication is required, or wrap it in [`Option`]
 /// when a handler also accepts anonymous requests:
 ///
 /// ```rust
@@ -78,7 +75,7 @@ pub struct AuthenticatorError {
     /// The reason of occurred error.
     pub reason: AuthenticationErrorReason,
     /// Custom response sent instead of the default response for [`Self::reason`].
-    pub response: Option<Response>,
+    pub response: Option<SecurityResponse>,
 }
 
 impl AuthenticatorError {
@@ -91,23 +88,21 @@ impl AuthenticatorError {
     }
 
     /// Create an authentication error with a custom response.
-    pub fn with_response(reason: AuthenticationErrorReason, response: impl IntoResponse) -> Self {
+    pub fn with_response(reason: AuthenticationErrorReason, response: SecurityResponse) -> Self {
         Self {
             reason,
-            response: Some(response.into_response()),
+            response: Some(response),
         }
     }
-}
 
-impl IntoResponse for AuthenticatorError {
-    fn into_response(self) -> Response {
-        self.response.unwrap_or_else(|| match self.reason {
-            AuthenticationErrorReason::WrongCredentials => {
-                axum::http::StatusCode::UNAUTHORIZED.into_response()
-            }
-            AuthenticationErrorReason::Internal(_) => {
-                axum::http::StatusCode::INTERNAL_SERVER_ERROR.into_response()
-            }
+    /// Use the custom response, or return HTTP 401 for wrong credentials and 500 for backend errors.
+    /// The response body is buffered bytes; the middleware adapts it to the framework's body type.
+    pub fn into_security_response(self) -> SecurityResponse {
+        self.response.unwrap_or_else(|| {
+            empty_response(match self.reason {
+                AuthenticationErrorReason::WrongCredentials => StatusCode::UNAUTHORIZED,
+                AuthenticationErrorReason::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            })
         })
     }
 }
@@ -119,10 +114,8 @@ impl IntoResponse for AuthenticatorError {
 pub enum AuthenticationAttempt<A> {
     /// The result of authentication, when target authenticator is not applicable.
     ///
-    /// For example, [`BasicRequestAuthenticator`] can return that, if your request
-    /// does not have `Authorization` header and target schema (`Basic`) in value.
-    ///
-    /// [`BasicRequestAuthenticator`]: crate::basic::BasicRequestAuthenticator
+    /// For example, an HTTP Basic authenticator can return this when a request has no
+    /// `Authorization` header or uses a different authentication scheme.
     ///
     NotApplicable,
     /// Success authenticated, where value is result of authentication.
@@ -230,7 +223,7 @@ where
     T: AuthenticationEntryPoint,
     F: Send + Sync + 'static,
 {
-    fn commence(&self, request: Request) -> Response {
+    fn commence(&self, request: &Parts) -> SecurityResponse {
         self.inner.commence(request)
     }
 }

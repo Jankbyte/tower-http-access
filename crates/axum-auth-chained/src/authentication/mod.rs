@@ -16,6 +16,7 @@ pub use core::{
     MapAuthentication, RequestAuthenticator, RequestAuthenticatorExt,
 };
 
+#[cfg(feature = "axum")]
 mod axum;
 
 mod auth_tower;

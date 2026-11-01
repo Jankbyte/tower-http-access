@@ -1,6 +1,13 @@
 use super::*;
 use crate::authentication::AuthenticatorError;
-use axum::{Router, body::Body, http::request::Parts, routing::method_routing::get};
+use axum::{
+    Router,
+    body::Body,
+    extract::Request,
+    http::request::Parts,
+    response::{IntoResponse, Response},
+    routing::method_routing::get,
+};
 use std::{
     convert::Infallible,
     future::{Ready, ready},

@@ -1,4 +1,5 @@
 use super::*;
+use crate::response::test_response;
 use crate::{
     authentication::{
         AuthenticationErrorReason, AuthenticatorError, DelegatingRequestAuthenticator,
@@ -9,7 +10,9 @@ use crate::{
 };
 use axum::{
     body::{Body, to_bytes},
+    extract::Request,
     http::{StatusCode, request::Parts},
+    response::{IntoResponse, Response},
 };
 use std::{
     future::{poll_fn, ready},
@@ -35,7 +38,7 @@ impl RequestAuthenticator for Authenticator {
                 1 => Ok(AuthenticationAttempt::Authenticated("alex".to_owned())),
                 _ => Err(AuthenticatorError::with_response(
                     AuthenticationErrorReason::WrongCredentials,
-                    (StatusCode::UNAUTHORIZED, "invalid credentials"),
+                    test_response(StatusCode::UNAUTHORIZED, "invalid credentials"),
                 )),
             }
         })
@@ -258,14 +261,14 @@ async fn custom_failure_handlers_receive_request_and_original_failure() {
                 calls: Arc::new(AtomicUsize::new(0)),
             },
         )
-        .authentication_entry_point(|request: Request| {
-            assert_eq!(request.uri().path(), "/notes");
-            assert_eq!(request.headers()["x-auth"], "checked");
-            StatusCode::FOUND
+        .authentication_entry_point(|request: &Parts| {
+            assert_eq!(request.uri.path(), "/notes");
+            assert_eq!(request.headers["x-auth"], "checked");
+            test_response(StatusCode::FOUND, "")
         })
         .failure_handler(
-            move |request: Request, failure: AuthorizationFailure<io::Error>| {
-                assert_eq!(request.headers()["x-auth"], "checked");
+            move |request: &Parts, failure: AuthorizationFailure<io::Error>| {
+                assert_eq!(request.headers["x-auth"], "checked");
                 match failure {
                     AuthorizationFailure::Denied(AuthorizationDenial::InsufficientPermissions) => {
                         assert_eq!(outcome, 2)
@@ -276,7 +279,7 @@ async fn custom_failure_handlers_receive_request_and_original_failure() {
                     }
                     _ => panic!("unexpected failure"),
                 }
-                StatusCode::IM_A_TEAPOT
+                test_response(StatusCode::IM_A_TEAPOT, "")
             },
         )
         .layer(Inner {

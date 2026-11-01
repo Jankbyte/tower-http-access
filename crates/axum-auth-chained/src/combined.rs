@@ -8,11 +8,9 @@ use crate::{
         DefaultAuthorizationFailureHandler,
     },
 };
-use axum::{
-    extract::Request,
-    response::{IntoResponse, Response},
-};
+use bytes::Bytes;
 use futures_util::future::BoxFuture;
+use http::{Request, Response};
 use std::{
     sync::Arc,
     task::{Context, Poll},
@@ -21,6 +19,13 @@ use tower_layer::Layer;
 use tower_service::Service;
 
 /// Authenticates and authorizes requests before forwarding them to an inner service.
+///
+/// The service accepts `http::Request<ReqBody>` and preserves successful
+/// `http::Response<ResBody>` values, including streaming bodies. `ReqBody` must be `Send + 'static`;
+/// `ResBody` must implement `From<bytes::Bytes>`. Only security-generated responses are converted.
+/// For Axum this conversion uses `axum::body::Body::from`; other Tower services can use `Bytes`,
+/// `http_body_util::Full<Bytes>`, or an application body wrapper implementing `From<Bytes>`.
+/// Entry points and failure handlers borrow request parts and return [`crate::SecurityResponse`].
 ///
 /// The authenticator's result is passed directly to the authorizer, without using
 /// request extensions to communicate between stages. After authorization allows the request,
@@ -41,7 +46,7 @@ use tower_service::Service;
 /// independent placement in the middleware stack.
 ///
 /// ```
-/// use axum::http::request::Parts;
+/// use http::request::Parts;
 /// use axum_auth_chained::{
 ///     authentication::{AuthenticationAttempt, AuthenticatorError},
 ///     authorization::AuthenticatedAuthorizationProvider,
@@ -158,26 +163,28 @@ impl<S: Clone, A, P, H: Clone, E> Clone for SecurityService<S, A, P, H, E> {
     }
 }
 
-impl<S, A, P, H, E> Service<Request> for SecurityService<S, A, P, H, E>
+impl<S, A, P, H, E, ReqBody, ResBody> Service<Request<ReqBody>> for SecurityService<S, A, P, H, E>
 where
-    S: Service<Request, Response = Response> + Clone + Send + 'static,
+    S: Service<Request<ReqBody>, Response = Response<ResBody>> + Clone + Send + 'static,
     S::Future: Send + 'static,
     S::Error: Send + 'static,
+    ReqBody: Send + 'static,
+    ResBody: From<Bytes> + 'static,
     A: RequestAuthenticator + 'static,
     P: AuthorizationProvider<Authentication = A::Authentication> + 'static,
     P::Error: 'static,
     H: AuthorizationFailureHandler<P::Error>,
     E: AuthenticationEntryPoint,
 {
-    type Response = Response;
+    type Response = Response<ResBody>;
     type Error = S::Error;
-    type Future = BoxFuture<'static, Result<Response, S::Error>>;
+    type Future = BoxFuture<'static, Result<Response<ResBody>, S::Error>>;
 
     fn poll_ready(&mut self, context: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         self.inner.poll_ready(context)
     }
 
-    fn call(&mut self, request: Request) -> Self::Future {
+    fn call(&mut self, request: Request<ReqBody>) -> Self::Future {
         let layer = self.layer.clone();
         let clone = self.inner.clone();
         let mut inner = std::mem::replace(&mut self.inner, clone);
@@ -187,16 +194,16 @@ where
             let authentication = match layer.authenticator.authenticate(&mut parts).await {
                 Ok(AuthenticationAttempt::Authenticated(authentication)) => Some(authentication),
                 Ok(AuthenticationAttempt::NotApplicable) => None,
-                Err(error) => return Ok(error.into_response()),
+                Err(error) => return Ok(error.into_security_response().map(ResBody::from)),
             };
             let decision = layer
                 .authorizer
                 .authorize(authentication.as_ref(), &parts)
                 .await;
-            let mut request = Request::from_parts(parts, body);
 
             match decision {
                 Ok(AuthorizationDecision::Allow) => {
+                    let mut request = Request::from_parts(parts, body);
                     if let Some(authentication) = authentication {
                         request
                             .extensions_mut()
@@ -205,14 +212,19 @@ where
                     inner.call(request).await
                 }
                 Ok(AuthorizationDecision::Deny(AuthorizationDenial::AuthenticationRequired)) => {
-                    Ok(layer.authentication_entry_point.commence(request))
+                    Ok(layer
+                        .authentication_entry_point
+                        .commence(&parts)
+                        .map(ResBody::from))
                 }
                 Ok(AuthorizationDecision::Deny(denial)) => Ok(layer
                     .failure_handler
-                    .handle(request, AuthorizationFailure::Denied(denial))),
+                    .handle(&parts, AuthorizationFailure::Denied(denial))
+                    .map(ResBody::from)),
                 Err(error) => Ok(layer
                     .failure_handler
-                    .handle(request, AuthorizationFailure::Provider(error))),
+                    .handle(&parts, AuthorizationFailure::Provider(error))
+                    .map(ResBody::from)),
             }
         })
     }

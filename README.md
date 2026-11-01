@@ -28,7 +28,7 @@ tokio = { version = "1", features = ["macros", "rt-multi-thread", "net"] }
 ```
 
 ```rust,no_run
-# #[cfg(feature = "argon2_encoder")]
+# #[cfg(all(feature = "argon2_encoder", feature = "axum"))]
 # mod example {
 use std::{num::NonZeroUsize, sync::Arc};
 
@@ -285,8 +285,8 @@ not need to implement `Clone`; the layer shares them through `Arc`.
 # use axum_auth_chained::{SecurityLayer, authentication::{AuthenticationAttempt, AuthenticatorError}, authorization::{AuthenticatedAuthorizationProvider, AuthorizationFailure}};
 # let my_authenticator = |_: &mut Parts| async { Ok::<_, AuthenticatorError>(AuthenticationAttempt::Authenticated("alex".to_owned())) };
 # let my_authorizer = AuthenticatedAuthorizationProvider::<String>::new();
-# let my_entry_point = |_: Request| StatusCode::UNAUTHORIZED;
-# let my_failure_handler = |_: Request, _: AuthorizationFailure<std::convert::Infallible>| StatusCode::FORBIDDEN;
+# let my_entry_point = |_: &Parts| http::Response::builder().status(StatusCode::UNAUTHORIZED).body(bytes::Bytes::new()).unwrap();
+# let my_failure_handler = |_: &Parts, _: AuthorizationFailure<std::convert::Infallible>| http::Response::builder().status(StatusCode::FORBIDDEN).body(bytes::Bytes::new()).unwrap();
 let security = SecurityLayer::new(my_authenticator, my_authorizer)
     .authentication_entry_point(my_entry_point)
     .failure_handler(my_failure_handler);
@@ -326,8 +326,8 @@ The following composition uses `tower::ServiceBuilder` (`tower = "0.5"`).
 # use axum_auth_chained::{authentication::{AuthenticationAttempt, AuthenticatorError}, authorization::{AuthenticatedAuthorizationProvider, AuthorizationFailure}};
 # let my_authenticator = |_: &mut Parts| async { Ok::<_, AuthenticatorError>(AuthenticationAttempt::Authenticated("alex".to_owned())) };
 # let my_authorizer = AuthenticatedAuthorizationProvider::<String>::new();
-# let my_entry_point = |_: Request| StatusCode::UNAUTHORIZED;
-# let my_failure_handler = |_: Request, _: AuthorizationFailure<std::convert::Infallible>| StatusCode::FORBIDDEN;
+# let my_entry_point = |_: &Parts| http::Response::builder().status(StatusCode::UNAUTHORIZED).body(bytes::Bytes::new()).unwrap();
+# let my_failure_handler = |_: &Parts, _: AuthorizationFailure<std::convert::Infallible>| http::Response::builder().status(StatusCode::FORBIDDEN).body(bytes::Bytes::new()).unwrap();
 use axum_auth_chained::{
     authentication::AuthenticationLayer,
     authorization::AuthorizationLayer,
@@ -361,12 +361,46 @@ The library provides extension points for session authentication; it does not in
 
 Authenticators only inspect request parts, so parse login form bodies in a handler. Cookie-based applications also need CSRF protection, including on login and logout. Add CSRF validation separately from authorization so public endpoints remain protected against forged submissions.
 
+## HTTP responses and framework integration
+
+Security-generated responses use `SecurityResponse`, an alias for `http::Response<bytes::Bytes>`.
+Authenticators can return an explicit custom response through `AuthenticatorError::with_response`;
+otherwise `into_security_response()` selects the default HTTP 401 or 500 response.
+Entry points and failure handlers borrow `&http::request::Parts` and also return `SecurityResponse`.
+
+```rust
+use axum_auth_chained::{SecurityResponse, authentication::{AuthenticatorError, AuthenticationErrorReason}};
+use bytes::Bytes;
+use http::StatusCode;
+
+let challenge: SecurityResponse = http::Response::builder()
+    .status(StatusCode::UNAUTHORIZED)
+    .header("www-authenticate", "Basic realm=\"Notes\"")
+    .body(Bytes::from_static(b"Authentication required"))?;
+let error = AuthenticatorError::with_response(AuthenticationErrorReason::WrongCredentials, challenge);
+assert_eq!(error.into_security_response().status(), StatusCode::UNAUTHORIZED);
+# Ok::<(), http::Error>(())
+```
+
+The Tower middleware accepts generic request and response bodies. Its inner service must return
+`http::Response<ResBody>` where `ResBody: From<Bytes>`. Axum's `Body`, `Bytes` itself, and
+`http_body_util::Full<Bytes>` support this conversion. Other body types can be wrapped in an
+application type implementing `From<Bytes>`. Successful handler responses are passed through
+unchanged, without buffering or polling streaming bodies. Use `Full<Bytes>` rather than plain
+`Bytes` when your HTTP transport requires an `http_body::Body` implementation.
+
+For a core-only dependency, use `axum-auth-chained = { version = "0.1", default-features = false }`.
+Add `bytes = "1"` and `http = "1"` to your application when constructing custom responses directly.
+
 ## ✨ Features
 
-No optional features are enabled by default. Core authentication and authorization traits, `SecurityLayer`, and the separate layers are always available.
+The `axum` integration feature is enabled by default. Disable default features to use the core
+HTTP/Tower middleware without depending on Axum. Authentication and authorization traits,
+`SecurityLayer`, and the separate layers are always available.
 
 | Feature | Enables |
 | --- | --- |
+| `axum` (default) | Axum extractors for `Authenticated<A>` and `Option<Authenticated<A>>`, plus `IntoResponse` for authentication errors. |
 | `request_matcher` | Request matching and ordered request-rule authorization, independently of Basic authentication. |
 | `basic_auth` | HTTP Basic authentication, user-detail support, and password helpers; also enables `request_matcher`. |
 | `argon2_encoder` | Argon2 support; also enables `basic_auth`. |

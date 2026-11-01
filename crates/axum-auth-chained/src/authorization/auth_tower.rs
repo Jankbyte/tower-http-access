@@ -12,7 +12,8 @@ use super::{
     DefaultAuthorizationFailureHandler,
 };
 use crate::authentication::Authenticated;
-use axum::{extract::Request, response::Response};
+use bytes::Bytes;
+use http::{Request, Response};
 use std::{
     future::Future,
     pin::Pin,
@@ -142,18 +143,20 @@ impl<S: Clone, P, H: Clone, E> Clone for AuthorizationService<S, P, H, E> {
     }
 }
 
-impl<S, P, H, E> Service<Request> for AuthorizationService<S, P, H, E>
+impl<S, P, H, E, ReqBody, ResBody> Service<Request<ReqBody>> for AuthorizationService<S, P, H, E>
 where
-    S: Service<Request, Response = Response> + Clone + Send + 'static,
+    S: Service<Request<ReqBody>, Response = Response<ResBody>> + Clone + Send + 'static,
     S::Future: Send + 'static,
     S::Error: Send + 'static,
+    ReqBody: Send + 'static,
+    ResBody: From<Bytes> + 'static,
     P: AuthorizationProvider + 'static,
     P::Authentication: 'static,
     P::Error: 'static,
     H: AuthorizationFailureHandler<P::Error>,
     E: AuthenticationEntryPoint,
 {
-    type Response = Response;
+    type Response = Response<ResBody>;
     type Error = S::Error;
     type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
 
@@ -161,7 +164,7 @@ where
         self.inner.poll_ready(context)
     }
 
-    fn call(&mut self, request: Request) -> Self::Future {
+    fn call(&mut self, request: Request<ReqBody>) -> Self::Future {
         let provider = Arc::clone(&self.provider);
         let failure_handler = self.failure_handler.clone();
         let authentication_entry_point = Arc::clone(&self.authentication_entry_point);
@@ -179,19 +182,22 @@ where
                     &parts,
                 )
                 .await;
-            let request = Request::from_parts(parts, body);
 
             match decision {
-                Ok(AuthorizationDecision::Allow) => inner.call(request).await,
+                Ok(AuthorizationDecision::Allow) => {
+                    inner.call(Request::from_parts(parts, body)).await
+                }
                 Ok(AuthorizationDecision::Deny(AuthorizationDenial::AuthenticationRequired)) => {
-                    Ok(authentication_entry_point.commence(request))
+                    Ok(authentication_entry_point
+                        .commence(&parts)
+                        .map(ResBody::from))
                 }
-                Ok(AuthorizationDecision::Deny(denial)) => {
-                    Ok(failure_handler.handle(request, AuthorizationFailure::Denied(denial)))
-                }
-                Err(error) => {
-                    Ok(failure_handler.handle(request, AuthorizationFailure::Provider(error)))
-                }
+                Ok(AuthorizationDecision::Deny(denial)) => Ok(failure_handler
+                    .handle(&parts, AuthorizationFailure::Denied(denial))
+                    .map(ResBody::from)),
+                Err(error) => Ok(failure_handler
+                    .handle(&parts, AuthorizationFailure::Provider(error))
+                    .map(ResBody::from)),
             }
         })
     }

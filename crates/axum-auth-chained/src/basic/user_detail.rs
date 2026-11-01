@@ -77,7 +77,9 @@ pub trait UserDetailService: Send + Sync {
 /// This is base implementation of [`UserDetailService`], that can be used with static-configured users.
 /// # Example
 ///
-/// ```rust
+/// ```no_run
+/// # #[cfg(feature = "argon2_encoder")]
+/// # mod example {
 /// use argon2::Argon2;
 /// use axum_auth_chained::basic::{Authority, AsyncStringPasswordManager, InMemoryUserDetailService, UserDetail};
 /// use std::num::NonZeroUsize;
@@ -98,6 +100,8 @@ pub trait UserDetailService: Send + Sync {
 ///     .await
 ///     .unwrap();
 /// # }
+/// # }
+/// # fn main() {}
 /// ```
 ///
 #[derive(Clone)]

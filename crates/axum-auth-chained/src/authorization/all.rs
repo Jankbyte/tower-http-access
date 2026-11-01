@@ -1,6 +1,6 @@
 use super::{AuthorizationDecision, AuthorizationProvider};
-use axum::http::request::Parts;
 use futures_util::future::BoxFuture;
+use http::request::Parts;
 
 /// Error returned by a provider in an all-of authorization chain.
 ///

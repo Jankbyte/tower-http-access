@@ -1,6 +1,6 @@
 use super::{AuthorizationDecision, AuthorizationDenial, AuthorizationProvider};
-use axum::http::request::Parts;
 use futures_util::future::BoxFuture;
+use http::request::Parts;
 use std::{convert::Infallible, future::Future, marker::PhantomData, pin::Pin};
 
 /// Default implementation of [`AuthorizationProvider`], that checks only fact of authentication
