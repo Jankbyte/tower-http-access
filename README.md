@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logo.png" alt="Axum Auth Chained: a Rust-inspired crab holding a chain between an identity-and-key icon and an authorization shield" width="60%">
+  <img src="https://raw.githubusercontent.com/Jankbyte/axum-auth-chained/HEAD/assets/logo.png" alt="Axum Auth Chained: a Rust-inspired crab holding a chain between an identity-and-key icon and an authorization shield" width="60%">
 </p>
 
 # 🦀 Axum Auth Chained
@@ -27,7 +27,9 @@ argon2 = "0.6"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "net"] }
 ```
 
-```rust
+```rust,no_run
+# #[cfg(feature = "argon2_encoder")]
+# mod example {
 use std::{num::NonZeroUsize, sync::Arc};
 
 use argon2::Argon2;
@@ -89,6 +91,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 async fn read_note(Authenticated(user): Authenticated<UserDetail>) -> String {
     format!("Authenticated as {}", user.username)
 }
+# }
+# fn main() {}
 ```
 
 ```sh
@@ -96,7 +100,7 @@ curl http://127.0.0.1:3000/health
 curl -u alex:change-me http://127.0.0.1:3000/notes/1
 ```
 
-The credentials above are for local demonstration. Use HTTPS when sending Basic credentials. For password-hashing configuration and concurrency limits, see [the Basic authentication example](examples/examples/axum_basic_auth.rs).
+The credentials above are for local demonstration. Use HTTPS when sending Basic credentials. For password-hashing configuration and concurrency limits, see [`AsyncStringPasswordManager`](https://docs.rs/axum-auth-chained/latest/axum_auth_chained/basic/struct.AsyncStringPasswordManager.html).
 
 ## 🔄 How requests are processed
 
@@ -122,7 +126,12 @@ Authorization runs after authentication. By default, authentication-required dec
 
 **The first matching rule decides access.** A denial or error is final. Declaration order determines priority, even when a later path is more specific.
 
-```rust
+```rust,no_run
+# #[cfg(feature = "basic_auth")]
+# fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+use axum::http::Method;
+use axum_auth_chained::{authorization::RequestAuthorizationProvider, basic::UserDetail};
+
 let rules = RequestAuthorizationProvider::<UserDetail>::builder()
     .method_matchers(Method::GET, "/notes/1")
     .permit_all() // Anyone can read the first note.
@@ -131,6 +140,10 @@ let rules = RequestAuthorizationProvider::<UserDetail>::builder()
     .any_request()
     .deny_all()
     .build()?;
+# Ok(())
+# }
+# #[cfg(not(feature = "basic_auth"))]
+# fn main() {}
 ```
 
 Reversing the two note rules would require `ReadNote` for note `1` too. Put exceptions before broader patterns and `any_request()` last. Unmatched requests are denied even without an explicit fallback.
@@ -150,8 +163,14 @@ Axum strips the nesting prefix before middleware inside a nested router runs.
 For `/v1/notes/1`, security attached inside `.nest("/v1/notes", ...)` sees `/1`;
 a rule for `/v1/notes/1` will not match. Attach security after nesting to use full paths:
 
-```rust
-let app = Router::new()
+```rust,no_run
+use axum::{Router, routing::get};
+# use axum_auth_chained::{SecurityLayer, authentication::{AuthenticationAttempt, AuthenticatorError}, authorization::AuthenticatedAuthorizationProvider};
+# let authenticator = |_: &mut axum::http::request::Parts| async { Ok::<_, AuthenticatorError>(AuthenticationAttempt::<String>::NotApplicable) };
+# let security_layer = SecurityLayer::new(authenticator, AuthenticatedAuthorizationProvider::<String>::new());
+# let notes_api = Router::new().route("/{id}", get(async || "note"));
+
+let app: Router = Router::new()
     .nest("/v1/notes", notes_api)
     .route_layer(security_layer);
 ```
@@ -162,18 +181,23 @@ such as `/1` and `/{id}`. The built-in path matcher reads `Parts.uri`, not Axum'
 
 Use `.matching(...)` to supply a `RequestMatcher` explicitly:
 
-```rust
+```rust,no_run
+# #[cfg(feature = "request_matcher")]
+# fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 use axum_auth_chained::{
-    basic::UserDetail,
     authorization::{RequestAuthorizationProvider, request_matcher::PathPatternRequestMatcher},
 };
 
-let rules = RequestAuthorizationProvider::<UserDetail>::builder()
+let rules = RequestAuthorizationProvider::<String>::builder()
     .matching(PathPatternRequestMatcher::new("/notes/{id}")?)
-    .has_authority("ReadNote")
+    .authenticated()
     .any_request()
     .deny_all()
     .build()?;
+# Ok(())
+# }
+# #[cfg(not(feature = "request_matcher"))]
+# fn main() {}
 ```
 
 `PathPatternRequestMatcher` compiles its pattern when constructed and matches paths
@@ -199,13 +223,19 @@ Request authorization is available independently of Basic authentication with
 `features = ["request_matcher"]`. Import its builders from `axum_auth_chained::authorization`.
 Authentication-only and custom rules work with any `Send + Sync + 'static` identity:
 
-```rust
+```rust,no_run
+# #[cfg(feature = "request_matcher")]
+# fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 use axum_auth_chained::authorization::RequestAuthorizationProvider;
 
 let rules = RequestAuthorizationProvider::<String>::builder()
     .request_matchers("/health").permit_all()
     .any_request().authenticated()
     .build()?;
+# Ok(())
+# }
+# #[cfg(not(feature = "request_matcher"))]
+# fn main() {}
 ```
 
 Only authority methods require `authorization::HasAuthorities`. The existing
@@ -250,15 +280,27 @@ one service. The identity is passed directly to the authorizer and, after access
 allowed, stored as `Authenticated<A>` for handlers. Authenticators and authorizers do
 not need to implement `Clone`; the layer shares them through `Arc`.
 
-```rust
+```rust,no_run
+# use axum::{extract::Request, http::{StatusCode, request::Parts}};
+# use axum_auth_chained::{SecurityLayer, authentication::{AuthenticationAttempt, AuthenticatorError}, authorization::{AuthenticatedAuthorizationProvider, AuthorizationFailure}};
+# let my_authenticator = |_: &mut Parts| async { Ok::<_, AuthenticatorError>(AuthenticationAttempt::Authenticated("alex".to_owned())) };
+# let my_authorizer = AuthenticatedAuthorizationProvider::<String>::new();
+# let my_entry_point = |_: Request| StatusCode::UNAUTHORIZED;
+# let my_failure_handler = |_: Request, _: AuthorizationFailure<std::convert::Infallible>| StatusCode::FORBIDDEN;
 let security = SecurityLayer::new(my_authenticator, my_authorizer)
     .authentication_entry_point(my_entry_point)
     .failure_handler(my_failure_handler);
+# let _: axum::Router = axum::Router::new().layer(security);
 ```
 
 For multiple authentication mechanisms, build an ordered chain separately:
 
-```rust
+```rust,no_run
+# use axum::http::request::Parts;
+# use axum_auth_chained::{authentication::{AuthenticationAttempt, AuthenticatorError}, authorization::AuthenticatedAuthorizationProvider};
+# let session_authenticator = |_: &mut Parts| async { Ok::<_, AuthenticatorError>(AuthenticationAttempt::<String>::NotApplicable) };
+# let basic_authenticator = |_: &mut Parts| async { Ok::<_, AuthenticatorError>(AuthenticationAttempt::Authenticated("alex".to_owned())) };
+# let my_authorizer = AuthenticatedAuthorizationProvider::<String>::new();
 use axum_auth_chained::{SecurityLayer, authentication::DelegatingRequestAuthenticator};
 
 let authenticators = DelegatingRequestAuthenticator::builder()
@@ -266,6 +308,7 @@ let authenticators = DelegatingRequestAuthenticator::builder()
     .authenticator(basic_authenticator)
     .build();
 let security = SecurityLayer::new(authenticators, my_authorizer);
+# let _: axum::Router = axum::Router::new().layer(security);
 ```
 
 The chain skips non-applicable authenticators and stops at the first authenticated
@@ -278,7 +321,13 @@ nested routers, or to run context-enrichment middleware between the stages.
 
 The following composition uses `tower::ServiceBuilder` (`tower = "0.5"`).
 
-```rust
+```rust,no_run
+# use axum::{extract::Request, http::{StatusCode, request::Parts}};
+# use axum_auth_chained::{authentication::{AuthenticationAttempt, AuthenticatorError}, authorization::{AuthenticatedAuthorizationProvider, AuthorizationFailure}};
+# let my_authenticator = |_: &mut Parts| async { Ok::<_, AuthenticatorError>(AuthenticationAttempt::Authenticated("alex".to_owned())) };
+# let my_authorizer = AuthenticatedAuthorizationProvider::<String>::new();
+# let my_entry_point = |_: Request| StatusCode::UNAUTHORIZED;
+# let my_failure_handler = |_: Request, _: AuthorizationFailure<std::convert::Infallible>| StatusCode::FORBIDDEN;
 use axum_auth_chained::{
     authentication::AuthenticationLayer,
     authorization::AuthorizationLayer,
@@ -293,6 +342,7 @@ let authorization = AuthorizationLayer::builder(my_authorizer)
 let security = ServiceBuilder::new()
     .layer(authentication)
     .layer(authorization);
+# let _: axum::Router = axum::Router::new().layer(security);
 ```
 
 For separate layers, authentication must run before authorization, and both must use
@@ -326,12 +376,11 @@ No optional features are enabled by default. Core authentication and authorizati
 
 ## 📝 Examples
 
-- [CRUD API with authority-based access](examples/examples/simple_crud_rbac_axum.rs)
+- [CRUD API with authority-based access](https://github.com/Jankbyte/axum-auth-chained/blob/main/examples/examples/simple_crud_rbac_axum.rs)
 
 Run an example from this checkout:
 
 ```sh
-cargo run --package axum-auth-chained-examples --example axum_basic_auth --features axum-auth-chained/argon2_encoder
 cargo run --package axum-auth-chained-examples --example simple_crud_rbac_axum --features axum-auth-chained/basic_auth
 ```
 
@@ -341,10 +390,10 @@ cargo run --package axum-auth-chained-examples --example simple_crud_rbac_axum -
 cargo fmt -- --check
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo test --all-targets --all-features
-cargo test --all-features --doc
+cargo test --workspace --all-features --doc
 cargo doc --all-features --no-deps --open
 ```
 
 ## 📄 License
 
-[MIT](LICENSE)
+[MIT](https://github.com/Jankbyte/axum-auth-chained/blob/main/LICENSE)

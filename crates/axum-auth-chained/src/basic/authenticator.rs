@@ -86,13 +86,26 @@ pub trait UsernamePasswordAuthenticationProvider: Send + Sync {
 ///
 #[derive(Clone)]
 pub struct BasicRequestAuthenticator<P> {
+    realm: String,
     provider: P,
 }
 
 impl<P> BasicRequestAuthenticator<P> {
-    /// Create a Basic authenticator backed by a username/password provider.
+    /// Create a Basic authenticator with the realm `Default`.
     pub fn new(provider: P) -> Self {
-        Self { provider }
+        Self {
+            provider,
+            realm: "Default".to_owned(),
+        }
+    }
+
+    /// Create a Basic authenticator with a custom realm for its `WWW-Authenticate` challenges.
+    /// Quotes and backslashes are escaped when writing the realm to the header.
+    pub fn with_realm(provider: P, realm: impl Into<String>) -> Self {
+        Self {
+            provider,
+            realm: realm.into(),
+        }
     }
 }
 
@@ -117,7 +130,8 @@ where
         >,
     > {
         Box::pin(async move {
-            let Some(credentials) = extract_credentials(parts).map_err(|_| wrong_credentials())?
+            let Some(credentials) =
+                extract_credentials(parts).map_err(|_| wrong_credentials(&self.realm))?
             else {
                 return Ok(AuthenticationAttempt::NotApplicable);
             };
@@ -132,7 +146,7 @@ where
                     #[cfg(feature = "tracing")]
                     tracing::warn!(username = %credentials.username, "invalid or wrong credentials");
 
-                    Err(wrong_credentials())
+                    Err(wrong_credentials(&self.realm))
                 }
                 Err(error) => {
                     #[cfg(feature = "tracing")]
@@ -150,21 +164,25 @@ where
     P: Send + Sync + 'static,
 {
     fn commence(&self, _: Request) -> Response {
-        basic_challenge()
+        basic_challenge(&self.realm)
     }
 }
 
-fn wrong_credentials() -> AuthenticatorError {
+fn wrong_credentials(realm: &str) -> AuthenticatorError {
     AuthenticatorError::with_response(
         AuthenticationErrorReason::WrongCredentials,
-        basic_challenge(),
+        basic_challenge(realm),
     )
 }
 
-fn basic_challenge() -> Response {
+fn basic_challenge(realm: &str) -> Response {
+    let realm = realm.replace('\\', "\\\\").replace('"', "\\\"");
     (
         StatusCode::UNAUTHORIZED,
-        [(header::WWW_AUTHENTICATE, r#"Basic realm="Realm""#)],
+        [(
+            header::WWW_AUTHENTICATE,
+            format!(r#"Basic realm="{realm}""#),
+        )],
     )
         .into_response()
 }

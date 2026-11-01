@@ -55,7 +55,7 @@ async fn basic_authenticator_invalid_credentials_return_basic_challenge() {
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     assert_eq!(
         response.headers()[header::WWW_AUTHENTICATE],
-        r#"Basic realm="Realm""#
+        r#"Basic realm="Default""#
     );
 }
 
@@ -67,4 +67,44 @@ async fn basic_authenticator_other_scheme_is_not_applicable() {
     let result = authenticator.authenticate(&mut parts).await.unwrap();
 
     assert_eq!(result, AuthenticationAttempt::NotApplicable);
+}
+
+#[test]
+fn basic_entry_point_uses_configured_realm() {
+    for (authenticator, expected) in [
+        (
+            BasicRequestAuthenticator::new(CustomProvider),
+            r#"Basic realm="Default""#,
+        ),
+        (
+            BasicRequestAuthenticator::with_realm(CustomProvider, "Notes API"),
+            r#"Basic realm="Notes API""#,
+        ),
+        (
+            BasicRequestAuthenticator::with_realm(CustomProvider, "\"private\"\\area"),
+            r#"Basic realm="\"private\"\\area""#,
+        ),
+    ] {
+        let response = authenticator.commence(Request::new(Body::empty()));
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(response.headers()[header::WWW_AUTHENTICATE], expected);
+    }
+}
+
+#[tokio::test]
+async fn basic_authenticator_uses_configured_realm_for_invalid_and_malformed_credentials() {
+    let authenticator = BasicRequestAuthenticator::with_realm(CustomProvider, "Notes API");
+    for authorization in ["Basic YWxleDpiYWQ=", "Basic !!!"] {
+        let (mut parts, _) = request(authorization).into_parts();
+        let response = authenticator
+            .authenticate(&mut parts)
+            .await
+            .unwrap_err()
+            .into_response();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(
+            response.headers()[header::WWW_AUTHENTICATE],
+            r#"Basic realm="Notes API""#
+        );
+    }
 }

@@ -7,7 +7,7 @@ description = "Composable authentication and authorization middleware for Axum"
 license.workspace = true
 repository.workspace = true
 documentation = "https://docs.rs/axum-auth-chained"
-readme = "../../README.md"
+readme = "README.md"
 keywords = ["axum", "authentication", "authorization", "middleware", "tower"]
 categories = ["authentication", "web-programming::http-server"]
 

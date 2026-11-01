@@ -6,6 +6,7 @@ rust-version.workspace = true
 publish = false
 
 [dev-dependencies]
+futures-util = { workspace = true, features = ["alloc"] }
 tower = { workspace = true, features = ["util"] }
 argon2.workspace = true
 axum.workspace = true

@@ -1,0 +1,68 @@
+//! The example shows how to implement custom `UsernamePasswordAuthenticationProvider`.
+//!
+//! ```bash
+//! cargo run --package axum-auth-chained-examples --example basic_auth_custom_upap
+//! curl -X GET -u alex:alex123 -v http://localhost:3000/hello
+//! ```
+use axum::{Router, routing::get};
+use axum_auth_chained::{
+    SecurityLayer,
+    authentication::Authenticated,
+    authorization::AuthenticatedAuthorizationProvider,
+    basic::{BasicCredentials, BasicRequestAuthenticator, UsernamePasswordAuthenticationProvider},
+};
+use futures_util::future::BoxFuture;
+use std::sync::Arc;
+
+#[tokio::main(flavor = "current_thread")]
+async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:3000").await?;
+    axum::serve(listener, create_app()).await?;
+    Ok(())
+}
+
+fn create_app() -> Router {
+    let upp = SingleUsernamePasswordProvider("alex".to_owned(), "alex123".to_owned());
+    let authenticator = Arc::new(BasicRequestAuthenticator::with_realm(upp, "Demo"));
+
+    let security = SecurityLayer::new(
+        Arc::clone(&authenticator),
+        AuthenticatedAuthorizationProvider::<User>::default(),
+    )
+    .authentication_entry_point(authenticator);
+
+    Router::new()
+        .route("/hello", get(hello))
+        .route_layer(security)
+}
+
+async fn hello(Authenticated(user): Authenticated<User>) -> String {
+    format!("Hello, {}!", user.username)
+}
+
+#[derive(Clone)]
+struct User {
+    username: String,
+}
+
+struct SingleUsernamePasswordProvider(String, String);
+
+impl UsernamePasswordAuthenticationProvider for SingleUsernamePasswordProvider {
+    type Authentication = User;
+    type Error = std::convert::Infallible;
+
+    fn authenticate<'a>(
+        &'a self,
+        credentials: &'a BasicCredentials,
+    ) -> BoxFuture<'a, Result<Option<Self::Authentication>, Self::Error>> {
+        Box::pin(async {
+            if credentials.username == self.0 && credentials.password == self.1 {
+                Ok(Some(User {
+                    username: self.0.clone(),
+                }))
+            } else {
+                Ok(None)
+            }
+        })
+    }
+}

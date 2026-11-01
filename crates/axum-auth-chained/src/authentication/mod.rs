@@ -16,6 +16,8 @@ pub use core::{
     MapAuthentication, RequestAuthenticator, RequestAuthenticatorExt,
 };
 
+mod axum;
+
 mod auth_tower;
 pub use auth_tower::{AuthenticationLayer, AuthenticationService};
 

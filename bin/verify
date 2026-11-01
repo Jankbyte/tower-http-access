@@ -15,4 +15,5 @@ export RUSTDOCFLAGS="$RUSTFLAGS"
 cargo fmt -- --check
 cargo clippy --workspace --all-targets --all-features
 cargo test --all-targets --all-features
+cargo test --workspace --all-features --doc
 cargo doc --all-features --no-deps "${doc_args[@]}"

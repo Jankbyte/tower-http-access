@@ -1,4 +1,4 @@
-//! Chain-based authentication middleware for Axum.
+#![doc = include_str!("../README.md")]
 
 pub mod authentication;
 pub mod authorization;

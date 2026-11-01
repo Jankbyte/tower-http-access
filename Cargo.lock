@@ -79,6 +79,7 @@ dependencies = [
  "argon2",
  "axum",
  "axum-auth-chained",
+ "futures-util",
  "serde",
  "serde_json",
  "tokio",

@@ -1,8 +1,7 @@
 //! Authentication contracts, typed identities, errors, and adapters.
 
 use axum::{
-    Extension,
-    extract::{FromRequestParts, OptionalFromRequestParts, Request, rejection::ExtensionRejection},
+    extract::Request,
     http::request::Parts,
     response::{IntoResponse, Response},
 };
@@ -55,32 +54,6 @@ impl<A> Authenticated<A> {
     /// Consume the wrapper and return the authenticated identity.
     pub fn into_inner(self) -> A {
         self.0
-    }
-}
-
-impl<S, A> FromRequestParts<S> for Authenticated<A>
-where
-    S: Send + Sync,
-    A: Clone + Send + Sync + 'static,
-{
-    type Rejection = ExtensionRejection;
-
-    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        <Extension<Self> as FromRequestParts<S>>::from_request_parts(parts, state)
-            .await
-            .map(|Extension(authentication)| authentication)
-    }
-}
-
-impl<S, A> OptionalFromRequestParts<S> for Authenticated<A>
-where
-    S: Send + Sync,
-    A: Clone + Send + Sync + 'static,
-{
-    type Rejection = std::convert::Infallible;
-
-    async fn from_request_parts(parts: &mut Parts, _: &S) -> Result<Option<Self>, Self::Rejection> {
-        Ok(parts.extensions.get::<Self>().cloned())
     }
 }
 
