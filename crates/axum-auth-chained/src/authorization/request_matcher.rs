@@ -35,7 +35,7 @@ pub struct InvalidRequestPattern(pub String);
 /// percent escapes.
 ///
 /// ```
-/// use axum_auth_chained::request_matcher::{
+/// use axum_auth_chained::authorization::request_matcher::{
 ///     PathPatternRequestMatcher, RequestMatcher,
 /// };
 /// use http::Request;
@@ -47,7 +47,7 @@ pub struct InvalidRequestPattern(pub String);
 ///     .unwrap()
 ///     .into_parts();
 /// assert!(matcher.matches(&parts));
-/// # Ok::<(), axum_auth_chained::request_matcher::InvalidRequestPattern>(())
+/// # Ok::<(), axum_auth_chained::authorization::request_matcher::InvalidRequestPattern>(())
 /// ```
 pub struct PathPatternRequestMatcher {
     router: matchit::Router<()>,

@@ -2,11 +2,24 @@ use super::*;
 use crate::authentication::{
     Authenticated, AuthenticationAttempt, AuthenticationLayer, AuthenticatorError,
 };
-use axum::{body::Body, response::IntoResponse};
-use std::{convert::Infallible, io};
+use crate::authorization::{AuthenticatedAuthorizationProvider, AuthorizationProviderExt};
+use axum::{
+    body::Body,
+    extract::Request,
+    http::{StatusCode, request::Parts},
+    response::{IntoResponse, Response},
+};
+use futures_util::future::BoxFuture;
+use std::{
+    convert::Infallible,
+    io,
+    task::{Context, Poll},
+};
+use tower_layer::Layer;
+use tower_service::Service;
 
 #[derive(Clone)]
-struct Inner;
+pub(in crate::authorization) struct Inner;
 
 impl Service<Request> for Inner {
     type Response = Response;
@@ -153,7 +166,7 @@ async fn custom_failure_handler_receives_request_and_denial() {
     );
 }
 
-struct ErrorProvider;
+pub(in crate::authorization) struct ErrorProvider;
 
 impl AuthorizationProvider for ErrorProvider {
     type Authentication = String;
@@ -195,7 +208,7 @@ async fn authentication_then_authorization_forwards_identity() {
     assert_eq!(response.status(), StatusCode::OK);
 }
 
-struct MappedIdentityProvider;
+pub(in crate::authorization) struct MappedIdentityProvider;
 
 impl AuthorizationProvider for MappedIdentityProvider {
     type Authentication = usize;

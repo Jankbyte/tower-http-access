@@ -79,6 +79,11 @@ enum AuthorizationConfiguration<P, E, H> {
 ///
 /// `A` is the concrete authenticator type. Use [`Self::authenticator`] for a
 /// single mechanism or [`Self::chained_authenticators`] for an ordered chain.
+///
+/// This builder stacks [`AuthenticationLayer`] and [`AuthorizationLayer`], sharing the identity
+/// through request extensions. Use [`crate::SecurityLayer::new`] when both stages should run in
+/// a single service with the identity passed directly to authorization. Use the separate layers
+/// directly when middleware must run between authentication and authorization.
 pub struct SecurityLayerBuilder<
     A = (),
     P = (),

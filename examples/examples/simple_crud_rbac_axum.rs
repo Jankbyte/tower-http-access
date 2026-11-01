@@ -20,11 +20,9 @@ use axum::{
     routing::method_routing::{get, post},
 };
 use axum_auth_chained::{
-    SecurityLayerBuilder,
+    SecurityLayer,
     authentication::{RequestAuthenticator, RequestAuthenticatorExt},
-    authorization::{
-        AuthenticationEntryPoint, AuthorizationLayer, DefaultAuthorizationFailureHandler,
-    },
+    authorization::AuthenticationEntryPoint,
     basic::{
         Authority, BasicRequestAuthenticator, HasAuthorities, InMemoryUserDetailService,
         PlainHashPasswordManager, RequestAuthorizationProvider, UserDetail,
@@ -56,12 +54,10 @@ async fn create_app() -> Router {
     ]);
 
     let basic_authenticator = Arc::new(create_basic_authenticator().await);
-    let authorization_layer = create_authorization_layer(Arc::clone(&basic_authenticator));
+    let authorizer = create_authorizer();
 
-    let security_layer = SecurityLayerBuilder::builder()
-        .authenticator(basic_authenticator)
-        .authorization_layer(authorization_layer)
-        .build();
+    let security_layer = SecurityLayer::new(Arc::clone(&basic_authenticator), authorizer)
+        .authentication_entry_point(basic_authenticator);
 
     let notes_api = Router::new()
         .route("/", post(create_note))
@@ -71,10 +67,10 @@ async fn create_app() -> Router {
         )
         .with_state(note_repository);
 
-    // Match full application paths before Axum strips the nesting prefix.
     Router::new()
         .nest("/v1/notes", notes_api)
-        .route_layer(security_layer) // apply security only to the existing Notes API routes
+        // Match full application paths before Axum strips the nesting prefix.
+        .route_layer(security_layer)
 }
 
 #[derive(Serialize)]
@@ -256,16 +252,8 @@ async fn create_basic_authenticator()
     BasicRequestAuthenticator::new(provider).map(SharedUser::from)
 }
 
-type NotesAuthorizationLayer<T> = AuthorizationLayer<
-    RequestAuthorizationProvider<SharedUser>,
-    DefaultAuthorizationFailureHandler,
-    T,
->;
-
-fn create_authorization_layer<T: AuthenticationEntryPoint>(
-    authentication_entry_point: T,
-) -> NotesAuthorizationLayer<T> {
-    let provider = RequestAuthorizationProvider::builder()
+fn create_authorizer() -> RequestAuthorizationProvider<SharedUser> {
+    RequestAuthorizationProvider::builder()
         .method_matchers(Method::GET, "/v1/notes/1")
         .permit_all() // any user can read first note
         .method_matchers(Method::GET, "/v1/notes/{id}")
@@ -279,8 +267,5 @@ fn create_authorization_layer<T: AuthenticationEntryPoint>(
         .any_request()
         .deny_all()
         .build()
-        .expect("build authorization provider");
-    AuthorizationLayer::builder(provider)
-        .authentication_entry_point(authentication_entry_point)
-        .build()
+        .expect("build authorization provider")
 }

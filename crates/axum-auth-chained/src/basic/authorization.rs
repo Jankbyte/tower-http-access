@@ -126,8 +126,8 @@ use std::{future::Future, marker::PhantomData, pin::Pin};
 
 use http::{Method, request::Parts};
 
-pub use crate::request_matcher::InvalidRequestPattern;
-use crate::request_matcher::{PathPatternRequestMatcher, RequestMatcher};
+pub use crate::authorization::request_matcher::InvalidRequestPattern;
+use crate::authorization::request_matcher::{PathPatternRequestMatcher, RequestMatcher};
 
 use crate::authorization::{AuthorizationDecision, AuthorizationDenial, AuthorizationProvider};
 
@@ -256,7 +256,7 @@ impl<A> RequestAuthorizationBuilder<A> {
     /// ```
     /// use axum_auth_chained::{
     ///     basic::{RequestAuthorizationProvider, UserDetail},
-    ///     request_matcher::PathPatternRequestMatcher,
+    ///     authorization::request_matcher::PathPatternRequestMatcher,
     /// };
     ///
     /// let provider = RequestAuthorizationProvider::<UserDetail>::builder()
@@ -264,7 +264,7 @@ impl<A> RequestAuthorizationBuilder<A> {
     ///     .has_authority("ReadNote")
     ///     .any_request().deny_all()
     ///     .build()?;
-    /// # Ok::<(), axum_auth_chained::request_matcher::InvalidRequestPattern>(())
+    /// # Ok::<(), axum_auth_chained::authorization::request_matcher::InvalidRequestPattern>(())
     /// ```
     pub fn matching<M: RequestMatcher + 'static>(self, matcher: M) -> PendingRuleBuilder<A> {
         PendingRuleBuilder {

@@ -2,8 +2,10 @@
 
 pub mod authentication;
 pub mod authorization;
+mod combined;
 #[cfg(feature = "request_matcher")]
-pub mod request_matcher;
+pub use authorization::request_matcher;
+pub use combined::{SecurityLayer, SecurityService};
 mod security_builder;
 
 pub use security_builder::{AuthorizationCustomizer, SecurityLayerBuilder, SecurityServiceBuilder};

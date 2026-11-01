@@ -170,7 +170,7 @@ Use `.matching(...)` to supply a `RequestMatcher` explicitly:
 ```rust
 use axum_auth_chained::{
     basic::{RequestAuthorizationProvider, UserDetail},
-    request_matcher::PathPatternRequestMatcher,
+    authorization::request_matcher::PathPatternRequestMatcher,
 };
 
 let rules = RequestAuthorizationProvider::<UserDetail>::builder()
@@ -197,7 +197,7 @@ access checks, use a custom `AuthorizationProvider` through `.access(provider)`.
 Offload CPU-bound work inside that provider to `spawn_blocking` or a dedicated worker
 pool; making a function async does not move CPU work off the executor.
 
-The `request_matcher` module uses `http` types and can be enabled independently with
+The `authorization::request_matcher` module uses `http` types and can be enabled independently with
 the `request_matcher` feature; `basic_auth` enables it automatically.
 
 Available policies:
