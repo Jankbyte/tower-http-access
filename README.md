@@ -358,6 +358,10 @@ Security-generated responses use `SecurityResponse`, an alias for `http::Respons
 Authenticators can return an explicit custom response through `AuthenticatorError::with_response`;
 otherwise `into_security_response()` selects the default HTTP 401 or 500 response.
 Entry points and failure handlers borrow `&http::request::Parts` and also return `SecurityResponse`.
+An authorizer can return `AuthorizationDecision::Deny(AuthorizationDenial::Custom(response))`
+to supply its own rejection response to the failure handler. The default handler returns it
+unchanged; custom handlers can inspect, modify, or replace it. The combined layer applies its
+response adapter afterward. Composed providers stop at this denial and preserve the response.
 
 ```rust
 use tower_http_access::{SecurityResponse, authentication::{AuthenticatorError, AuthenticationErrorReason}};

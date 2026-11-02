@@ -5,6 +5,9 @@
 //!
 //! The security layer returns an [`AuthenticationEntryPoint`] response when authentication is
 //! required, or delegates other denials and provider errors to an [`AuthorizationFailureHandler`].
+//! A provider can return [`AuthorizationDenial::Custom`] to supply a response to the failure
+//! handler. The default handler preserves it; custom handlers can modify or replace it.
+//! Response-body adaptation runs after the failure handler.
 //! Use [`AuthorizationLayer`] for independently placed authorization that reads an identity
 //! established by earlier authentication middleware from request extensions.
 //! Applications that only require a valid identity can use [`AuthenticatedAuthorizationProvider`].

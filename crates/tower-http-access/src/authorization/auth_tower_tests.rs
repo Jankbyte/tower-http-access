@@ -250,12 +250,12 @@ async fn mapped_provider_preserves_decisions_errors_and_request_parts() {
             AuthorizationDecision::Deny(AuthorizationDenial::InsufficientPermissions),
         ),
     ] {
-        assert_eq!(
+        crate::authorization::core::assert_builtin_decision(
             provider
                 .authorize(Some(&identity.to_owned()), &parts)
                 .await
                 .unwrap(),
-            expected
+            expected,
         );
     }
 
@@ -276,10 +276,10 @@ async fn mapped_provider_passes_anonymous_requests_without_mapping() {
     let provider = MappedIdentityProvider
         .map(|_: &String| -> usize { panic!("anonymous requests must not invoke the mapper") });
     let (parts, _) = Request::new(Body::empty()).into_parts();
-    assert_eq!(
+    assert!(matches!(
         provider.authorize(None, &parts).await.unwrap(),
         AuthorizationDecision::Deny(AuthorizationDenial::AuthenticationRequired)
-    );
+    ));
 }
 
 #[cfg(feature = "axum")]

@@ -65,41 +65,38 @@ async fn ordered_policies_and_identity_requirements() {
         .unwrap();
     let reader = TestIdentity::new("reader", "hash", vec![TestAuthority::new("ReadNote")]);
     let admin = TestIdentity::new("admin", "hash", vec![TestAuthority::new("ADMIN")]);
-    let allow = AuthorizationDecision::Allow;
-    let forbidden = AuthorizationDecision::Deny(AuthorizationDenial::InsufficientPermissions);
-    let unauthorized = AuthorizationDecision::Deny(AuthorizationDenial::AuthenticationRequired);
-    assert_eq!(
+    assert!(matches!(
         decision(&provider, None, Method::GET, "/public").await,
-        allow
-    );
-    assert_eq!(
+        AuthorizationDecision::Allow
+    ));
+    assert!(matches!(
         decision(&provider, None, Method::GET, "/private").await,
-        unauthorized
-    );
-    assert_eq!(
+        AuthorizationDecision::Deny(AuthorizationDenial::AuthenticationRequired)
+    ));
+    assert!(matches!(
         decision(&provider, Some(&reader), Method::GET, "/private").await,
-        allow
-    );
-    assert_eq!(
+        AuthorizationDecision::Allow
+    ));
+    assert!(matches!(
         decision(&provider, Some(&reader), Method::GET, "/admin/a").await,
-        forbidden
-    );
-    assert_eq!(
+        AuthorizationDecision::Deny(AuthorizationDenial::InsufficientPermissions)
+    ));
+    assert!(matches!(
         decision(&provider, Some(&admin), Method::GET, "/admin/dashboard").await,
-        allow
-    );
-    assert_eq!(
+        AuthorizationDecision::Allow
+    ));
+    assert!(matches!(
         decision(&provider, Some(&reader), Method::GET, "/notes/1?q=x").await,
-        allow
-    );
-    assert_eq!(
+        AuthorizationDecision::Allow
+    ));
+    assert!(matches!(
         decision(&provider, Some(&reader), Method::DELETE, "/notes/1").await,
-        forbidden
-    );
-    assert_eq!(
+        AuthorizationDecision::Deny(AuthorizationDenial::InsufficientPermissions)
+    ));
+    assert!(matches!(
         decision(&provider, Some(&admin), Method::GET, "/unknown").await,
-        forbidden
-    );
+        AuthorizationDecision::Deny(AuthorizationDenial::InsufficientPermissions)
+    ));
 }
 
 #[tokio::test]
@@ -112,14 +109,14 @@ async fn first_match_is_final_and_unmatched_requests_are_denied() {
         .permit_all()
         .build()
         .unwrap();
-    assert_eq!(
+    assert!(matches!(
         decision(&provider, Some(&user), Method::GET, "/blocked").await,
         AuthorizationDecision::Deny(AuthorizationDenial::InsufficientPermissions)
-    );
-    assert_eq!(
+    ));
+    assert!(matches!(
         decision(&provider, None, Method::GET, "/").await,
         AuthorizationDecision::Allow
-    );
+    ));
     let overlapping = RequestAuthorizationProvider::builder()
         .request_matchers("/notes/{*rest}")
         .deny_all()
@@ -127,15 +124,15 @@ async fn first_match_is_final_and_unmatched_requests_are_denied() {
         .permit_all()
         .build()
         .unwrap();
-    assert_eq!(
+    assert!(matches!(
         decision(&overlapping, Some(&user), Method::GET, "/notes/public").await,
         AuthorizationDecision::Deny(AuthorizationDenial::InsufficientPermissions)
-    );
+    ));
     let empty = RequestAuthorizationProvider::builder().build().unwrap();
-    assert_eq!(
+    assert!(matches!(
         decision(&empty, None, Method::GET, "/anything").await,
         AuthorizationDecision::Deny(AuthorizationDenial::AuthenticationRequired)
-    );
+    ));
 }
 
 #[tokio::test]
@@ -159,25 +156,25 @@ async fn all_authorities_requires_authentication_and_every_authority() {
     let writer = TestIdentity::new("writer", "hash", vec![TestAuthority::new("WriteNote")]);
     let no_authorities = TestIdentity::new("user", "hash", vec![]);
     for user in [&reader, &writer, &no_authorities] {
-        assert_eq!(
+        assert!(matches!(
             decision(&provider, Some(user), Method::GET, "/notes").await,
             AuthorizationDecision::Deny(AuthorizationDenial::InsufficientPermissions)
-        );
+        ));
     }
-    assert_eq!(
+    assert!(matches!(
         decision(&provider, Some(&editor), Method::GET, "/notes").await,
         AuthorizationDecision::Allow
-    );
+    ));
     for path in ["/notes", "/empty"] {
-        assert_eq!(
+        assert!(matches!(
             decision(&provider, None, Method::GET, path).await,
             AuthorizationDecision::Deny(AuthorizationDenial::AuthenticationRequired)
-        );
+        ));
     }
-    assert_eq!(
+    assert!(matches!(
         decision(&provider, Some(&no_authorities), Method::GET, "/empty").await,
         AuthorizationDecision::Allow
-    );
+    ));
 }
 
 struct TestManager {
@@ -243,20 +240,20 @@ async fn custom_manager_receives_context_and_its_decision_is_final() {
             AuthorizationDecision::Deny(AuthorizationDenial::InsufficientPermissions),
         ),
     ] {
-        assert_eq!(
+        crate::authorization::core::assert_builtin_decision(
             decision(&provider, user, Method::GET, "/notes/7?shared=true").await,
-            expected
+            expected,
         );
     }
     assert_eq!(calls.load(Ordering::SeqCst), 3);
-    assert_eq!(
+    assert!(matches!(
         decision(&provider, None, Method::POST, "/notes/7").await,
         AuthorizationDecision::Allow
-    );
-    assert_eq!(
+    ));
+    assert!(matches!(
         decision(&provider, None, Method::GET, "/other").await,
         AuthorizationDecision::Allow
-    );
+    ));
     assert_eq!(calls.load(Ordering::SeqCst), 3);
 }
 
@@ -339,10 +336,9 @@ fn patterns_have_segment_boundaries_and_validate_at_build_time() {
                     .body(())
                     .unwrap()
                     .into_parts()
-                    .0
+                    .0,
             ),
             expected,
-            "{pattern}: {path}"
         );
     }
     for pattern in [
@@ -380,15 +376,15 @@ async fn explicit_path_matchers_preserve_order_and_ignore_queries_and_methods() 
         .unwrap();
     let user = TestIdentity::new("user", "hash", vec![]);
     for method in [Method::GET, Method::POST] {
-        assert_eq!(
+        assert!(matches!(
             decision(&provider, None, method.clone(), "/notes/42?view=full").await,
-            AuthorizationDecision::Allow,
-        );
+            AuthorizationDecision::Allow
+        ));
         for path in ["/notes/private", "/other", "/notes/42/"] {
-            assert_eq!(
+            assert!(matches!(
                 decision(&provider, Some(&user), method.clone(), path).await,
-                AuthorizationDecision::Deny(AuthorizationDenial::InsufficientPermissions),
-            );
+                AuthorizationDecision::Deny(AuthorizationDenial::InsufficientPermissions)
+            ));
         }
     }
 }
@@ -408,14 +404,14 @@ async fn user_defined_matcher_can_select_rules() {
         .deny_all()
         .build()
         .unwrap();
-    assert_eq!(
+    assert!(matches!(
         decision(&provider, None, Method::POST, "/anything").await,
-        AuthorizationDecision::Allow,
-    );
-    assert_eq!(
+        AuthorizationDecision::Allow
+    ));
+    assert!(matches!(
         decision(&provider, None, Method::GET, "/anything").await,
-        AuthorizationDecision::Deny(AuthorizationDenial::AuthenticationRequired),
-    );
+        AuthorizationDecision::Deny(AuthorizationDenial::AuthenticationRequired)
+    ));
 }
 
 #[tokio::test]
@@ -484,7 +480,7 @@ async fn middleware_matchers_borrow_original_headers_and_extensions() {
                 .extensions_mut()
                 .insert(ClientAddress(address.parse().unwrap()));
         }
-        assert_eq!(app.call(request).await.unwrap().status(), expected);
+        assert_eq!(app.call(request).await.unwrap().status(), expected,);
     }
 }
 
@@ -536,10 +532,10 @@ async fn custom_manager_borrows_original_parts_across_await() {
         .unwrap()
         .into_parts();
     parts.extensions.insert(Tenant("team-a".to_owned()));
-    assert_eq!(
+    assert!(matches!(
         provider.authorize(Some(&user), &parts).await.unwrap(),
-        AuthorizationDecision::Allow,
-    );
+        AuthorizationDecision::Allow
+    ));
 }
 
 #[tokio::test]
@@ -592,15 +588,13 @@ async fn string_identities_support_rules_without_authorities() {
             .body(())
             .unwrap()
             .into_parts();
-        assert_eq!(
+        crate::authorization::core::assert_builtin_decision(
             provider.authorize(None, &parts).await.unwrap(),
             anonymous,
-            "{path}"
         );
-        assert_eq!(
+        crate::authorization::core::assert_builtin_decision(
             provider.authorize(Some(&identity), &parts).await.unwrap(),
             authenticated,
-            "{path}"
         );
     }
 }

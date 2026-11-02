@@ -14,7 +14,7 @@ use tower_service::Service;
 struct RecordingProvider {
     index: usize,
     calls: Arc<Mutex<Vec<usize>>>,
-    decision: AuthorizationDecision,
+    decision: fn() -> AuthorizationDecision,
 }
 
 impl AuthorizationProvider for RecordingProvider {
@@ -31,7 +31,7 @@ impl AuthorizationProvider for RecordingProvider {
             assert_eq!(request.uri.path(), "/private");
             self.calls.lock().await.push(self.index);
             tokio::task::yield_now().await;
-            Ok(self.decision)
+            Ok((self.decision)())
         })
     }
 }
@@ -49,8 +49,8 @@ fn all_authorization_rejects_empty_chain() {
 async fn all_authorization_runs_in_order_and_stops_at_first_denial() {
     for denial in [
         None,
-        Some(AuthorizationDenial::AuthenticationRequired),
-        Some(AuthorizationDenial::InsufficientPermissions),
+        Some((|| AuthorizationDenial::AuthenticationRequired) as fn() -> AuthorizationDenial),
+        Some((|| AuthorizationDenial::InsufficientPermissions) as fn() -> AuthorizationDenial),
     ] {
         let calls = Arc::new(Mutex::new(Vec::new()));
         let mut builder = AllAuthorizationProvider::<String>::builder();
@@ -59,11 +59,19 @@ async fn all_authorization_runs_in_order_and_stops_at_first_denial() {
                 index,
                 calls: Arc::clone(&calls),
                 decision: if index == 1 {
-                    denial
-                        .map(AuthorizationDecision::Deny)
-                        .unwrap_or(AuthorizationDecision::Allow)
+                    match denial.map(|f| f()) {
+                        Some(AuthorizationDenial::AuthenticationRequired) => || {
+                            AuthorizationDecision::Deny(AuthorizationDenial::AuthenticationRequired)
+                        },
+                        Some(AuthorizationDenial::InsufficientPermissions) => || {
+                            AuthorizationDecision::Deny(
+                                AuthorizationDenial::InsufficientPermissions,
+                            )
+                        },
+                        _ => || AuthorizationDecision::Allow,
+                    }
                 } else {
-                    AuthorizationDecision::Allow
+                    || AuthorizationDecision::Allow
                 },
             });
         }
@@ -77,11 +85,11 @@ async fn all_authorization_runs_in_order_and_stops_at_first_denial() {
             .authorize(Some(&"alex".to_owned()), &parts)
             .await
             .unwrap();
-        assert_eq!(
+        crate::authorization::core::assert_builtin_decision(
             decision,
             denial
-                .map(AuthorizationDecision::Deny)
-                .unwrap_or(AuthorizationDecision::Allow)
+                .map(|f| AuthorizationDecision::Deny(f()))
+                .unwrap_or(AuthorizationDecision::Allow),
         );
         assert_eq!(
             *calls.lock().await,
@@ -103,7 +111,7 @@ async fn all_authorization_preserves_error_source_and_skips_later_providers() {
         .with(RecordingProvider {
             index: 0,
             calls: Arc::clone(&calls),
-            decision: AuthorizationDecision::Allow,
+            decision: || AuthorizationDecision::Allow,
         })
         .build()
         .unwrap();
@@ -154,8 +162,8 @@ async fn all_authorization_passes_anonymous_identity_through_to_provider() {
         .build()
         .unwrap();
     let (parts, _) = Request::new(Body::empty()).into_parts();
-    assert_eq!(
+    assert!(matches!(
         provider.authorize(None, &parts).await.unwrap(),
         AuthorizationDecision::Deny(AuthorizationDenial::AuthenticationRequired)
-    );
+    ));
 }

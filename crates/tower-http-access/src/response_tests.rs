@@ -499,3 +499,182 @@ async fn custom_adapter_is_bypassed_for_successful_inner_responses() {
     assert_eq!(inner_calls.load(Ordering::SeqCst), 1);
     assert_eq!(adapter_calls.load(Ordering::SeqCst), 0);
 }
+
+struct CustomDenialProvider;
+
+impl AuthorizationProvider for CustomDenialProvider {
+    type Authentication = String;
+    type Error = Infallible;
+
+    fn authorize<'a>(
+        &'a self,
+        _: Option<&'a String>,
+        _: &'a Parts,
+    ) -> BoxFuture<'a, Result<AuthorizationDecision, Infallible>> {
+        Box::pin(async {
+            let mut response = challenge(StatusCode::FORBIDDEN, "office network required");
+            response.extensions_mut().insert(ResponseMarker);
+            Ok(AuthorizationDecision::Deny(AuthorizationDenial::Custom(
+                response,
+            )))
+        })
+    }
+}
+
+struct UnreachableProvider;
+
+impl AuthorizationProvider for UnreachableProvider {
+    type Authentication = String;
+    type Error = Infallible;
+
+    fn authorize<'a>(
+        &'a self,
+        _: Option<&'a String>,
+        _: &'a Parts,
+    ) -> BoxFuture<'a, Result<AuthorizationDecision, Infallible>> {
+        panic!("providers after a custom denial must not run")
+    }
+}
+
+fn custom_denial_chain() -> impl AuthorizationProvider<
+    Authentication = String,
+    Error = crate::authorization::AllAuthorizationError,
+> {
+    crate::authorization::AllAuthorizationProvider::builder()
+        .with(CustomDenialProvider)
+        .with(UnreachableProvider)
+        .build()
+        .unwrap()
+}
+
+#[tokio::test]
+async fn custom_denial_survives_composition_and_default_failure_handlers() {
+    let inner_calls = Arc::new(AtomicUsize::new(0));
+    let raw = inner(|| Full::new(Bytes::new()), Arc::clone(&inner_calls));
+    let entry_point = |_: &Parts| -> SecurityResponse {
+        panic!("custom denials must bypass the authentication entry point")
+    };
+    let services = [
+        BoxCloneService::new(
+            AuthorizationLayer::builder(custom_denial_chain())
+                .authentication_entry_point(entry_point)
+                .build()
+                .layer(raw.clone()),
+        ),
+        BoxCloneService::new(
+            SecurityLayer::new(TokenAuthenticator, custom_denial_chain())
+                .authentication_entry_point(entry_point)
+                .layer(raw),
+        ),
+    ];
+    for service in services {
+        let response = service.oneshot(request(None)).await.unwrap();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        assert!(response.extensions().get::<ResponseMarker>().is_some());
+        assert!(response.headers().contains_key(header::WWW_AUTHENTICATE));
+        assert_eq!(
+            response.into_body().collect().await.unwrap().to_bytes(),
+            "office network required"
+        );
+    }
+    assert_eq!(inner_calls.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn custom_denial_uses_combined_response_adapter_once() {
+    let calls = Arc::new(AtomicUsize::new(0));
+    let inner_calls = Arc::new(AtomicUsize::new(0));
+    let response = SecurityLayer::new(TokenAuthenticator, CustomDenialProvider)
+        .failure_handler(|_: &Parts, failure: AuthorizationFailure<Infallible>| {
+            let AuthorizationFailure::Denied(AuthorizationDenial::Custom(mut response)) = failure
+            else {
+                panic!("expected a custom denial");
+            };
+            *response.status_mut() = StatusCode::TOO_MANY_REQUESTS;
+            response
+        })
+        .response_adapter(RecordingAdapter {
+            calls: Arc::clone(&calls),
+        })
+        .layer(inner(
+            || AdaptedBody(Bytes::new()),
+            Arc::clone(&inner_calls),
+        ))
+        .oneshot(request(None))
+        .await
+        .unwrap();
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    assert_eq!(inner_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(response.status(), StatusCode::IM_A_TEAPOT);
+    assert_eq!(response.headers()["x-original-status"], "429");
+    assert!(response.extensions().get::<ResponseMarker>().is_some());
+    assert_eq!(response.into_body().0, "office network required");
+}
+
+#[cfg(feature = "request_matcher")]
+#[tokio::test]
+async fn request_rule_preserves_custom_denial_without_falling_through() {
+    let provider = crate::authorization::RequestAuthorizationProvider::<String>::builder()
+        .request_matchers("/notes")
+        .access(CustomDenialProvider)
+        .any_request()
+        .permit_all()
+        .build()
+        .unwrap();
+    let (parts, _) = request(None).into_parts();
+    let AuthorizationDecision::Deny(AuthorizationDenial::Custom(response)) =
+        provider.authorize(None, &parts).await.unwrap()
+    else {
+        panic!("expected the selected provider's custom response");
+    };
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    assert_eq!(response.body(), "office network required");
+}
+
+#[tokio::test]
+async fn custom_failure_handlers_can_modify_custom_denials_in_both_layers() {
+    let handler_calls = Arc::new(AtomicUsize::new(0));
+    let inner_calls = Arc::new(AtomicUsize::new(0));
+    let raw = inner(|| Full::new(Bytes::new()), Arc::clone(&inner_calls));
+    let calls = Arc::clone(&handler_calls);
+    let handler = move |parts: &Parts, failure: AuthorizationFailure<Infallible>| {
+        assert_eq!(parts.uri.path(), "/notes");
+        calls.fetch_add(1, Ordering::SeqCst);
+        let AuthorizationFailure::Denied(AuthorizationDenial::Custom(mut response)) = failure
+        else {
+            panic!("expected a custom denial");
+        };
+        assert_eq!(response.body(), "office network required");
+        *response.status_mut() = StatusCode::LOCKED;
+        response
+            .headers_mut()
+            .insert("x-failure-handler", "processed".parse().unwrap());
+        *response.body_mut() = Bytes::from_static(b"modified by failure handler");
+        response
+    };
+    let services = [
+        BoxCloneService::new(
+            AuthorizationLayer::builder(CustomDenialProvider)
+                .failure_handler(handler.clone())
+                .build()
+                .layer(raw.clone()),
+        ),
+        BoxCloneService::new(
+            SecurityLayer::new(TokenAuthenticator, CustomDenialProvider)
+                .failure_handler(handler)
+                .layer(raw),
+        ),
+    ];
+    for service in services {
+        let response = service.oneshot(request(None)).await.unwrap();
+        assert_eq!(response.status(), StatusCode::LOCKED);
+        assert_eq!(response.headers()["x-failure-handler"], "processed");
+        assert!(response.extensions().get::<ResponseMarker>().is_some());
+        assert_eq!(
+            response.into_body().collect().await.unwrap().to_bytes(),
+            "modified by failure handler"
+        );
+    }
+    assert_eq!(handler_calls.load(Ordering::SeqCst), 2);
+    assert_eq!(inner_calls.load(Ordering::SeqCst), 0);
+}

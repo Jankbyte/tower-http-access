@@ -26,10 +26,10 @@ async fn authority_providers_preserve_anonymous_any_all_and_empty_list_semantics
     ];
     let (parts, _) = http::Request::new(()).into_parts();
     for provider in &providers {
-        assert_eq!(
+        assert!(matches!(
             provider.authorize(None, &parts).await.unwrap(),
             AuthorizationDecision::Deny(AuthorizationDenial::AuthenticationRequired)
-        );
+        ));
     }
     for (identity, allowed) in [
         (Principal(vec![]), [false, false, false, false, true]),
@@ -46,9 +46,9 @@ async fn authority_providers_preserve_anonymous_any_all_and_empty_list_semantics
             } else {
                 AuthorizationDecision::Deny(AuthorizationDenial::InsufficientPermissions)
             };
-            assert_eq!(
+            crate::authorization::core::assert_builtin_decision(
                 provider.authorize(Some(&identity), &parts).await.unwrap(),
-                expected
+                expected,
             );
         }
     }
@@ -63,20 +63,20 @@ async fn authority_checks_compose_and_map_without_request_matching_or_basic_auth
         .unwrap()
         .map(|roles: &Vec<&'static str>| Principal(roles.clone()));
     let (parts, _) = http::Request::new(()).into_parts();
-    assert_eq!(
+    assert!(matches!(
         provider
             .authorize(Some(&vec!["Read", "Write", "Share"]), &parts)
             .await
             .unwrap(),
         AuthorizationDecision::Allow
-    );
-    assert_eq!(
+    ));
+    assert!(matches!(
         provider
             .authorize(Some(&vec!["Read"]), &parts)
             .await
             .unwrap(),
         AuthorizationDecision::Deny(AuthorizationDenial::InsufficientPermissions)
-    );
+    ));
 }
 
 #[tokio::test]
@@ -95,10 +95,13 @@ async fn permit_and_deny_providers_work_without_authority_traits() {
             AuthorizationDecision::Deny(AuthorizationDenial::InsufficientPermissions),
         ),
     ] {
-        assert_eq!(
+        assert!(matches!(
             permit.authorize(identity, &parts).await.unwrap(),
             AuthorizationDecision::Allow
+        ));
+        crate::authorization::core::assert_builtin_decision(
+            deny.authorize(identity, &parts).await.unwrap(),
+            expected,
         );
-        assert_eq!(deny.authorize(identity, &parts).await.unwrap(), expected);
     }
 }

@@ -161,7 +161,7 @@ where
 /// Authorization success result, with optional behavior.
 ///
 /// The success result of [`AuthorizationProvider`].
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Debug)]
 pub enum AuthorizationDecision {
     /// Authorization success.
     Allow,
@@ -170,13 +170,31 @@ pub enum AuthorizationDecision {
 }
 
 /// Reasons why authorization failed. Part of [`AuthorizationDecision`].
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Debug)]
 pub enum AuthorizationDenial {
     /// Target request not authenticated, so authentication required.
     AuthenticationRequired,
     /// Request is authenticated, but target authentication does not have
     /// required permissions.
     InsufficientPermissions,
+    /// Supply a response to the authorization failure handler. The default handler
+    /// returns it unchanged; custom handlers may inspect, modify, or replace it.
+    /// The layer adapts its byte body to the inner service's response body type.
+    /// Composed providers preserve this response and stop evaluating later policies.
+    ///
+    /// ```
+    /// use bytes::Bytes;
+    /// use http::{Response, StatusCode};
+    /// use tower_http_access::authorization::{AuthorizationDecision, AuthorizationDenial};
+    ///
+    /// let response = Response::builder()
+    ///     .status(StatusCode::FORBIDDEN)
+    ///     .header("content-type", "text/plain")
+    ///     .body(Bytes::from_static(b"Office network required"))
+    ///     .unwrap();
+    /// let decision = AuthorizationDecision::Deny(AuthorizationDenial::Custom(response));
+    /// ```
+    Custom(SecurityResponse),
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -215,6 +233,7 @@ impl<E> AuthorizationFailureHandler<E> for DefaultAuthorizationFailureHandler {
                 StatusCode::FORBIDDEN
             }
             AuthorizationFailure::Provider(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            AuthorizationFailure::Denied(AuthorizationDenial::Custom(response)) => return response,
         })
     }
 }
@@ -227,4 +246,26 @@ where
     fn commence(&self, request: &Parts) -> SecurityResponse {
         T::commence(self.as_ref(), request)
     }
+}
+
+#[cfg(test)]
+pub(super) fn assert_builtin_decision(
+    actual: AuthorizationDecision,
+    expected: AuthorizationDecision,
+) {
+    assert!(
+        matches!(
+            (&actual, &expected),
+            (AuthorizationDecision::Allow, AuthorizationDecision::Allow)
+                | (
+                    AuthorizationDecision::Deny(AuthorizationDenial::AuthenticationRequired),
+                    AuthorizationDecision::Deny(AuthorizationDenial::AuthenticationRequired)
+                )
+                | (
+                    AuthorizationDecision::Deny(AuthorizationDenial::InsufficientPermissions),
+                    AuthorizationDecision::Deny(AuthorizationDenial::InsufficientPermissions)
+                )
+        ),
+        "expected {expected:?}, got {actual:?}"
+    );
 }
