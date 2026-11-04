@@ -99,6 +99,8 @@ struct Rule<A> {
 /// Path rules use the URI visible to the middleware. Axum strips nesting prefixes
 /// inside nested routers; attach security outside the nest for full application
 /// paths, or use local patterns inside it. See the module's nested-router guidance.
+///
+/// It has *O(n)* complexity while iteration per matching rules.
 pub struct RequestAuthorizationProvider<A> {
     rules: Vec<Rule<A>>,
     identity: PhantomData<fn() -> A>,

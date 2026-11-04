@@ -4,22 +4,22 @@
 
 # Tower HTTP Access
 
-Composable HTTP authentication and authorization middleware for Tower, with optional Axum integration.
+Base abstractions for building HTTP authentication and authorization layers with Tower.
 
-Use [`SecurityLayer`] to authenticate and authorize requests together, or use the separate
-[`authentication::AuthenticationLayer`] and [`authorization::AuthorizationLayer`].
-Custom authenticators implement [`authentication::RequestAuthenticator`]; custom authorization
-policies implement [`authorization::AuthorizationProvider`]. Successful responses retain their
-original body type, including streaming bodies.
+[`RequestAuthenticator`](authentication::RequestAuthenticator) and [`AuthorizationProvider`](authorization::AuthorizationProvider) define your authentication mechanism and
+authorization policy. [`SecurityLayer`](SecurityLayer) connects them and wraps an inner Tower service in a
+[`SecurityService`](SecurityService), which coordinates each request:
 
-The default `axum` feature enables identity extractors. Enable `request_matcher` for ordered
-path and method authorization rules. Disable default features for framework-independent Tower use.
+1. The service calls [`RequestAuthenticator`](authentication::RequestAuthenticator) with mutable request parts (headers, URI, and
+   extensions). The authenticator returns an identity, reports that authentication does not
+   apply, or fails with an error. It does not consume the request body.
+2. The service passes the optional identity and request parts to [`AuthorizationProvider`](authorization::AuthorizationProvider).
+   The provider decides whether to allow the request or deny access. Both components share
+   the same `Authentication` type, so the identity flows directly between them.
+3. If allowed, the service stores any identity in the request extensions as [`Authenticated<T>`](authentication::Authenticated)
+   and forwards the request to the inner service. Authentication errors, authorization denials,
+   and provider errors produce a response without calling the inner service.
 
-HTTP Basic authentication, user-detail types, and password helpers live in the separate
-[`tower-http-access-basic`](https://docs.rs/tower-http-access-basic) crate. Import those types
-from `tower_http_access_basic`. Add a hashing implementation such as `argon2` directly to
-your application’s dependencies and pass it to `AsyncStringPasswordManager`.
-
-See the [project guide](https://github.com/Jankbyte/axum-auth-chained#readme) for configuration,
-examples, and integration documentation. The guide's Rust examples are compiled as part of
-the Basic crate's documentation tests.
+An authentication-required denial invokes the configured [`AuthenticationEntryPoint`](authorization::AuthenticationEntryPoint);
+other denials and authorization errors go through [`AuthorizationFailureHandler`](authorization::AuthorizationFailureHandler).
+This keeps credential handling, access policy, and application request handling separate.
