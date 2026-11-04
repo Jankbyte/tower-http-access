@@ -1,11 +1,11 @@
-//! Synchronous request matching for ordered authorization rules.
+//! Synchronous request matching for security chains and authorization rules.
 //!
-//! A matcher selects a policy; it does not grant or deny access itself.
+//! A matcher selects a chain or policy; it does not grant or deny access itself.
 //! Patterns are compiled once and matching borrows request metadata.
 
 use http::{Method, request::Parts};
 
-/// Selects whether a request is covered by an authorization rule.
+/// Selects whether a request is covered by a security chain or authorization rule.
 ///
 /// Implementations should perform local, synchronous checks. A `false` result skips
 /// the rule rather than denying access; later rules may still allow the request.
@@ -35,7 +35,7 @@ pub struct InvalidRequestPattern(pub String);
 /// percent escapes.
 ///
 /// ```
-/// use tower_http_access::authorization::request_matcher::{
+/// use tower_http_access::request_matcher::{
 ///     PathPatternRequestMatcher, RequestMatcher,
 /// };
 /// use http::Request;
@@ -47,7 +47,7 @@ pub struct InvalidRequestPattern(pub String);
 ///     .unwrap()
 ///     .into_parts();
 /// assert!(matcher.matches(&parts));
-/// # Ok::<(), tower_http_access::authorization::request_matcher::InvalidRequestPattern>(())
+/// # Ok::<(), tower_http_access::request_matcher::InvalidRequestPattern>(())
 /// ```
 pub struct PathPatternRequestMatcher {
     router: matchit::Router<()>,

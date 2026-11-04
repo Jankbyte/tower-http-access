@@ -23,3 +23,20 @@ authorization policy. [`SecurityLayer`](SecurityLayer) connects them and wraps a
 An authentication-required denial invokes the configured [`AuthenticationEntryPoint`](authorization::AuthenticationEntryPoint);
 other denials and authorization errors go through [`AuthorizationFailureHandler`](authorization::AuthorizationFailureHandler).
 This keeps credential handling, access policy, and application request handling separate.
+
+## Features
+
+| Feature name | Adds |
+| --- | --- |
+| `default` | Enables `axum`. |
+| `axum` | Axum extractors for [`Authenticated<T>`](authentication::Authenticated) and `Option<Authenticated<T>>`, plus `IntoResponse` for authentication errors. |
+| `request_matcher` | [Request matchers](request_matcher) and ordered authorization rules through [`RequestAuthorizationProvider`](authorization::RequestAuthorizationProvider). |
+| `split_auth` | Standalone [`AuthenticationLayer`](authentication::AuthenticationLayer) and [`AuthorizationLayer`](authorization::AuthorizationLayer) for independent middleware placement. |
+| `filter_chain` | Selects complete middleware stacks through [`SecurityChainLayer`](filter_chain::SecurityChainLayer). Also enables `request_matcher`. |
+
+Authentication and authorization traits and `SecurityLayer` are always available.
+Use `default-features = false` for Tower integration without Axum.
+
+```toml
+tower-http-access = { version = "0.0.1", features = ["filter_chain"] }
+```

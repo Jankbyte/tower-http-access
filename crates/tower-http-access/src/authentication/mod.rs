@@ -7,7 +7,7 @@
 //! Implement [`RequestAuthenticator`] for an authentication mechanism. Use
 //! [`DelegatingRequestAuthenticator`] to try multiple mechanisms in order and stop at the first one
 //! that authenticates the request. Use [`crate::SecurityLayer`] to run authentication
-//! and authorization together, or [`AuthenticationLayer`] when authentication needs independent
+//! and authorization together, or `AuthenticationLayer` (with `split_auth`) when authentication needs independent
 //! placement in the middleware stack.
 
 mod core;
@@ -19,7 +19,9 @@ pub use core::{
 #[cfg(feature = "axum")]
 mod axum;
 
+#[cfg(feature = "split_auth")]
 mod auth_tower;
+#[cfg(feature = "split_auth")]
 pub use auth_tower::{AuthenticationLayer, AuthenticationService};
 
 mod delegator;

@@ -257,6 +257,7 @@ async fn custom_manager_receives_context_and_its_decision_is_final() {
     assert_eq!(calls.load(Ordering::SeqCst), 3);
 }
 
+#[cfg(feature = "split_auth")]
 #[tokio::test]
 async fn custom_manager_errors_preserve_source_and_return_internal_server_error() {
     use axum::{body::Body, http::StatusCode};
@@ -414,6 +415,7 @@ async fn user_defined_matcher_can_select_rules() {
     ));
 }
 
+#[cfg(feature = "split_auth")]
 #[tokio::test]
 async fn middleware_matchers_borrow_original_headers_and_extensions() {
     use axum::{body::Body, http::StatusCode};

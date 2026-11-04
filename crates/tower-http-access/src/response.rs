@@ -89,6 +89,6 @@ pub(crate) fn test_response(status: StatusCode, body: impl Into<Bytes>) -> Secur
     response
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "split_auth"))]
 #[path = "response_tests.rs"]
 mod tests;

@@ -8,13 +8,15 @@
 //! A provider can return [`AuthorizationDenial::Custom`] to supply a response to the failure
 //! handler. The default handler preserves it; custom handlers can modify or replace it.
 //! Response-body adaptation runs after the failure handler.
-//! Use [`AuthorizationLayer`] for independently placed authorization that reads an identity
+//! Use `AuthorizationLayer` (with `split_auth`) for independently placed authorization that reads an identity
 //! established by earlier authentication middleware from request extensions.
 //! Applications that only require a valid identity can use [`AuthenticatedAuthorizationProvider`].
 //! Combine independent checks with [`AllAuthorizationProvider`] to require every provider to allow
 //! a request, stopping at the first denial or error.
 
+#[cfg(feature = "split_auth")]
 mod auth_tower;
+#[cfg(feature = "split_auth")]
 pub use auth_tower::{AuthorizationLayer, AuthorizationLayerBuilder, AuthorizationService};
 
 mod core;
@@ -49,6 +51,3 @@ pub use request::{
     InvalidRequestPattern, PendingRuleBuilder, RequestAuthorizationBuilder,
     RequestAuthorizationError, RequestAuthorizationProvider,
 };
-
-#[cfg(feature = "request_matcher")]
-pub mod request_matcher;

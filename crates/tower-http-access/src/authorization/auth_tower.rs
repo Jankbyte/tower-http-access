@@ -27,6 +27,20 @@ use tower_service::Service;
 #[path = "auth_tower_tests.rs"]
 pub(super) mod tests;
 
+/// Authorizes HTTP requests using an identity extracted from request extensions.
+///
+/// For each request, the service looks up [`Authenticated<P::Authentication>`](Authenticated)
+/// and passes the borrowed identity and request parts to [`AuthorizationProvider`].
+/// If the extension is absent, the provider receives `None` and decides whether
+/// anonymous access is allowed. Only allowed requests reach the inner service.
+///
+/// Run [`AuthenticationLayer`](crate::authentication::AuthenticationLayer) or custom
+/// middleware that inserts the matching `Authenticated<T>` before this layer.
+/// This layer does not parse the HTTP `Authorization` header or verify credentials;
+/// those operations belong to authentication.
+///
+/// Available with the `split_auth` feature. Use [`SecurityLayer`](crate::SecurityLayer)
+/// to combine authentication and authorization in one layer.
 pub struct AuthorizationLayer<P, H, E> {
     provider: Arc<P>,
     failure_handler: H,

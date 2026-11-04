@@ -38,14 +38,14 @@ use futures_util::future::BoxFuture;
 use http::{Method, request::Parts};
 use std::marker::PhantomData;
 
-pub use super::request_matcher::InvalidRequestPattern;
-use super::request_matcher::{PathPatternRequestMatcher, RequestMatcher};
 use super::{
     AllAuthoritiesAuthorizationProvider, AnyAuthorityAuthorizationProvider,
     AuthenticatedAuthorizationProvider, AuthorityAuthorizationProvider, AuthorizationDecision,
     AuthorizationProvider, DenyAllAuthorizationProvider, HasAuthorities,
     PermitAllAuthorizationProvider,
 };
+pub use crate::request_matcher::InvalidRequestPattern;
+use crate::request_matcher::{PathPatternRequestMatcher, RequestMatcher};
 
 /// An error returned by a request authorization provider.
 ///
@@ -149,7 +149,7 @@ impl<A> RequestAuthorizationBuilder<A> {
     /// ```
     /// use tower_http_access::{
     ///     authorization::RequestAuthorizationProvider,
-    ///     authorization::request_matcher::PathPatternRequestMatcher,
+    ///     request_matcher::PathPatternRequestMatcher,
     /// };
     ///
     /// let provider = RequestAuthorizationProvider::<String>::builder()
@@ -157,7 +157,7 @@ impl<A> RequestAuthorizationBuilder<A> {
     ///     .authenticated()
     ///     .any_request().deny_all()
     ///     .build()?;
-    /// # Ok::<(), tower_http_access::authorization::request_matcher::InvalidRequestPattern>(())
+    /// # Ok::<(), tower_http_access::request_matcher::InvalidRequestPattern>(())
     /// ```
     pub fn matching<M: RequestMatcher + 'static>(self, matcher: M) -> PendingRuleBuilder<A> {
         PendingRuleBuilder {

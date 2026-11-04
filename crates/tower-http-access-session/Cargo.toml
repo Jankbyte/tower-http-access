@@ -1,0 +1,25 @@
+[package]
+name = "tower-http-access-session"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Session authentication for Tower HTTP Access using tower-sessions"
+readme = "README.md"
+keywords = ["authentication", "session", "middleware", "tower"]
+categories = ["authentication", "web-programming::http-server"]
+
+[dependencies]
+tower-http-access = { version = "0.0.1", path = "../tower-http-access", default-features = false }
+tower-sessions.workspace = true
+http.workspace = true
+serde.workspace = true
+futures-util = { workspace = true, features = ["alloc"] }
+
+[dev-dependencies]
+tower-sessions = { workspace = true, features = ["memory-store", "axum-core"] }
+tower-http-access = { path = "../tower-http-access", features = ["axum"] }
+axum.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tower = { workspace = true, features = ["util"] }

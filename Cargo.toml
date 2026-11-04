@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/tower-http-access", "crates/tower-http-access-basic", "examples"]
+members = ["crates/tower-http-access", "crates/tower-http-access-basic", "crates/tower-http-access-session", "examples"]
 resolver = "3"
 
 [workspace.package]
@@ -10,6 +10,7 @@ license = "MIT"
 repository = "https://github.com/Jankbyte/tower-http-access"
 
 [workspace.dependencies]
+tower-sessions = { version = "0.15", default-features = false }
 bytes = "1"
 http-body = "1"
 http-body-util = "0.1"

@@ -56,7 +56,7 @@ where
 ///
 /// ```
 /// use tower_http_access::authorization::{
-///     AllAuthorizationProvider, AuthenticatedAuthorizationProvider, AuthorizationLayer,
+///     AllAuthorizationProvider, AuthenticatedAuthorizationProvider,
 ///     AuthorizationProviderExt,
 /// };
 ///
@@ -68,7 +68,6 @@ where
 ///     .with(AuthenticatedAuthorizationProvider::<String>::new()
 ///         .map(|user: &AppUser| user.id.to_string()))
 ///     .build()?;
-/// let layer = AuthorizationLayer::builder(provider).build();
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 pub struct AllAuthorizationProvider<A> {
@@ -132,6 +131,6 @@ impl<A: Send + Sync> AuthorizationProvider for AllAuthorizationProvider<A> {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "split_auth"))]
 #[path = "all_tests.rs"]
 mod tests;

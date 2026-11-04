@@ -6,11 +6,13 @@ rust-version.workspace = true
 publish = false
 
 [dev-dependencies]
+tower-http-access-session = { path = "../crates/tower-http-access-session" }
+tower-sessions = { workspace = true, features = ["memory-store", "axum-core"] }
 futures-util = { workspace = true, features = ["alloc"] }
 tower = { workspace = true, features = ["util"] }
 argon2.workspace = true
 axum.workspace = true
-tower-http-access = { path = "../crates/tower-http-access", features = ["request_matcher"] }
+tower-http-access = { path = "../crates/tower-http-access", features = ["filter_chain", "split_auth"] }
 tower-http-access-basic = { path = "../crates/tower-http-access-basic", features = ["tracing"] }
 tokio = { workspace = true, features = ["full"] }
 tracing-subscriber.workspace = true
