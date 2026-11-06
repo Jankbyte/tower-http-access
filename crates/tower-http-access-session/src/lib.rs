@@ -5,6 +5,9 @@ pub use authenticator::{
     InvalidLoginPagePath, SessionIdentityProvider, SessionRequestAuthenticator, initialize_session,
 };
 
+mod stored_identity;
+pub use stored_identity::SessionStoredIdentity;
+
 #[cfg(feature = "browser_matcher")]
 mod browser_matcher;
 #[cfg(feature = "browser_matcher")]

@@ -1,4 +1,5 @@
 use super::*;
+use crate::SessionStoredIdentity;
 use axum::{
     Router,
     body::Body,
@@ -195,4 +196,149 @@ fn login_paths_reject_external_and_invalid_locations() {
     let response = SessionRequestAuthenticator::new(Users).commence(&parts);
     assert_eq!(response.status(), StatusCode::FOUND);
     assert_eq!(response.headers()[header::LOCATION], "/login");
+}
+
+// Deliberately has no Deserialize implementation.
+struct ApplicationId(String);
+
+struct ApplicationUsers;
+impl SessionIdentityProvider for ApplicationUsers {
+    type Id = ApplicationId;
+    type Identity = String;
+    type Error = std::io::Error;
+
+    fn load_identity<'a>(
+        &'a self,
+        id: ApplicationId,
+    ) -> BoxFuture<'a, Result<Option<String>, Self::Error>> {
+        Box::pin(async move { Users.load_identity(id.0).await })
+    }
+}
+
+#[tokio::test]
+async fn custom_extractor_supports_non_deserializable_ids_and_preserves_error_semantics() {
+    let authenticator = Arc::new(
+        SessionRequestAuthenticator::new_with_extractor(ApplicationUsers, |session| async move {
+            Ok(session.get::<String>("account").await?.map(ApplicationId))
+        })
+        .login_page_path("/sign-in")
+        .unwrap(),
+    );
+    let app = Router::new().route("/", get(|| async { "allowed" })).layer(
+        SecurityLayer::new(
+            Arc::clone(&authenticator),
+            AuthenticatedAuthorizationProvider::<String>::new(),
+        )
+        .authentication_entry_point(authenticator),
+    );
+    for (value, expected) in [
+        (None, StatusCode::FOUND),
+        (Some("alice"), StatusCode::OK),
+        (Some("deleted"), StatusCode::FOUND),
+        (Some("failure"), StatusCode::INTERNAL_SERVER_ERROR),
+        (Some("malformed"), StatusCode::INTERNAL_SERVER_ERROR),
+    ] {
+        let session = Session::new(None, Arc::new(MemoryStore::default()), None);
+        if value == Some("malformed") {
+            session.insert("account", 42).await.unwrap();
+        } else if let Some(value) = value {
+            session.insert("account", value).await.unwrap();
+        }
+        let mut request = Request::new(Body::empty());
+        request.extensions_mut().insert(session);
+        let response = app.clone().oneshot(request).await.unwrap();
+        assert_eq!(response.status(), expected);
+        if expected == StatusCode::FOUND {
+            assert_eq!(response.headers()[header::LOCATION], "/sign-in");
+        }
+    }
+    let response = app.oneshot(Request::new(Body::empty())).await.unwrap();
+    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+}
+
+#[tokio::test]
+async fn stored_identity_authenticates_from_session_backend_without_user_lookup() {
+    use std::collections::BTreeMap;
+    type Identity = BTreeMap<String, String>;
+
+    let store = MemoryStore::default();
+    let app = Router::new()
+        .route(
+            "/",
+            get(|Authenticated(user): Authenticated<Identity>| async move {
+                format!("{}:{}", user["username"], user["role"])
+            }),
+        )
+        .layer(SecurityLayer::new(
+            Arc::new(
+                SessionRequestAuthenticator::new(SessionStoredIdentity::<Identity>::default())
+                    .with_session_key("authenticated_user"),
+            ),
+            AuthenticatedAuthorizationProvider::<Identity>::new(),
+        ))
+        .layer(SessionManagerLayer::new(store.clone()).with_secure(false));
+
+    for (value, expected) in [
+        ("identity", StatusCode::OK),
+        ("missing", StatusCode::UNAUTHORIZED),
+        ("malformed", StatusCode::INTERNAL_SERVER_ERROR),
+    ] {
+        let session = Session::new(None, Arc::new(store.clone()), None);
+        match value {
+            "identity" => {
+                let identity = Identity::from([
+                    ("username".into(), "alice".into()),
+                    ("role".into(), "admin".into()),
+                ]);
+                session
+                    .insert("authenticated_user", identity)
+                    .await
+                    .unwrap();
+            }
+            "malformed" => session.insert("authenticated_user", 42).await.unwrap(),
+            _ => session.insert("unrelated", true).await.unwrap(),
+        }
+        session.save().await.unwrap();
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .header(header::COOKIE, format!("id={}", session.id().unwrap()))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), expected);
+        if expected == StatusCode::OK {
+            assert_eq!(
+                axum::body::to_bytes(response.into_body(), 1024)
+                    .await
+                    .unwrap(),
+                "alice:admin",
+            );
+        }
+    }
+}
+
+#[tokio::test]
+async fn stored_identity_accepts_custom_extraction_without_serde_bounds() {
+    #[derive(Clone, Debug, PartialEq)]
+    struct Identity(String);
+
+    let authenticator = SessionRequestAuthenticator::new_with_extractor(
+        SessionStoredIdentity::<Identity>::new(),
+        |session| async move { Ok(session.get::<String>("username").await?.map(Identity)) },
+    );
+    let session = Session::new(None, Arc::new(MemoryStore::default()), None);
+    session.insert("username", "alice").await.unwrap();
+    let (mut parts, _) = Request::new(()).into_parts();
+    parts.extensions.insert(session);
+    let result = authenticator.authenticate(&mut parts).await.unwrap();
+    match result {
+        AuthenticationAttempt::Authenticated(identity) => {
+            assert_eq!(identity, Identity("alice".into()));
+        }
+        AuthenticationAttempt::NotApplicable => panic!("expected stored identity"),
+    }
 }

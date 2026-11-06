@@ -8,6 +8,25 @@ Session middleware loads the cookie-backed session into request extensions.
 that identity to your authorization provider and exposes it as `Authenticated<T>`
 to handlers. Existing role and path policies work without modification.
 
+`SessionIdentityProvider` is separate from the `tower-sessions` storage backend:
+
+- The session backend retrieves session data, including the stored user identifier.
+- The identity provider uses that identifier to retrieve the current user and
+  permissions from your application's database or an external identity service.
+
+For example, you can store sessions in Redis and retrieve users and roles from
+PostgreSQL. Your provider can hold a shared database connection pool and perform
+an async query in `load_identity`; the session backend and user database do not
+need to use the same storage technology or database.
+
+The provider is called on every request whose session extractor returns an
+identifier, even for public routes that pass through the security layer. This
+additional lookup lets role changes and disabled accounts take effect without
+rewriting session data. Return `Ok(None)` for unknown or disabled users and `Err`
+for database failures. If you cache identities to reduce database traffic, choose
+cache freshness according to how quickly account and permission changes must
+be observed.
+
 ```toml
 [dependencies]
 tower-http-access = "0.0.1"
@@ -60,9 +79,73 @@ In your public login handler, verify credentials first, then call
 Log out with `session.flush().await?`. The identifier type must match the provider's
 `Id`. Use `.with_session_key("account_id")` to customize the key.
 
+The default extractor calls `session.get::<P::Id>()` and requires the identifier
+to implement `DeserializeOwned`. To use a custom session schema or construct an
+identifier that does not implement deserialization, supply an async extractor:
+
+```rust
+use tower_http_access_session::{SessionIdentityProvider, SessionRequestAuthenticator};
+
+fn custom_authenticator<P>(provider: P) -> SessionRequestAuthenticator<P>
+where
+    P: SessionIdentityProvider<Id = String>,
+{
+    SessionRequestAuthenticator::new_with_extractor(provider, |session| async move {
+        session.get::<String>("account_id").await
+    })
+}
+```
+
+The extractor receives an owned, cloned `Session` handle and returns
+`Result<Option<P::Id>, tower_sessions::session::Error>`. `Ok(None)` means no
+applicable identity; errors produce an internal error. `SessionIdentityProvider`
+itself does not require `DeserializeOwned`. Calling `.with_session_key(...)`
+replaces the extractor with the default key-based lookup.
+
 Missing identifiers and deleted users are treated as anonymous. Missing session
 middleware, malformed session data, and backend failures produce internal errors.
 Authorization decides whether anonymous access is permitted.
+
+## Store the identity in the session
+
+Use [`SessionStoredIdentity<T>`] when the session already contains the complete
+identity needed for authorization. It implements `SessionIdentityProvider` with
+both `Id` and `Identity` set to `T`, returning the extracted value unchanged.
+`tower-sessions` still loads the session from its configured backend; this provider
+performs no additional user database lookup.
+
+```rust,no_run
+use tower_http_access_session::{SessionRequestAuthenticator, SessionStoredIdentity};
+use tower_sessions::Session;
+
+// A simple identity consisting of the username and role names.
+type Identity = (String, Vec<String>);
+
+let authenticator = SessionRequestAuthenticator::new(
+    SessionStoredIdentity::<Identity>::new(),
+)
+.with_session_key("authenticated_user");
+
+// Call only after credentials have been verified.
+async fn establish_session(
+    session: &Session,
+    identity: Identity,
+) -> Result<(), tower_sessions::session::Error> {
+    session.cycle_id().await?;
+    session.insert("authenticated_user", identity).await
+}
+```
+
+The default extractor requires `T: DeserializeOwned`; inserting the identity
+requires `Serialize`. The provider itself only requires
+`T: Clone + Send + Sync + 'static`, so custom extractors can construct identities
+without serialization support. `new()` and `Default::default()` create the same
+provider. Without `.with_session_key(...)`, the authenticator reads `user_id`.
+
+Store only identity and authorization data, excluding passwords and password
+hashes. Roles and account status reflect the stored value until the session is
+updated, expires, or is invalidated. Keep a database-backed provider when you need
+to check current permissions or disabled accounts on each request.
 
 Use a persistent shared session store for multiple application instances. Configure
 cookie security and expiry with `SessionManagerLayer`; protect browser mutations,
