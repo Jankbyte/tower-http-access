@@ -1,0 +1,61 @@
+//! Examples show multitype authentication.
+use std::sync::Arc;
+use tower_http_access::{
+    authentication::{RequestAuthenticator, RequestAuthenticatorExt},
+    authorization::{DelegatingAuthenticationEntryPoint, AuthenticationEntryPoint},
+};
+use tower_http_access_basic::{
+    BasicRequestAuthenticator, InMemoryUserDetailService, PlainHashPasswordManager, UserDetail,
+    UserDetailAuthenticationProvider, UsernamePasswordAuthenticationProvider,
+};
+//use tower_http_access_session::{
+//    SessionRequestAuthenticator
+//};
+
+#[tokio::main(flavor = "current_thread")]
+async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let user_service = Arc::new(create_users_service().await);
+    let basic_authenticator = Arc::new(create_basic_authenticator(Arc::clone(&user_service)));
+
+    let delegate_auth_entrypoint = DelegatingAuthenticationEntryPoint::builder()
+        .fallback(Arc::clone(&basic_authenticator));
+
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:3000").await?;
+    Ok(())
+}
+
+#[derive(Clone)]
+enum SessionAuth {
+    Basic(UserDetail)
+}
+
+impl From<UserDetail> for SessionAuth {
+    fn from(ud: UserDetail) -> Self {
+        Self::Basic(ud)
+    }
+}
+
+async fn create_users_service()
+-> UserDetailAuthenticationProvider<PlainHashPasswordManager, InMemoryUserDetailService> {
+    let manager = PlainHashPasswordManager;
+
+    let raw_users = vec![
+        UserDetail::new("john", "john123", vec![]),
+        UserDetail::new("max", "max123", vec![]),
+    ];
+    let user_detail_service = InMemoryUserDetailService::new((&manager, raw_users))
+        .await
+        .unwrap();
+    UserDetailAuthenticationProvider::new(manager, user_detail_service)
+        .await
+        .unwrap()
+}
+
+fn create_basic_authenticator<
+    T: UsernamePasswordAuthenticationProvider<Authentication = UserDetail> + 'static,
+>(
+    provider: T,
+) -> impl RequestAuthenticator<Authentication = SessionAuth> + AuthenticationEntryPoint {
+    BasicRequestAuthenticator::new(provider).map(SessionAuth::from)
+}

@@ -28,6 +28,8 @@
 //!     .layer(security);
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
+//!
+//! The implementation inspired by [`FilterChainProxy`](https://docs.spring.io/spring-security/site/docs/current/api/org/springframework/security/web/FilterChainProxy.html) from Java based Spring Security framework.
 use crate::request_matcher::RequestMatcher;
 use bytes::Bytes;
 use futures_util::future::BoxFuture;

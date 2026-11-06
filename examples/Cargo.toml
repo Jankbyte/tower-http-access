@@ -6,7 +6,7 @@ rust-version.workspace = true
 publish = false
 
 [dev-dependencies]
-tower-http-access-session = { path = "../crates/tower-http-access-session" }
+tower-http-access-session = { path = "../crates/tower-http-access-session", features = ["browser_matcher", "session_matcher"] }
 tower-sessions = { workspace = true, features = ["memory-store", "axum-core"] }
 futures-util = { workspace = true, features = ["alloc"] }
 tower = { workspace = true, features = ["util"] }

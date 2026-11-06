@@ -2,7 +2,7 @@
 //! These API keys are demonstration values.
 //!
 //! ```bash
-//! cargo run --package tower-http-access-examples --example custom_request_authenticator
+//! cargo run --package tower-http-access-examples --example custom-request-authenticator
 //! # Authenticated: Hello, alex!
 //! curl -v -H 'Api-Key: alex-api-key' http://127.0.0.1:3000/hello
 //! # Anonymous: Hello, anonymous!

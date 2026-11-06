@@ -17,8 +17,13 @@ use futures_util::future::BoxFuture;
 use serde::Deserialize;
 use std::{num::NonZeroUsize, sync::Arc};
 use tower_http_access::{
-    SecurityChainLayer, SecurityLayer, authentication::Authenticated,
-    authorization::RequestAuthorizationProvider, request_matcher::RequestMatcher,
+    SecurityChainLayer, SecurityLayer,
+    authentication::Authenticated,
+    authorization::{
+        DefaultAuthenticationEntryPoint, DelegatingAuthenticationEntryPoint,
+        RequestAuthorizationProvider,
+    },
+    request_matcher::{OrRequestMatcher, RequestMatcher},
 };
 use tower_http_access_basic::{
     AsyncStringPasswordManager, BasicCredentials, BasicRequestAuthenticator,
@@ -26,7 +31,8 @@ use tower_http_access_basic::{
     UserLoadingError, UsernamePasswordAuthenticationProvider,
 };
 use tower_http_access_session::{
-    SessionIdentityProvider, SessionRequestAuthenticator, initialize_session,
+    BrowserRequestMatcher, SessionCookieRequestMatcher, SessionIdentityProvider,
+    SessionRequestAuthenticator, initialize_session,
 };
 use tower_sessions::{
     Expiry, MemoryStore, Session, SessionManagerLayer,
@@ -35,36 +41,6 @@ use tower_sessions::{
 
 const ORIGIN: &str = "http://127.0.0.1:3000";
 type WebError = (StatusCode, &'static str);
-
-// Select HTML-oriented requests, rather than relying on User-Agent strings.
-// This is content negotiation, not proof that the caller is a browser.
-struct BrowserRequestMatcher;
-impl RequestMatcher for BrowserRequestMatcher {
-    fn matches(&self, request: &axum::http::request::Parts) -> bool {
-        request.headers.get_all(header::ACCEPT).iter().any(|value| {
-            value.to_str().is_ok_and(|value| {
-                value.split(',').any(|range| {
-                    let mut parts = range.split(';');
-                    parts
-                        .next()
-                        .is_some_and(|media| media.trim().eq_ignore_ascii_case("text/html"))
-                        && !parts.any(|parameter| {
-                            parameter
-                                .trim()
-                                .split_once('=')
-                                .is_some_and(|(name, value)| {
-                                    name.trim().eq_ignore_ascii_case("q")
-                                        && value
-                                            .trim()
-                                            .parse::<f32>()
-                                            .is_ok_and(|quality| quality == 0.0)
-                                })
-                        })
-                })
-            })
-        })
-    }
-}
 
 // Explicit Basic credentials take precedence over HTML content negotiation.
 struct BasicRequestMatcher;
@@ -147,15 +123,13 @@ async fn create_app() -> Result<Router, Box<dyn std::error::Error + Send + Sync>
         .any_request()
         .authenticated()
         .build()?;
-    let security = SecurityLayer::new(SessionRequestAuthenticator::new(session_users), authorizer)
-        .authentication_entry_point(|_: &axum::http::request::Parts| {
-            let mut response = tower_http_access::SecurityResponse::new(Default::default());
-            *response.status_mut() = StatusCode::SEE_OTHER;
-            response
-                .headers_mut()
-                .insert(header::LOCATION, "/login".parse().unwrap());
-            response
-        });
+    let session_authenticator =
+        Arc::new(SessionRequestAuthenticator::new(session_users).login_page_path("/login")?);
+    let entry_point = DelegatingAuthenticationEntryPoint::builder()
+        .entry_point(BrowserRequestMatcher, Arc::clone(&session_authenticator))
+        .fallback(DefaultAuthenticationEntryPoint);
+    let security = SecurityLayer::new(session_authenticator, authorizer)
+        .authentication_entry_point(entry_point);
     // These layers run only when the browser chain is selected.
     let browser_stack = tower::ServiceBuilder::new()
         .layer(
@@ -169,7 +143,13 @@ async fn create_app() -> Result<Router, Box<dyn std::error::Error + Send + Sync>
         .layer(security);
     let chains = SecurityChainLayer::builder()
         .chain(BasicRequestMatcher, basic_security)
-        .chain(BrowserRequestMatcher, browser_stack)
+        .chain(
+            OrRequestMatcher::new(
+                BrowserRequestMatcher,
+                SessionCookieRequestMatcher::default(),
+            ),
+            browser_stack,
+        )
         .fallback_deny()
         .build()?;
     Ok(Router::new()
@@ -364,7 +344,7 @@ mod tests {
             )
             .await
             .unwrap();
-        assert_eq!(response.status(), StatusCode::SEE_OTHER);
+        assert_eq!(response.status(), StatusCode::FOUND);
         assert_eq!(response.headers()[header::LOCATION], "/login");
         for (origin, username, password, status) in [
             (
@@ -429,6 +409,20 @@ mod tests {
                     .unwrap()
                     .contains(&format!("Hello, {username}!"))
             );
+            // Frontend REST requests reuse the session without advertising HTML.
+            let api_response = app
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .uri("/private")
+                        .header(header::ACCEPT, "application/json")
+                        .header(header::COOKIE, &cookie)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(api_response.status(), StatusCode::OK);
             assert_eq!(
                 app.clone()
                     .oneshot(request("POST", "/logout"))
@@ -437,13 +431,27 @@ mod tests {
                     .status(),
                 StatusCode::SEE_OTHER
             );
+            let expired = app
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .uri("/private")
+                        .header(header::COOKIE, &cookie)
+                        .header(header::ACCEPT, "application/json")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(expired.status(), StatusCode::UNAUTHORIZED);
+            assert!(!expired.headers().contains_key(header::LOCATION));
             assert_eq!(
                 app.clone()
                     .oneshot(request("GET", "/private"))
                     .await
                     .unwrap()
                     .status(),
-                StatusCode::SEE_OTHER
+                StatusCode::FOUND
             );
         }
     }

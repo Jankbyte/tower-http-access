@@ -1,6 +1,6 @@
 //! The example where we can get authenticated user.
 //! ```bash
-//! cargo run --package tower-http-access-examples --example hello_authenticated_user
+//! cargo run --package tower-http-access-examples --example hello-authenticated-user
 //! # Authenticated
 //! curl -v -u alex:alex123 -X GET http://localhost:3000/hello
 //! # Anonymous

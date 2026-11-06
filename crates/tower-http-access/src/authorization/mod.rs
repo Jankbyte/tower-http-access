@@ -51,3 +51,10 @@ pub use request::{
     InvalidRequestPattern, PendingRuleBuilder, RequestAuthorizationBuilder,
     RequestAuthorizationError, RequestAuthorizationProvider,
 };
+
+#[cfg(feature = "request_matcher")]
+mod entry_point;
+#[cfg(feature = "request_matcher")]
+pub use entry_point::{
+    DelegatingAuthenticationEntryPoint, DelegatingAuthenticationEntryPointBuilder,
+};

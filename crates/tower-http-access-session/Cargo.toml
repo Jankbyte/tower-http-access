@@ -23,3 +23,11 @@ tower-http-access = { path = "../tower-http-access", features = ["axum"] }
 axum.workspace = true
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tower = { workspace = true, features = ["util"] }
+
+[features]
+default = []
+browser_matcher = ["tower-http-access/request_matcher"]
+session_matcher = ["tower-http-access/request_matcher"]
+
+[package.metadata.docs.rs]
+all-features = true

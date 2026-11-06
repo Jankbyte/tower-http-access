@@ -135,3 +135,64 @@ async fn initialization_creates_anonymous_session_without_rewriting_existing_ses
     loaded.flush().await.unwrap();
     assert!(loaded.is_empty().await);
 }
+
+#[tokio::test]
+async fn login_entry_point_redirects_only_when_authentication_is_required() {
+    for path in ["/login", "/account/login?next=%2Fprivate"] {
+        let auth = Arc::new(
+            SessionRequestAuthenticator::new(Users)
+                .login_page_path(path)
+                .unwrap(),
+        );
+        let app = Router::new().route("/", get(|| async { "allowed" })).layer(
+            SecurityLayer::new(
+                Arc::clone(&auth),
+                AuthenticatedAuthorizationProvider::<String>::new(),
+            )
+            .authentication_entry_point(auth),
+        );
+        for (user, status) in [
+            (None, StatusCode::FOUND),
+            (Some("alice"), StatusCode::OK),
+            (Some("failure"), StatusCode::INTERNAL_SERVER_ERROR),
+        ] {
+            let session = Session::new(None, Arc::new(MemoryStore::default()), None);
+            if let Some(user) = user {
+                session.insert("user_id", user).await.unwrap();
+            }
+            let mut request = Request::new(Body::empty());
+            request.extensions_mut().insert(session);
+            let response = app.clone().oneshot(request).await.unwrap();
+            assert_eq!(response.status(), status);
+            if status == StatusCode::FOUND {
+                assert_eq!(response.headers()[header::LOCATION], path);
+            } else {
+                assert!(!response.headers().contains_key(header::LOCATION));
+            }
+        }
+    }
+}
+
+#[test]
+fn login_paths_reject_external_and_invalid_locations() {
+    for path in [
+        "",
+        "login",
+        "https://evil.example/login",
+        "//evil.example/login",
+        "/\\evil.example",
+        "/login\r\nInjected: true",
+        "/login#fragment",
+    ] {
+        assert!(
+            SessionRequestAuthenticator::new(Users)
+                .login_page_path(path)
+                .is_err(),
+            "{path:?}"
+        );
+    }
+    let (parts, _) = Request::new(()).into_parts();
+    let response = SessionRequestAuthenticator::new(Users).commence(&parts);
+    assert_eq!(response.status(), StatusCode::FOUND);
+    assert_eq!(response.headers()[header::LOCATION], "/login");
+}

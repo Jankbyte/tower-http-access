@@ -1,7 +1,7 @@
 //! The example shows how to implement custom `UsernamePasswordAuthenticationProvider`.
 //!
 //! ```bash
-//! cargo run --package tower-http-access-examples --example basic_auth_custom_upap
+//! cargo run --package tower-http-access-examples --example basic-auth-custom-source
 //! curl -X GET -u alex:alex123 -v http://localhost:3000/hello
 //! ```
 use axum::{Router, routing::get};

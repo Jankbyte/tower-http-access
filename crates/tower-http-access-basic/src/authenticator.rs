@@ -3,7 +3,7 @@ use super::base64::extract_credentials;
 use bytes::Bytes;
 use futures_util::future::BoxFuture;
 use http::{StatusCode, header, request::Parts};
-use std::{error::Error, future::Future, pin::Pin};
+use std::{error::Error, future::Future, pin::Pin, sync::Arc};
 use tower_http_access::SecurityResponse;
 use tower_http_access::{
     authentication::{
@@ -26,6 +26,24 @@ pub trait UsernamePasswordAuthenticationProvider: Send + Sync {
         &'a self,
         credentials: &'a BasicCredentials,
     ) -> BoxFuture<'a, Result<Option<Self::Authentication>, Self::Error>>;
+}
+
+/// Implementation for using with values that does not implement `Clone` or it's not cheap.
+impl<T> UsernamePasswordAuthenticationProvider for Arc<T>
+where
+    T: UsernamePasswordAuthenticationProvider,
+{
+    /// Identity produced by successful authentication.
+    type Authentication = T::Authentication;
+    /// Internal authentication backend error.
+    type Error = T::Error;
+
+    fn authenticate<'a>(
+        &'a self,
+        credentials: &'a BasicCredentials,
+    ) -> BoxFuture<'a, Result<Option<Self::Authentication>, Self::Error>> {
+        T::authenticate(self.as_ref(), credentials)
+    }
 }
 
 /// HTTP Basic authentication for Axum requests.
