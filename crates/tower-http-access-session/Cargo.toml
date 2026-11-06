@@ -26,7 +26,7 @@ tower = { workspace = true, features = ["util"] }
 
 [features]
 default = []
-browser_matcher = ["tower-http-access/request_matcher"]
+browser_matcher = ["tower-http-access/request_matcher", "session_matcher"]
 session_matcher = ["tower-http-access/request_matcher"]
 
 [package.metadata.docs.rs]

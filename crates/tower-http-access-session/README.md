@@ -169,15 +169,18 @@ tower-http-access = { version = "0.0.1", features = ["filter_chain"] }
 tower-http-access-session = { version = "0.0.1", features = ["browser_matcher"] }
 ```
 
-Add `.chain(BrowserRequestMatcher, browser_stack)` to your chain builder. The
+Add `.chain(BrowserRequestMatcher::default(), browser_stack)` to your chain builder. The
 browser stack should contain `SessionManagerLayer`, session initialization, and
 `SecurityLayer`, in that order. Put Basic or token credential chains first so
 those requests skip session middleware even when they accept HTML.
 
-The matcher selects explicit `Accept: text/html` entries with nonzero quality;
-wildcards do not match. This selects browser-style HTML behavior, not a trusted
-browser identity. Clients can set the header themselves, and browser fetch calls
-may omit it. Each selected stack must enforce its own authentication and authorization.
+The matcher combines `MediaTypeRequestMatcher` for HTML with
+`SessionCookieRequestMatcher` through `OrRequestMatcher`. It selects HTML requests
+or requests carrying the session cookie, including REST requests without HTML
+in `Accept`. HTML matching ignores `*/*` and `text/*`; parameters, including `q=0`,
+are ignored according to the media matcher's compatibility semantics. Invalid
+Accept headers do not match the HTML branch, but cookies can still select the chain.
+This is a routing heuristic; each stack must enforce authentication and authorization.
 See `examples/examples/form-login-session.rs` for the complete composition.
 
 `SessionRequestAuthenticator` also implements `AuthenticationEntryPoint`: share it
@@ -187,15 +190,14 @@ a same-origin absolute path with `.login_page_path("/account/login")?`. The resp
 is HTTP 302. Make the login endpoint public to prevent redirect loops. Omitting
 the entry-point configuration retains the layer's default HTTP 401 behavior.
 
-Enable `session_matcher` for `SessionCookieRequestMatcher`. Combine it with
-`BrowserRequestMatcher` using the core API's `OrRequestMatcher::new(...)` to select
-one session chain for HTML navigation **or** requests carrying a session cookie.
-Use `SessionCookieRequestMatcher::default()` for `id`, or `::new("JSESSIONID")`
-when the session manager uses that name. Cookie presence only selects the chain;
-it never proves authentication. Invalid or expired sessions remain anonymous.
+`browser_matcher` also enables `session_matcher`. Use
+`BrowserRequestMatcher::default()` for cookie name `id`, or
+`BrowserRequestMatcher::new("JSESSIONID")` when the session manager uses that name.
+Cookie presence only selects the chain; it never proves authentication. Invalid
+or expired sessions remain anonymous. `SessionCookieRequestMatcher` is also
+available separately with the `session_matcher` feature.
 
-A REST request with a valid session cookie can then authenticate without accepting
-HTML. Use `DelegatingAuthenticationEntryPoint` from the core authorization API
-with `.entry_point(BrowserRequestMatcher, session_authenticator)` and
-`.fallback(DefaultAuthenticationEntryPoint)` to redirect unauthenticated HTML
-requests while returning 401 to REST clients. See the form-login example.
+To redirect only HTML requests while returning 401 to REST clients, configure
+`DelegatingAuthenticationEntryPoint` with a `MediaTypeRequestMatcher` for
+`text/html`, ignoring `*/*` and `text/*`, and use
+`.fallback(DefaultAuthenticationEntryPoint)`. See the form-login example.

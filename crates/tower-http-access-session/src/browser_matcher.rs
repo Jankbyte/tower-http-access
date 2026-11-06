@@ -1,83 +1,114 @@
-use http::{header, request::Parts};
-use tower_http_access::request_matchers::RequestMatcher;
+use http::request::Parts;
+use tower_http_access::request_matchers::{
+    MediaTypeRequestMatcher, OrRequestMatcher, RequestMatcher,
+};
 
-/// Selects browser-style HTML flows by checking for an explicit `Accept: text/html`.
+use crate::SessionCookieRequestMatcher;
+
+/// Selects HTML requests or requests carrying a session cookie.
 ///
-/// Available with `browser_matcher`. Use this with
-/// `SecurityChainLayer::builder().chain(BrowserRequestMatcher, browser_stack)`
-/// to run session middleware and form-login security only for HTML requests.
+/// Available with `browser_matcher`, which also enables `session_matcher`.
 /// Put explicit credential chains, such as HTTP Basic, before this chain.
+/// The default cookie name is `id`; configure the same name as the session manager.
 ///
-/// Matches media types case-insensitively across multiple header values, excluding
-/// entries with `q=0`. Wildcard accept values (`*/*`, `text/*`) do not match.
-/// This is a content-negotiation heuristic, not proof of browser identity or an
-/// access-control check. Browser fetch requests may not advertise HTML; any client
-/// can send this header. Authentication and authorization must still run in the stack.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct BrowserRequestMatcher;
+/// HTML matching uses [`MediaTypeRequestMatcher`] compatibility semantics, ignoring
+/// requested `*/*` and `text/*` ranges (including the missing-Accept fallback).
+/// Parameters are ignored, including `q=0`; malformed Accept headers do not match
+/// the media branch. Cookie presence can still match independently.
+///
+/// This selects a middleware stack, not a trusted browser identity. Cookie presence
+/// does not validate a session. Authentication and authorization must still run.
+#[derive(Clone, Debug)]
+pub struct BrowserRequestMatcher {
+    matcher: OrRequestMatcher<MediaTypeRequestMatcher, SessionCookieRequestMatcher>,
+}
+
+impl BrowserRequestMatcher {
+    /// Select HTML requests or requests carrying the specified session cookie.
+    pub fn new(cookie_name: impl Into<String>) -> Self {
+        let media = MediaTypeRequestMatcher::new(["text/html"])
+            .expect("valid HTML media type")
+            .with_ignored_media_types(["*/*", "text/*"])
+            .expect("valid ignored media types");
+        Self {
+            matcher: OrRequestMatcher::new(media, SessionCookieRequestMatcher::new(cookie_name)),
+        }
+    }
+}
+
+impl Default for BrowserRequestMatcher {
+    fn default() -> Self {
+        Self::new("id")
+    }
+}
+
 impl RequestMatcher for BrowserRequestMatcher {
     fn matches(&self, request: &Parts) -> bool {
-        request.headers.get_all(header::ACCEPT).iter().any(|value| {
-            value.to_str().is_ok_and(|value| {
-                value.split(',').any(|range| {
-                    let mut parts = range.split(';');
-                    parts
-                        .next()
-                        .is_some_and(|media| media.trim().eq_ignore_ascii_case("text/html"))
-                        && !parts.any(|parameter| {
-                            parameter
-                                .trim()
-                                .split_once('=')
-                                .is_some_and(|(name, value)| {
-                                    name.trim().eq_ignore_ascii_case("q")
-                                        && value
-                                            .trim()
-                                            .parse::<f32>()
-                                            .is_ok_and(|quality| quality == 0.0)
-                                })
-                        })
-                })
-            })
-        })
+        self.matcher.matches(request)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use http::{Request, header};
 
     #[test]
-    fn selects_explicit_html_and_excludes_zero_quality_and_wildcards() {
-        for (accept, expected) in [
-            (None, false),
-            (Some("text/html"), true),
+    fn selects_html_or_session_cookie() {
+        let matcher = BrowserRequestMatcher::default();
+        for (accept, cookie, expected) in [
+            (None, None, false),
+            (Some("text/html"), None, true),
             (
                 Some("application/json, Text/HTML; charset=utf-8; q=0.8"),
+                None,
                 true,
             ),
-            (Some("text/html;q=0"), false),
-            (Some("text/html;q=0.000"), false),
-            (Some("*/*"), false),
-            (Some("text/*"), false),
-            (Some("application/json"), false),
+            (Some("text/html;q=0"), None, true),
+            (Some("*/*"), None, false),
+            (Some("text/*"), None, false),
+            (Some("application/json"), None, false),
+            (Some("text/html, invalid"), None, false),
+            (None, Some("id=abc"), true),
+            (Some("application/json"), Some("id="), true),
+            (Some("invalid"), Some("id=expired"), true),
+            (Some("application/json"), Some("other_id=abc"), false),
         ] {
-            let mut request = http::Request::builder();
+            let mut request = Request::builder();
             if let Some(accept) = accept {
                 request = request.header(header::ACCEPT, accept);
             }
+            if let Some(cookie) = cookie {
+                request = request.header(header::COOKIE, cookie);
+            }
             let (parts, _) = request.body(()).unwrap().into_parts();
-            assert_eq!(
-                BrowserRequestMatcher.matches(&parts),
-                expected,
-                "{accept:?}"
-            );
+            assert_eq!(matcher.matches(&parts), expected, "{accept:?}, {cookie:?}");
         }
-        let (parts, _) = http::Request::builder()
+    }
+
+    #[test]
+    fn supports_custom_cookie_names_and_multiple_headers() {
+        let matcher = BrowserRequestMatcher::new("JSESSIONID");
+        let (parts, _) = Request::builder()
+            .header(header::ACCEPT, "application/json")
+            .header(header::COOKIE, "id=abc")
+            .header(header::COOKIE, "JSESSIONID=abc")
+            .body(())
+            .unwrap()
+            .into_parts();
+        assert!(matcher.matches(&parts));
+        let (parts, _) = Request::builder()
+            .header(header::COOKIE, "id=abc")
+            .body(())
+            .unwrap()
+            .into_parts();
+        assert!(!matcher.matches(&parts));
+        let (parts, _) = Request::builder()
             .header(header::ACCEPT, "application/json")
             .header(header::ACCEPT, "text/html")
             .body(())
             .unwrap()
             .into_parts();
-        assert!(BrowserRequestMatcher.matches(&parts));
+        assert!(matcher.clone().matches(&parts));
     }
 }

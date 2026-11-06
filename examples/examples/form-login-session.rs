@@ -23,7 +23,7 @@ use tower_http_access::{
         DefaultAuthenticationEntryPoint, DelegatingAuthenticationEntryPoint,
         RequestAuthorizationProvider,
     },
-    request_matchers::{OrRequestMatcher, RequestMatcher},
+    request_matchers::{MediaTypeRequestMatcher, RequestMatcher},
 };
 use tower_http_access_basic::{
     AsyncStringPasswordManager, BasicCredentials, BasicRequestAuthenticator,
@@ -31,8 +31,7 @@ use tower_http_access_basic::{
     UserLoadingError, UsernamePasswordAuthenticationProvider,
 };
 use tower_http_access_session::{
-    BrowserRequestMatcher, SessionCookieRequestMatcher, SessionIdentityProvider,
-    SessionRequestAuthenticator, initialize_session,
+    BrowserRequestMatcher, SessionIdentityProvider, SessionRequestAuthenticator, initialize_session,
 };
 use tower_sessions::{
     Expiry, MemoryStore, Session, SessionManagerLayer,
@@ -126,7 +125,11 @@ async fn create_app() -> Result<Router, Box<dyn std::error::Error + Send + Sync>
     let session_authenticator =
         Arc::new(SessionRequestAuthenticator::new(session_users).login_page_path("/login")?);
     let entry_point = DelegatingAuthenticationEntryPoint::builder()
-        .entry_point(BrowserRequestMatcher, Arc::clone(&session_authenticator))
+        .entry_point(
+            MediaTypeRequestMatcher::new(["text/html"])?
+                .with_ignored_media_types(["*/*", "text/*"])?,
+            Arc::clone(&session_authenticator),
+        )
         .fallback(DefaultAuthenticationEntryPoint);
     let security = SecurityLayer::new(session_authenticator, authorizer)
         .authentication_entry_point(entry_point);
@@ -143,13 +146,7 @@ async fn create_app() -> Result<Router, Box<dyn std::error::Error + Send + Sync>
         .layer(security);
     let chains = SecurityChainLayer::builder()
         .chain(BasicRequestMatcher, basic_security)
-        .chain(
-            OrRequestMatcher::new(
-                BrowserRequestMatcher,
-                SessionCookieRequestMatcher::default(),
-            ),
-            browser_stack,
-        )
+        .chain(BrowserRequestMatcher::default(), browser_stack)
         .fallback_deny()
         .build()?;
     Ok(Router::new()
@@ -302,7 +299,7 @@ mod tests {
     #[tokio::test]
     async fn non_html_requests_are_denied() {
         let app = create_app().await.unwrap();
-        for accept in [None, Some("application/json"), Some("text/html;q=0")] {
+        for accept in [None, Some("application/json"), Some("*/*"), Some("text/*")] {
             let mut request = Request::builder().uri("/private");
             if let Some(accept) = accept {
                 request = request.header(header::ACCEPT, accept);
