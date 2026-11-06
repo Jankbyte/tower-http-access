@@ -1,5 +1,5 @@
 use http::{header, request::Parts};
-use tower_http_access::request_matcher::RequestMatcher;
+use tower_http_access::request_matchers::RequestMatcher;
 
 /// Selects browser-style HTML flows by checking for an explicit `Accept: text/html`.
 ///

@@ -1,7 +1,7 @@
 //! Request-based selection of authentication entry points.
 
 use super::AuthenticationEntryPoint;
-use crate::{SecurityResponse, request_matcher::RequestMatcher};
+use crate::{SecurityResponse, request_matchers::RequestMatcher};
 use http::request::Parts;
 use std::sync::Arc;
 
@@ -70,7 +70,7 @@ impl AuthenticationEntryPoint for DelegatingAuthenticationEntryPoint {
 mod tests {
     use super::*;
     use crate::{
-        authorization::DefaultAuthenticationEntryPoint, request_matcher::PathPatternRequestMatcher,
+        authorization::DefaultAuthenticationEntryPoint, request_matchers::PathPatternRequestMatcher,
     };
     use http::{Request, StatusCode};
 

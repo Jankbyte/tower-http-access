@@ -1,5 +1,5 @@
 use super::*;
-use crate::request_matcher::PathPatternRequestMatcher;
+use crate::request_matchers::PathPatternRequestMatcher;
 use std::{
     future::{Ready, ready},
     sync::atomic::{AtomicUsize, Ordering},

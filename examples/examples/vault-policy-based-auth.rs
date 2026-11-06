@@ -30,7 +30,7 @@ use tower_http_access::{
         RequestAuthenticator,
     },
     authorization::{AuthorizationDecision, AuthorizationDenial, AuthorizationProvider},
-    request_matcher::{PathPatternRequestMatcher, RequestMatcher},
+    request_matchers::{PathPatternRequestMatcher, RequestMatcher},
 };
 
 const ZONE: &str = "/secret/team";

@@ -15,6 +15,7 @@ categories = ["authentication", "web-programming::http-server"]
 bytes.workspace = true
 futures-util = { workspace = true, default-features = false, features = ["alloc"] }
 matchit = { workspace = true, optional = true }
+mime = { workspace = true, optional = true }
 http.workspace = true
 tower-service.workspace = true
 tower-layer.workspace = true
@@ -32,7 +33,7 @@ tokio = { workspace = true, features = ["full"] }
 [features]
 default = ["axum"]
 axum = ["dep:axum"]
-request_matcher = ["dep:matchit"]
+request_matcher = ["dep:matchit", "dep:mime"]
 filter_chain = ["request_matcher", "dep:tower"]
 split_auth = []
 

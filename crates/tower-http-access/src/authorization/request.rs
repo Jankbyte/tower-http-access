@@ -44,8 +44,8 @@ use super::{
     AuthorizationProvider, DenyAllAuthorizationProvider, HasAuthorities,
     PermitAllAuthorizationProvider,
 };
-pub use crate::request_matcher::InvalidRequestPattern;
-use crate::request_matcher::{PathPatternRequestMatcher, RequestMatcher};
+pub use crate::request_matchers::InvalidRequestPattern;
+use crate::request_matchers::{PathPatternRequestMatcher, RequestMatcher};
 
 /// An error returned by a request authorization provider.
 ///
@@ -149,7 +149,7 @@ impl<A> RequestAuthorizationBuilder<A> {
     /// ```
     /// use tower_http_access::{
     ///     authorization::RequestAuthorizationProvider,
-    ///     request_matcher::PathPatternRequestMatcher,
+    ///     request_matchers::PathPatternRequestMatcher,
     /// };
     ///
     /// let provider = RequestAuthorizationProvider::<String>::builder()
@@ -157,7 +157,7 @@ impl<A> RequestAuthorizationBuilder<A> {
     ///     .authenticated()
     ///     .any_request().deny_all()
     ///     .build()?;
-    /// # Ok::<(), tower_http_access::request_matcher::InvalidRequestPattern>(())
+    /// # Ok::<(), tower_http_access::request_matchers::InvalidRequestPattern>(())
     /// ```
     pub fn matching<M: RequestMatcher + 'static>(self, matcher: M) -> PendingRuleBuilder<A> {
         PendingRuleBuilder {

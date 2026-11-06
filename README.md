@@ -182,7 +182,7 @@ Use `.matching(...)` to supply a `RequestMatcher` explicitly:
 # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 use tower_http_access::{
     authorization::RequestAuthorizationProvider,
-    request_matcher::PathPatternRequestMatcher,
+    request_matchers::PathPatternRequestMatcher,
 };
 
 let rules = RequestAuthorizationProvider::<String>::builder()
@@ -211,7 +211,7 @@ access checks, use a custom `AuthorizationProvider` through `.access(provider)`.
 Offload CPU-bound work inside that provider to `spawn_blocking` or a dedicated worker
 pool; making a function async does not move CPU work off the executor.
 
-The `request_matcher` module uses `http` types and can be enabled independently with
+The `request_matchers` module uses `http` types and can be enabled independently with
 the core crate’s `request_matcher` feature.
 
 Request authorization is available independently of Basic authentication with

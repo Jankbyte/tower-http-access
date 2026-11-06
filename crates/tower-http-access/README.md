@@ -30,7 +30,7 @@ This keeps credential handling, access policy, and application request handling 
 | --- | --- |
 | `default` | Enables `axum`. |
 | `axum` | Axum extractors for [`Authenticated<T>`](authentication::Authenticated) and `Option<Authenticated<T>>`, plus `IntoResponse` for authentication errors. |
-| `request_matcher` | [Request matchers](request_matcher) and ordered authorization rules through [`RequestAuthorizationProvider`](authorization::RequestAuthorizationProvider). |
+| `request_matcher` | [Request matchers](request_matchers) and ordered authorization rules through [`RequestAuthorizationProvider`](authorization::RequestAuthorizationProvider). |
 | `split_auth` | Standalone [`AuthenticationLayer`](authentication::AuthenticationLayer) and [`AuthorizationLayer`](authorization::AuthorizationLayer) for independent middleware placement. |
 | `filter_chain` | Selects complete middleware stacks through [`SecurityChainLayer`](filter_chain::SecurityChainLayer). Also enables `request_matcher`. |
 

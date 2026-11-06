@@ -23,7 +23,7 @@ use tower_http_access::{
         DefaultAuthenticationEntryPoint, DelegatingAuthenticationEntryPoint,
         RequestAuthorizationProvider,
     },
-    request_matcher::{OrRequestMatcher, RequestMatcher},
+    request_matchers::{OrRequestMatcher, RequestMatcher},
 };
 use tower_http_access_basic::{
     AsyncStringPasswordManager, BasicCredentials, BasicRequestAuthenticator,

@@ -13,7 +13,7 @@
 //! use tower_http_access::{SecurityChainLayer, SecurityLayer,
 //!     authentication::{AuthenticationAttempt, AuthenticatorError},
 //!     authorization::AuthenticatedAuthorizationProvider,
-//!     request_matcher::PathPatternRequestMatcher};
+//!     request_matchers::PathPatternRequestMatcher};
 //!
 //! let authentication = |_: &mut http::request::Parts| async {
 //!     Ok::<_, AuthenticatorError>(AuthenticationAttempt::Authenticated("alice".to_owned()))
@@ -30,7 +30,7 @@
 //! ```
 //!
 //! The implementation inspired by [`FilterChainProxy`](https://docs.spring.io/spring-security/site/docs/current/api/org/springframework/security/web/FilterChainProxy.html) from Java based Spring Security framework.
-use crate::request_matcher::RequestMatcher;
+use crate::request_matchers::RequestMatcher;
 use bytes::Bytes;
 use futures_util::future::BoxFuture;
 use http::{Request, Response, StatusCode};
