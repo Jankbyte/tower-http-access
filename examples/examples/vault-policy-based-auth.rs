@@ -106,6 +106,7 @@ struct PolicyStore {
     policies: HashMap<String, Policy>,
 }
 
+#[derive(Clone)]
 struct TokenAuthenticator(Arc<PolicyStore>);
 
 impl RequestAuthenticator for TokenAuthenticator {

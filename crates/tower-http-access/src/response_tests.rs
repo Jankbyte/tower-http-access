@@ -44,6 +44,7 @@ fn challenge(status: StatusCode, text: impl Into<Bytes>) -> SecurityResponse {
     response
 }
 
+#[derive(Clone)]
 struct TokenAuthenticator;
 
 impl RequestAuthenticator for TokenAuthenticator {
@@ -367,7 +368,7 @@ async fn successful_streaming_body_is_forwarded_without_polling_or_replacing_it(
 // Deliberately has no From<Bytes> implementation.
 struct AdaptedBody(Bytes);
 
-// Deliberately has no Clone implementation.
+#[derive(Clone)]
 struct RecordingAdapter {
     calls: Arc<AtomicUsize>,
 }

@@ -20,6 +20,7 @@ use std::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 
+#[derive(Clone)]
 struct Authenticator {
     outcome: u8,
 }
@@ -156,7 +157,7 @@ async fn passes_identity_directly_and_preserves_body_for_handler() {
             calls: Arc::clone(&calls),
         },
     );
-    // Neither the authenticator nor the authorizer implements Clone.
+    // The authorizer does not implement Clone; its Arc is shared across clones.
     let mut service = layer
         .clone()
         .layer(Inner {

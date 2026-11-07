@@ -25,6 +25,10 @@ use tower_service::Service;
 /// With the default adapter, `ResBody` must implement `From<bytes::Bytes>`. Use
 /// [`Self::response_adapter`] to support other body types or response protocols.
 /// Only security-generated responses are converted.
+///
+/// The authenticator, entry point, response adapter, and failure handler are cloned for
+/// each service and request. Use `Arc` for shared authenticators or entry points that do
+/// not implement `Clone`. The authorizer is shared internally through `Arc`.
 /// For Axum this conversion uses `axum::body::Body::from`; other Tower services can use `Bytes`,
 /// `http_body_util::Full<Bytes>`, or an application body wrapper implementing `From<Bytes>`.
 /// Entry points and failure handlers borrow request parts and return [`crate::SecurityResponse`].
@@ -76,11 +80,11 @@ pub struct SecurityLayer<
     E = DefaultAuthenticationEntryPoint,
     R = DefaultSecurityResponseAdapter,
 > {
-    authenticator: Arc<A>,
+    authenticator: A,
     authorizer: Arc<P>,
     failure_handler: H,
-    authentication_entry_point: Arc<E>,
-    response_adapter: Arc<R>,
+    authentication_entry_point: E,
+    response_adapter: R,
 }
 
 impl<A, P> SecurityLayer<A, P>
@@ -91,11 +95,11 @@ where
     /// Combine an authenticator and a authorizer accepting the same identity type.
     pub fn new(authenticator: A, authorizer: P) -> Self {
         Self {
-            authenticator: Arc::new(authenticator),
+            authenticator,
             authorizer: Arc::new(authorizer),
             failure_handler: DefaultAuthorizationFailureHandler,
-            authentication_entry_point: Arc::new(DefaultAuthenticationEntryPoint),
-            response_adapter: Arc::new(DefaultSecurityResponseAdapter),
+            authentication_entry_point: DefaultAuthenticationEntryPoint,
+            response_adapter: DefaultSecurityResponseAdapter,
         }
     }
 }
@@ -110,7 +114,7 @@ impl<A, P, H, E, R> SecurityLayer<A, P, H, E, R> {
             authenticator: self.authenticator,
             authorizer: self.authorizer,
             failure_handler: self.failure_handler,
-            authentication_entry_point: Arc::new(entry_point),
+            authentication_entry_point: entry_point,
             response_adapter: self.response_adapter,
         }
     }
@@ -120,9 +124,9 @@ impl<A, P, H, E, R> SecurityLayer<A, P, H, E, R> {
     /// The adapter runs once for authentication failures, authentication-required denials,
     /// permission denials, and authorization backend errors. Successful inner responses bypass it.
     /// An adapter can translate HTTP failures to gRPC responses and supports body types that do
-    /// not implement `From<bytes::Bytes>`. It is shared through `Arc` and need not implement `Clone`.
+    /// not implement `From<bytes::Bytes>`. It is cloned for each service and request.
     /// To serve requests, the adapter must implement `SecurityResponseAdapter<ResBody>` and be
-    /// `Send + Sync + 'static`.
+    /// `Clone + Send + Sync + 'static`.
     ///
     /// ```
     /// use tower_http_access::{SecurityLayer, SecurityResponseAdapter};
@@ -146,7 +150,7 @@ impl<A, P, H, E, R> SecurityLayer<A, P, H, E, R> {
             authorizer: self.authorizer,
             failure_handler: self.failure_handler,
             authentication_entry_point: self.authentication_entry_point,
-            response_adapter: Arc::new(adapter),
+            response_adapter: adapter,
         }
     }
 
@@ -162,19 +166,19 @@ impl<A, P, H, E, R> SecurityLayer<A, P, H, E, R> {
     }
 }
 
-impl<A, P, H: Clone, E, R> Clone for SecurityLayer<A, P, H, E, R> {
+impl<A: Clone, P, H: Clone, E: Clone, R: Clone> Clone for SecurityLayer<A, P, H, E, R> {
     fn clone(&self) -> Self {
         Self {
-            authenticator: Arc::clone(&self.authenticator),
+            authenticator: self.authenticator.clone(),
             authorizer: Arc::clone(&self.authorizer),
             failure_handler: self.failure_handler.clone(),
-            authentication_entry_point: Arc::clone(&self.authentication_entry_point),
-            response_adapter: Arc::clone(&self.response_adapter),
+            authentication_entry_point: self.authentication_entry_point.clone(),
+            response_adapter: self.response_adapter.clone(),
         }
     }
 }
 
-impl<S, A, P, H: Clone, E, R> Layer<S> for SecurityLayer<A, P, H, E, R> {
+impl<S, A: Clone, P, H: Clone, E: Clone, R: Clone> Layer<S> for SecurityLayer<A, P, H, E, R> {
     type Service = SecurityService<S, A, P, H, E, R>;
 
     fn layer(&self, inner: S) -> Self::Service {
@@ -198,7 +202,9 @@ pub struct SecurityService<
     layer: SecurityLayer<A, P, H, E, R>,
 }
 
-impl<S: Clone, A, P, H: Clone, E, R> Clone for SecurityService<S, A, P, H, E, R> {
+impl<S: Clone, A: Clone, P, H: Clone, E: Clone, R: Clone> Clone
+    for SecurityService<S, A, P, H, E, R>
+{
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
@@ -215,12 +221,12 @@ where
     S::Error: Send + 'static,
     ReqBody: Send + 'static,
     ResBody: 'static,
-    R: SecurityResponseAdapter<ResBody> + Send + Sync + 'static,
-    A: RequestAuthenticator + 'static,
+    R: SecurityResponseAdapter<ResBody> + Clone + Send + Sync + 'static,
+    A: RequestAuthenticator + Clone + 'static,
     P: AuthorizationProvider<Authentication = A::Authentication> + 'static,
     P::Error: 'static,
     H: AuthorizationFailureHandler<P::Error>,
-    E: AuthenticationEntryPoint,
+    E: AuthenticationEntryPoint + Clone,
 {
     type Response = Response<ResBody>;
     type Error = S::Error;

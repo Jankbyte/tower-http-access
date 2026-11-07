@@ -51,7 +51,7 @@ async fn resolves_current_identity_and_distinguishes_anonymous_from_errors() {
                 get(|Authenticated(user): Authenticated<String>| async move { user }),
             )
             .layer(SecurityLayer::new(
-                SessionRequestAuthenticator::new(Users).with_session_key("account"),
+                Arc::new(SessionRequestAuthenticator::new(Users).with_session_key("account")),
                 AuthenticatedAuthorizationProvider::<String>::new(),
             ));
         let mut request = Request::new(Body::empty());
@@ -99,7 +99,7 @@ async fn cookie_session_round_trip_and_logout() {
     let app = Router::new()
         .route("/", get(|| async { "allowed" }))
         .layer(SecurityLayer::new(
-            SessionRequestAuthenticator::new(Users),
+            Arc::new(SessionRequestAuthenticator::new(Users)),
             AuthenticatedAuthorizationProvider::<String>::new(),
         ))
         .layer(SessionManagerLayer::new(store.as_ref().clone()).with_secure(false));

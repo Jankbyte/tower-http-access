@@ -59,6 +59,7 @@ struct User {
     username: String,
 }
 
+#[derive(Clone)]
 struct UserApiKeyRepository {
     inner: Arc<RwLock<HashMap<String, User>>>,
 }
@@ -70,6 +71,7 @@ impl UserApiKeyRepository {
     }
 }
 
+#[derive(Clone)]
 struct ApiKeyRequestAuthenticator {
     repository: UserApiKeyRepository,
 }
