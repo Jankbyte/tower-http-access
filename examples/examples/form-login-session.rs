@@ -109,8 +109,8 @@ async fn create_app() -> Result<Router, Box<dyn std::error::Error + Send + Sync>
         .any_request()
         .deny_all()
         .build()?;
-    let basic_security =
-        SecurityLayer::new(Arc::clone(&basic), basic_authorizer).authentication_entry_point(basic);
+    let basic_security = SecurityLayer::new(Arc::clone(&basic), Arc::new(basic_authorizer))
+        .authentication_entry_point(basic);
     let state = Arc::new(LoginState { credentials });
     let authorizer = RequestAuthorizationProvider::<UserDetail>::builder()
         .request_matchers("/")
@@ -131,7 +131,7 @@ async fn create_app() -> Result<Router, Box<dyn std::error::Error + Send + Sync>
             Arc::clone(&session_authenticator),
         )
         .fallback(DefaultAuthenticationEntryPoint);
-    let security = SecurityLayer::new(session_authenticator, authorizer)
+    let security = SecurityLayer::new(session_authenticator, Arc::new(authorizer))
         .authentication_entry_point(entry_point);
     // These layers run only when the browser chain is selected.
     let browser_stack = tower::ServiceBuilder::new()

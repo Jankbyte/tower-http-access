@@ -542,7 +542,7 @@ impl AuthorizationProvider for UnreachableProvider {
 fn custom_denial_chain() -> impl AuthorizationProvider<
     Authentication = String,
     Error = crate::authorization::AllAuthorizationError,
-> + Clone {
+> {
     crate::authorization::AllAuthorizationProvider::builder()
         .with(CustomDenialProvider)
         .with(UnreachableProvider)
@@ -565,7 +565,7 @@ async fn custom_denial_survives_composition_and_default_failure_handlers() {
                 .layer(raw.clone()),
         ),
         BoxCloneService::new(
-            SecurityLayer::new(TokenAuthenticator, custom_denial_chain())
+            SecurityLayer::new(TokenAuthenticator, Arc::new(custom_denial_chain()))
                 .authentication_entry_point(entry_point)
                 .layer(raw),
         ),

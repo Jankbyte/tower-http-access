@@ -1,7 +1,6 @@
 use super::{AuthorizationDecision, AuthorizationProvider};
 use futures_util::future::BoxFuture;
 use http::request::Parts;
-use std::sync::Arc;
 
 /// Error returned by a provider in an all-of authorization chain.
 ///
@@ -72,7 +71,7 @@ where
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 pub struct AllAuthorizationProvider<A> {
-    providers: Arc<[Provider<A>]>,
+    providers: Vec<Provider<A>>,
 }
 
 impl<A> AllAuthorizationProvider<A> {
@@ -106,7 +105,7 @@ impl<A> AllAuthorizationProviderBuilder<A> {
             return Err(EmptyAuthorizationProviders);
         }
         Ok(AllAuthorizationProvider {
-            providers: self.providers.into(),
+            providers: self.providers,
         })
     }
 }
@@ -135,11 +134,3 @@ impl<A: Send + Sync> AuthorizationProvider for AllAuthorizationProvider<A> {
 #[cfg(all(test, feature = "split_auth"))]
 #[path = "all_tests.rs"]
 mod tests;
-
-impl<A> Clone for AllAuthorizationProvider<A> {
-    fn clone(&self) -> Self {
-        Self {
-            providers: Arc::clone(&self.providers),
-        }
-    }
-}

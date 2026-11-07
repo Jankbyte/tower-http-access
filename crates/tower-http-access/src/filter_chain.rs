@@ -199,7 +199,7 @@ where
 {
     type Response = Response<R>;
     type Error = E;
-    type Future = BoxFuture<'static, Result<Self::Response, E>>;
+    type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&mut self, _: &mut Context<'_>) -> Poll<Result<(), E>> {
         Poll::Ready(Ok(()))

@@ -56,7 +56,7 @@ async fn create_app() -> Router {
     let basic_authenticator = Arc::new(create_basic_authenticator().await);
     let authorizer = create_authorizer();
 
-    let security_layer = SecurityLayer::new(Arc::clone(&basic_authenticator), authorizer)
+    let security_layer = SecurityLayer::new(Arc::clone(&basic_authenticator), Arc::new(authorizer))
         .authentication_entry_point(basic_authenticator);
 
     let notes_api = Router::new()

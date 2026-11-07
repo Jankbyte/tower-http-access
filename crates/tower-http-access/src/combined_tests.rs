@@ -312,11 +312,12 @@ async fn supports_composed_and_mapped_authorizers_and_propagates_inner_errors() 
         )
         .build()
         .unwrap();
-    let mut service = SecurityLayer::new(Authenticator { outcome: 1 }, authorizer).layer(Inner {
-        ready: false,
-        calls: Arc::new(AtomicUsize::new(0)),
-        fail: true,
-    });
+    let mut service =
+        SecurityLayer::new(Authenticator { outcome: 1 }, Arc::new(authorizer)).layer(Inner {
+            ready: false,
+            calls: Arc::new(AtomicUsize::new(0)),
+            fail: true,
+        });
     assert_eq!(
         execute(&mut service, request())
             .await
@@ -418,10 +419,4 @@ fn providers_clone_without_requiring_clone_identities() {
         Identity,
     >::new("read"));
     assert_clone(&AuthenticatedAuthorizationProvider::<usize>::new().map(|_: &Identity| 1));
-    assert_clone(
-        &AllAuthorizationProvider::<Identity>::builder()
-            .with(AuthenticatedAuthorizationProvider::<Identity>::new())
-            .build()
-            .unwrap(),
-    );
 }

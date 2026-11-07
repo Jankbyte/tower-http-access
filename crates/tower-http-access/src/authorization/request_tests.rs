@@ -629,7 +629,10 @@ async fn string_request_rules_integrate_with_combined_layer_without_basic_authen
                 |Authenticated(identity): Authenticated<String>| async move { identity },
             ),
         )
-        .layer(SecurityLayer::new(authenticator, rules));
+        .layer(SecurityLayer::new(
+            authenticator,
+            std::sync::Arc::new(rules),
+        ));
     let response = app.call(Request::new(Body::empty())).await.unwrap();
     assert_eq!(
         to_bytes(response.into_body(), usize::MAX).await.unwrap(),

@@ -74,7 +74,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         .deny_all()
         .build()?;
 
-    let security = SecurityLayer::new(Arc::clone(&authenticator), rules)
+    let security = SecurityLayer::new(Arc::clone(&authenticator), Arc::new(rules))
         .authentication_entry_point(authenticator);
 
     let app = Router::new()
