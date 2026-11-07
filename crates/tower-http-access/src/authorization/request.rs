@@ -36,7 +36,7 @@
 
 use futures_util::future::BoxFuture;
 use http::{Method, request::Parts};
-use std::marker::PhantomData;
+use std::{marker::PhantomData, sync::Arc};
 
 use super::{
     AllAuthoritiesAuthorizationProvider, AnyAuthorityAuthorizationProvider,
@@ -102,7 +102,7 @@ struct Rule<A> {
 ///
 /// It has *O(n)* complexity while iteration per matching rules.
 pub struct RequestAuthorizationProvider<A> {
-    rules: Vec<Rule<A>>,
+    rules: Arc<[Rule<A>]>,
     identity: PhantomData<fn() -> A>,
 }
 
@@ -224,9 +224,9 @@ impl<A> RequestAuthorizationBuilder<A> {
                     provider,
                 })
             })
-            .collect::<Result<_, InvalidRequestPattern>>()?;
+            .collect::<Result<Vec<_>, InvalidRequestPattern>>()?;
         Ok(RequestAuthorizationProvider {
-            rules,
+            rules: rules.into(),
             identity: PhantomData,
         })
     }
@@ -326,3 +326,12 @@ impl<A: Send + Sync> AuthorizationProvider for RequestAuthorizationProvider<A> {
 #[cfg(test)]
 #[path = "request_tests.rs"]
 mod tests;
+
+impl<A> Clone for RequestAuthorizationProvider<A> {
+    fn clone(&self) -> Self {
+        Self {
+            rules: Arc::clone(&self.rules),
+            identity: PhantomData,
+        }
+    }
+}

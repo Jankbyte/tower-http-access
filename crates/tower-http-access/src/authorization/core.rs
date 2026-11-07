@@ -59,6 +59,20 @@ pub trait AuthorizationProvider: Send + Sync {
     ) -> Pin<Box<dyn Future<Output = Result<AuthorizationDecision, Self::Error>> + Send + 'a>>;
 }
 
+/// Forwards authorization to a shared provider, including trait objects.
+impl<P: AuthorizationProvider + ?Sized> AuthorizationProvider for Arc<P> {
+    type Authentication = P::Authentication;
+    type Error = P::Error;
+
+    fn authorize<'a>(
+        &'a self,
+        authentication: Option<&'a Self::Authentication>,
+        request: &'a Parts,
+    ) -> BoxFuture<'a, Result<AuthorizationDecision, Self::Error>> {
+        self.as_ref().authorize(authentication, request)
+    }
+}
+
 /// Adapters for authorization providers.
 pub trait AuthorizationProviderExt: AuthorizationProvider + Sized {
     /// Convert an authenticated identity before passing it to this provider.
@@ -135,6 +149,16 @@ pub struct MapAuthorization<P, F, A> {
     inner: P,
     mapper: F,
     authentication: PhantomData<fn() -> A>,
+}
+
+impl<P: Clone, F: Clone, A> Clone for MapAuthorization<P, F, A> {
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+            mapper: self.mapper.clone(),
+            authentication: PhantomData,
+        }
+    }
 }
 
 impl<P, F, A> AuthorizationProvider for MapAuthorization<P, F, A>

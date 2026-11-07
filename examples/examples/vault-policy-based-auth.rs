@@ -132,6 +132,7 @@ impl RequestAuthenticator for TokenAuthenticator {
     }
 }
 
+#[derive(Clone)]
 struct ZoneAuthorizer(Arc<PolicyStore>);
 
 impl AuthorizationProvider for ZoneAuthorizer {

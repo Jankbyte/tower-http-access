@@ -3,8 +3,13 @@ use http::request::Parts;
 use std::sync::Arc;
 
 /// Wrapper for [`RequestMatcher`], for sharing between multiple components.
-#[derive(Clone)]
 pub struct SharedRequestMatcher<T>(Arc<T>);
+
+impl<T> Clone for SharedRequestMatcher<T> {
+    fn clone(&self) -> Self {
+        Self(Arc::clone(&self.0))
+    }
+}
 
 impl<T> SharedRequestMatcher<T> {
     pub fn new(value: T) -> Self

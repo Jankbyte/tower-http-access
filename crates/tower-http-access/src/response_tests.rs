@@ -69,6 +69,7 @@ impl RequestAuthenticator for TokenAuthenticator {
     }
 }
 
+#[derive(Clone)]
 struct DenyProvider(bool);
 
 impl AuthorizationProvider for DenyProvider {
@@ -501,6 +502,7 @@ async fn custom_adapter_is_bypassed_for_successful_inner_responses() {
     assert_eq!(adapter_calls.load(Ordering::SeqCst), 0);
 }
 
+#[derive(Clone)]
 struct CustomDenialProvider;
 
 impl AuthorizationProvider for CustomDenialProvider {
@@ -540,7 +542,7 @@ impl AuthorizationProvider for UnreachableProvider {
 fn custom_denial_chain() -> impl AuthorizationProvider<
     Authentication = String,
     Error = crate::authorization::AllAuthorizationError,
-> {
+> + Clone {
     crate::authorization::AllAuthorizationProvider::builder()
         .with(CustomDenialProvider)
         .with(UnreachableProvider)

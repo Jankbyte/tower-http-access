@@ -17,7 +17,10 @@ use axum::{
 use std::{
     future::{poll_fn, ready},
     io,
-    sync::atomic::{AtomicUsize, Ordering},
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
 };
 
 #[derive(Clone)]
@@ -149,15 +152,14 @@ async fn execute<S: Service<Request>>(
 #[tokio::test]
 async fn passes_identity_directly_and_preserves_body_for_handler() {
     let calls = Arc::new(AtomicUsize::new(0));
-    let layer = SecurityLayer::new(
-        Authenticator { outcome: 1 },
-        Authorizer {
+    let authorizer: Arc<dyn AuthorizationProvider<Authentication = String, Error = io::Error>> =
+        Arc::new(Authorizer {
             identity: Some("alex"),
             outcome: 0,
             calls: Arc::clone(&calls),
-        },
-    );
-    // The authorizer does not implement Clone; its Arc is shared across clones.
+        });
+    let layer = SecurityLayer::new(Authenticator { outcome: 1 }, authorizer);
+    // The explicitly shared authorizer does not implement Clone.
     let mut service = layer
         .clone()
         .layer(Inner {
@@ -179,11 +181,11 @@ async fn passes_identity_directly_and_preserves_body_for_handler() {
 async fn anonymous_request_can_be_allowed_without_inserting_identity() {
     let layer = SecurityLayer::new(
         Authenticator { outcome: 0 },
-        Authorizer {
+        Arc::new(Authorizer {
             identity: None,
             outcome: 0,
             calls: Arc::new(AtomicUsize::new(0)),
-        },
+        }),
     );
     let mut service = layer.layer(Inner {
         ready: false,
@@ -202,11 +204,11 @@ async fn authentication_failure_skips_authorization_and_inner_service() {
     let calls = Arc::new(AtomicUsize::new(0));
     let mut service = SecurityLayer::new(
         Authenticator { outcome: 2 },
-        Authorizer {
+        Arc::new(Authorizer {
             identity: None,
             outcome: 0,
             calls: Arc::clone(&calls),
-        },
+        }),
     )
     .layer(Inner {
         ready: false,
@@ -232,11 +234,11 @@ async fn authorization_failures_use_default_responses_without_calling_inner() {
         let inner_calls = Arc::new(AtomicUsize::new(0));
         let mut service = SecurityLayer::new(
             Authenticator { outcome: 0 },
-            Authorizer {
+            Arc::new(Authorizer {
                 identity: None,
                 outcome,
                 calls: Arc::new(AtomicUsize::new(0)),
-            },
+            }),
         )
         .layer(Inner {
             ready: false,
@@ -256,11 +258,11 @@ async fn custom_failure_handlers_receive_request_and_original_failure() {
     for outcome in 1..=3 {
         let mut service = SecurityLayer::new(
             Authenticator { outcome: 0 },
-            Authorizer {
+            Arc::new(Authorizer {
                 identity: None,
                 outcome,
                 calls: Arc::new(AtomicUsize::new(0)),
-            },
+            }),
         )
         .authentication_entry_point(|request: &Parts| {
             assert_eq!(request.uri.path(), "/notes");
@@ -345,11 +347,11 @@ async fn accepts_shared_authenticator() {
     let calls = Arc::new(AtomicUsize::new(0));
     let mut service = SecurityLayer::new(
         Arc::clone(&authenticator),
-        Authorizer {
+        Arc::new(Authorizer {
             identity: Some("alex"),
             outcome: 0,
             calls: Arc::clone(&calls),
-        },
+        }),
     )
     .layer(Inner {
         ready: false,
@@ -387,11 +389,11 @@ async fn delegates_to_next_authenticator_and_preserves_request_mutations() {
     let calls = Arc::new(AtomicUsize::new(0));
     let mut service = SecurityLayer::new(
         authenticators,
-        Authorizer {
+        Arc::new(Authorizer {
             identity: Some("alex"),
             outcome: 0,
             calls: Arc::clone(&calls),
-        },
+        }),
     )
     .layer(Inner {
         ready: false,
@@ -405,4 +407,21 @@ async fn delegates_to_next_authenticator_and_preserves_request_mutations() {
         "alex:payload"
     );
     assert_eq!(calls.load(Ordering::SeqCst), 2);
+}
+
+#[test]
+fn providers_clone_without_requiring_clone_identities() {
+    struct Identity;
+    fn assert_clone<T: Clone>(_: &T) {}
+    assert_clone(&AuthenticatedAuthorizationProvider::<Identity>::new());
+    assert_clone(&crate::authorization::AuthorityAuthorizationProvider::<
+        Identity,
+    >::new("read"));
+    assert_clone(&AuthenticatedAuthorizationProvider::<usize>::new().map(|_: &Identity| 1));
+    assert_clone(
+        &AllAuthorizationProvider::<Identity>::builder()
+            .with(AuthenticatedAuthorizationProvider::<Identity>::new())
+            .build()
+            .unwrap(),
+    );
 }

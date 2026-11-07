@@ -11,10 +11,7 @@ use crate::{
 };
 use futures_util::future::BoxFuture;
 use http::{Request, Response};
-use std::{
-    sync::Arc,
-    task::{Context, Poll},
-};
+use std::task::{Context, Poll};
 use tower_layer::Layer;
 use tower_service::Service;
 
@@ -26,9 +23,9 @@ use tower_service::Service;
 /// [`Self::response_adapter`] to support other body types or response protocols.
 /// Only security-generated responses are converted.
 ///
-/// The authenticator, entry point, response adapter, and failure handler are cloned for
-/// each service and request. Use `Arc` for shared authenticators or entry points that do
-/// not implement `Clone`. The authorizer is shared internally through `Arc`.
+/// The authenticator, authorizer, entry point, response adapter, and failure handler are
+/// cloned for each service and request. Use `Arc` for shared authenticators, authorizers,
+/// or entry points that do not implement `Clone`.
 /// For Axum this conversion uses `axum::body::Body::from`; other Tower services can use `Bytes`,
 /// `http_body_util::Full<Bytes>`, or an application body wrapper implementing `From<Bytes>`.
 /// Entry points and failure handlers borrow request parts and return [`crate::SecurityResponse`].
@@ -81,7 +78,7 @@ pub struct SecurityLayer<
     R = DefaultSecurityResponseAdapter,
 > {
     authenticator: A,
-    authorizer: Arc<P>,
+    authorizer: P,
     failure_handler: H,
     authentication_entry_point: E,
     response_adapter: R,
@@ -96,7 +93,7 @@ where
     pub fn new(authenticator: A, authorizer: P) -> Self {
         Self {
             authenticator,
-            authorizer: Arc::new(authorizer),
+            authorizer,
             failure_handler: DefaultAuthorizationFailureHandler,
             authentication_entry_point: DefaultAuthenticationEntryPoint,
             response_adapter: DefaultSecurityResponseAdapter,
@@ -166,11 +163,11 @@ impl<A, P, H, E, R> SecurityLayer<A, P, H, E, R> {
     }
 }
 
-impl<A: Clone, P, H: Clone, E: Clone, R: Clone> Clone for SecurityLayer<A, P, H, E, R> {
+impl<A: Clone, P: Clone, H: Clone, E: Clone, R: Clone> Clone for SecurityLayer<A, P, H, E, R> {
     fn clone(&self) -> Self {
         Self {
             authenticator: self.authenticator.clone(),
-            authorizer: Arc::clone(&self.authorizer),
+            authorizer: self.authorizer.clone(),
             failure_handler: self.failure_handler.clone(),
             authentication_entry_point: self.authentication_entry_point.clone(),
             response_adapter: self.response_adapter.clone(),
@@ -178,7 +175,9 @@ impl<A: Clone, P, H: Clone, E: Clone, R: Clone> Clone for SecurityLayer<A, P, H,
     }
 }
 
-impl<S, A: Clone, P, H: Clone, E: Clone, R: Clone> Layer<S> for SecurityLayer<A, P, H, E, R> {
+impl<S, A: Clone, P: Clone, H: Clone, E: Clone, R: Clone> Layer<S>
+    for SecurityLayer<A, P, H, E, R>
+{
     type Service = SecurityService<S, A, P, H, E, R>;
 
     fn layer(&self, inner: S) -> Self::Service {
@@ -202,7 +201,7 @@ pub struct SecurityService<
     layer: SecurityLayer<A, P, H, E, R>,
 }
 
-impl<S: Clone, A: Clone, P, H: Clone, E: Clone, R: Clone> Clone
+impl<S: Clone, A: Clone, P: Clone, H: Clone, E: Clone, R: Clone> Clone
     for SecurityService<S, A, P, H, E, R>
 {
     fn clone(&self) -> Self {
@@ -223,7 +222,7 @@ where
     ResBody: 'static,
     R: SecurityResponseAdapter<ResBody> + Clone + Send + Sync + 'static,
     A: RequestAuthenticator + Clone + 'static,
-    P: AuthorizationProvider<Authentication = A::Authentication> + 'static,
+    P: AuthorizationProvider<Authentication = A::Authentication> + Clone + 'static,
     P::Error: 'static,
     H: AuthorizationFailureHandler<P::Error>,
     E: AuthenticationEntryPoint + Clone,

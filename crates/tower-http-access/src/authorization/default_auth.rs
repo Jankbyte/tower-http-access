@@ -112,3 +112,21 @@ impl<A: Send + Sync> AuthorizationProvider for DenyAllAuthorizationProvider<A> {
         Box::pin(async move { Ok(denied(authentication)) })
     }
 }
+
+impl<A> Clone for AuthenticatedAuthorizationProvider<A> {
+    fn clone(&self) -> Self {
+        Self::new()
+    }
+}
+
+impl<A> Clone for PermitAllAuthorizationProvider<A> {
+    fn clone(&self) -> Self {
+        Self::new()
+    }
+}
+
+impl<A> Clone for DenyAllAuthorizationProvider<A> {
+    fn clone(&self) -> Self {
+        Self::new()
+    }
+}

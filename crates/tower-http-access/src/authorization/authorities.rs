@@ -146,3 +146,30 @@ impl<A: HasAuthorities + Send + Sync> AuthorizationProvider
 #[cfg(test)]
 #[path = "authorities_tests.rs"]
 mod tests;
+
+impl<A> Clone for AuthorityAuthorizationProvider<A> {
+    fn clone(&self) -> Self {
+        Self {
+            authority: self.authority.clone(),
+            identity: PhantomData,
+        }
+    }
+}
+
+impl<A> Clone for AnyAuthorityAuthorizationProvider<A> {
+    fn clone(&self) -> Self {
+        Self {
+            authorities: self.authorities.clone(),
+            identity: PhantomData,
+        }
+    }
+}
+
+impl<A> Clone for AllAuthoritiesAuthorizationProvider<A> {
+    fn clone(&self) -> Self {
+        Self {
+            authorities: self.authorities.clone(),
+            identity: PhantomData,
+        }
+    }
+}
