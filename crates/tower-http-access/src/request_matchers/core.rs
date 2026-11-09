@@ -15,3 +15,12 @@ use http::request::Parts;
 pub trait RequestMatcher: Send + Sync {
     fn matches(&self, request: &Parts) -> bool;
 }
+
+impl<T> RequestMatcher for std::sync::Arc<T>
+where
+    T: RequestMatcher,
+{
+    fn matches(&self, request: &Parts) -> bool {
+        T::matches(self, request)
+    }
+}

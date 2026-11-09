@@ -17,6 +17,3 @@ pub use or::OrRequestMatcher;
 
 mod path_pattern;
 pub use path_pattern::{InvalidRequestPattern, PathPatternRequestMatcher};
-
-mod shared;
-pub use shared::SharedRequestMatcher;
