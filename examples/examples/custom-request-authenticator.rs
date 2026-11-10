@@ -14,14 +14,13 @@ use axum::{Router, http::request::Parts, routing::get};
 use futures_util::future::BoxFuture;
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::RwLock;
-use tower_http_access::{
-    SecurityLayer,
-    authentication::{
-        Authenticated, AuthenticationAttempt, AuthenticationErrorReason, AuthenticatorError,
-        RequestAuthenticator,
-    },
-    authorization::AuthenticatedAuthorizationProvider,
-};
+use tower_http_access_core::SecurityLayer;
+use tower_http_access_core::authentication::Authenticated;
+use tower_http_access_core::authentication::AuthenticationAttempt;
+use tower_http_access_core::authentication::AuthenticationErrorReason;
+use tower_http_access_core::authentication::AuthenticatorError;
+use tower_http_access_core::authentication::RequestAuthenticator;
+use tower_http_access_core::authorization::default_auth::AuthenticatedAuthorizationProvider;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -81,7 +80,7 @@ impl RequestAuthenticator for ApiKeyRequestAuthenticator {
 
     fn authenticate<'a>(
         &'a self,
-        parts: &'a mut Parts,
+        parts: &'a Parts,
     ) -> BoxFuture<'a, Result<AuthenticationAttempt<User>, AuthenticatorError>> {
         Box::pin(async move {
             let Some(header) = parts.headers.get("api-key") else {

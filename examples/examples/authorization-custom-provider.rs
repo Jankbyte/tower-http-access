@@ -19,10 +19,13 @@ use std::{
     convert::Infallible,
     net::{IpAddr, Ipv4Addr, SocketAddr},
 };
-use tower_http_access::SecurityResponse;
-use tower_http_access::authorization::{
-    AuthorizationDecision, AuthorizationDenial, AuthorizationLayer, AuthorizationProvider,
-    PendingRuleBuilder, RequestAuthorizationBuilder, RequestAuthorizationProvider,
+use tower_http_access_core::{
+    SecurityResponse,
+    authorization::{
+        auth_tower::AuthorizationLayer,
+        core::{AuthorizationDecision, AuthorizationDenial, AuthorizationProvider},
+        request::{PendingRuleBuilder, RequestAuthorizationBuilder, RequestAuthorizationProvider},
+    },
 };
 
 #[tokio::main(flavor = "current_thread")]

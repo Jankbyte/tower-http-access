@@ -1,6 +1,8 @@
 use super::*;
 use axum::{body::Body, extract::Request, http::header::AUTHORIZATION};
+use futures_util::future::BoxFuture;
 use std::convert::Infallible;
+use user_password_auth::Credentials;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct CustomIdentity(String);
@@ -13,7 +15,7 @@ impl UsernamePasswordAuthenticationProvider for CustomProvider {
 
     fn authenticate<'a>(
         &'a self,
-        credentials: &'a BasicCredentials,
+        credentials: &'a Credentials,
     ) -> BoxFuture<'a, Result<Option<Self::Authentication>, Self::Error>> {
         Box::pin(async move {
             Ok(
@@ -34,9 +36,9 @@ fn request(authorization: &str) -> Request {
 #[tokio::test]
 async fn basic_authenticator_returns_provider_identity_type() {
     let authenticator = BasicRequestAuthenticator::new(CustomProvider);
-    let (mut parts, _) = request("Basic YWxleDphbGV4MTIz").into_parts();
+    let (parts, _) = request("Basic YWxleDphbGV4MTIz").into_parts();
 
-    let result = authenticator.authenticate(&mut parts).await.unwrap();
+    let result = authenticator.authenticate(&parts).await.unwrap();
 
     assert_eq!(
         result,
@@ -47,9 +49,9 @@ async fn basic_authenticator_returns_provider_identity_type() {
 #[tokio::test]
 async fn basic_authenticator_invalid_credentials_return_basic_challenge() {
     let authenticator = BasicRequestAuthenticator::new(CustomProvider);
-    let (mut parts, _) = request("Basic YWxleDpiYWQ=").into_parts();
+    let (parts, _) = request("Basic YWxleDpiYWQ=").into_parts();
 
-    let error = authenticator.authenticate(&mut parts).await.unwrap_err();
+    let error = authenticator.authenticate(&parts).await.unwrap_err();
     let response = error.into_security_response();
 
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
@@ -62,9 +64,9 @@ async fn basic_authenticator_invalid_credentials_return_basic_challenge() {
 #[tokio::test]
 async fn basic_authenticator_other_scheme_is_not_applicable() {
     let authenticator = BasicRequestAuthenticator::new(CustomProvider);
-    let (mut parts, _) = request("Bearer token").into_parts();
+    let (parts, _) = request("Bearer token").into_parts();
 
-    let result = authenticator.authenticate(&mut parts).await.unwrap();
+    let result = authenticator.authenticate(&parts).await.unwrap();
 
     assert_eq!(result, AuthenticationAttempt::NotApplicable);
 }
@@ -95,9 +97,9 @@ fn basic_entry_point_uses_configured_realm() {
 async fn basic_authenticator_uses_configured_realm_for_invalid_and_malformed_credentials() {
     let authenticator = BasicRequestAuthenticator::with_realm(CustomProvider, "Notes API");
     for authorization in ["Basic YWxleDpiYWQ=", "Basic !!!"] {
-        let (mut parts, _) = request(authorization).into_parts();
+        let (parts, _) = request(authorization).into_parts();
         let response = authenticator
-            .authenticate(&mut parts)
+            .authenticate(&parts)
             .await
             .unwrap_err()
             .into_security_response();

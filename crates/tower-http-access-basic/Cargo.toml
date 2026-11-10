@@ -5,32 +5,33 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "HTTP Basic authentication and password helpers for Tower HTTP Access"
+description = "HTTP Basic authentication for Tower HTTP Access"
 documentation = "https://docs.rs/tower-http-access-basic"
 readme = "README.md"
 keywords = ["authentication", "basic", "middleware", "tower"]
 categories = ["authentication", "web-programming::http-server"]
 
 [dependencies]
-tower-http-access = { version = "0.0.1", path = "../tower-http-access", default-features = false }
+user-password-auth = { version = "0.0.1", path = "../user-password-auth" }
+tower-http-access-core = { version = "0.0.1", path = "../tower-http-access-core", default-features = false }
 bytes.workspace = true
 http.workspace = true
 futures-util = { workspace = true, features = ["alloc"] }
 base64.workspace = true
-password-hash = { workspace = true, features = ["getrandom", "phc"] }
-tokio = { workspace = true, features = ["rt", "sync"] }
 thiserror.workspace = true
 tracing = { workspace = true, optional = true }
 
 [dev-dependencies]
+http-request-matcher = { version = "0.0.1", path = "../http-request-matcher" }
+user-password-auth = { path = "../user-password-auth", features = ["user_details"] }
 argon2.workspace = true
 tower = { workspace = true, features = ["util"] }
 axum.workspace = true
-tower-http-access = { path = "../tower-http-access", features = ["axum", "request_matcher"] }
+tower-http-access-core = { path = "../tower-http-access-core", features = ["axum", "request_matcher", "user_password_auth"] }
 tokio = { workspace = true, features = ["full"] }
 
 [features]
-tracing = ["dep:tracing"]
+tracing = ["dep:tracing", "user-password-auth/tracing"]
 
 [package.metadata.docs.rs]
 all-features = true

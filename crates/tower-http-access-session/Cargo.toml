@@ -11,7 +11,15 @@ keywords = ["authentication", "session", "middleware", "tower"]
 categories = ["authentication", "web-programming::http-server"]
 
 [dependencies]
-tower-http-access = { version = "0.0.1", path = "../tower-http-access", default-features = false }
+http-request-matcher = { version = "0.0.1", path = "../http-request-matcher", optional = true }
+user-password-auth = { version = "0.0.1", path = "../user-password-auth", optional = true }
+bytes = { workspace = true, optional = true }
+http-body = { workspace = true, optional = true }
+http-body-util = { workspace = true, optional = true }
+tower-layer = { workspace = true, optional = true }
+tower-service = { workspace = true, optional = true }
+serde_urlencoded = { version = "0.7", optional = true }
+tower-http-access-core = { version = "0.0.1", path = "../tower-http-access-core", default-features = false }
 tower-sessions.workspace = true
 http.workspace = true
 serde.workspace = true
@@ -19,15 +27,16 @@ futures-util = { workspace = true, features = ["alloc"] }
 
 [dev-dependencies]
 tower-sessions = { workspace = true, features = ["memory-store", "axum-core"] }
-tower-http-access = { path = "../tower-http-access", features = ["axum"] }
+tower-http-access-core = { path = "../tower-http-access-core", features = ["axum"] }
 axum.workspace = true
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tower = { workspace = true, features = ["util"] }
 
 [features]
 default = []
-browser_matcher = ["tower-http-access/request_matcher", "session_matcher"]
-session_matcher = ["tower-http-access/request_matcher"]
+form_login_layer = ["dep:http-request-matcher", "dep:user-password-auth", "dep:bytes", "dep:http-body", "dep:http-body-util", "dep:tower-layer", "dep:tower-service", "dep:serde_urlencoded"]
+browser_matcher = ["dep:http-request-matcher", "session_matcher"]
+session_matcher = ["dep:http-request-matcher"]
 
 [package.metadata.docs.rs]
 all-features = true

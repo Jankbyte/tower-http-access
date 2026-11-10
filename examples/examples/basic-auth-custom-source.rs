@@ -7,13 +7,12 @@
 use axum::{Router, routing::get};
 use futures_util::future::BoxFuture;
 use std::sync::Arc;
-use tower_http_access::{
-    SecurityLayer, authentication::Authenticated, authorization::AuthenticatedAuthorizationProvider,
-};
+use tower_http_access_core::SecurityLayer;
+use tower_http_access_core::authentication::Authenticated;
+use tower_http_access_core::authorization::default_auth::AuthenticatedAuthorizationProvider;
 
-use tower_http_access_basic::{
-    BasicCredentials, BasicRequestAuthenticator, UsernamePasswordAuthenticationProvider,
-};
+use tower_http_access_basic::BasicRequestAuthenticator;
+use user_password_auth::{Credentials, UsernamePasswordAuthenticationProvider};
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -54,7 +53,7 @@ impl UsernamePasswordAuthenticationProvider for SingleUsernamePasswordProvider {
 
     fn authenticate<'a>(
         &'a self,
-        credentials: &'a BasicCredentials,
+        credentials: &'a Credentials,
     ) -> BoxFuture<'a, Result<Option<Self::Authentication>, Self::Error>> {
         Box::pin(async {
             if credentials.username == self.0 && credentials.password == self.1 {

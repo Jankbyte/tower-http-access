@@ -1,22 +1,7 @@
 use ::base64::{DecodeError, Engine, engine::general_purpose::STANDARD};
 use http::{header::AUTHORIZATION, request::Parts};
-use std::{fmt, str::Utf8Error};
-
-#[derive(Clone, Eq, PartialEq)]
-pub struct BasicCredentials {
-    pub username: String,
-    pub password: String,
-}
-
-impl fmt::Debug for BasicCredentials {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter
-            .debug_struct("BasicCredentials")
-            .field("username", &self.username)
-            .field("password", &"[REDACTED]")
-            .finish()
-    }
-}
+use std::str::Utf8Error;
+use user_password_auth::Credentials;
 
 #[derive(Debug, thiserror::Error)]
 pub enum BasicCredentialsError {
@@ -34,9 +19,7 @@ pub enum BasicCredentialsError {
 ///
 /// If request does not have `Authorization` header or header value does not starts with `Basic` schema,
 /// so [`Result`] with [`Option::None`] will return.
-pub fn extract_credentials(
-    parts: &Parts,
-) -> Result<Option<BasicCredentials>, BasicCredentialsError> {
+pub fn extract_credentials(parts: &Parts) -> Result<Option<Credentials>, BasicCredentialsError> {
     let Some(header) = parts.headers.get(AUTHORIZATION) else {
         return Ok(None);
     };
@@ -61,7 +44,7 @@ pub fn extract_credentials(
         .split_once(':')
         .ok_or(BasicCredentialsError::MissingSeparator)?;
 
-    Ok(Some(BasicCredentials {
+    Ok(Some(Credentials {
         username: username.to_owned(),
         password: password.to_owned(),
     }))

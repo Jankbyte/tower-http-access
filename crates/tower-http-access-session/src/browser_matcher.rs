@@ -1,7 +1,7 @@
 use http::request::Parts;
-use tower_http_access::request_matchers::{
-    MediaTypeRequestMatcher, OrRequestMatcher, RequestMatcher,
-};
+use http_request_matcher::MediaTypeRequestMatcher;
+use http_request_matcher::OrRequestMatcher;
+use http_request_matcher::RequestMatcher;
 
 use crate::SessionCookieRequestMatcher;
 

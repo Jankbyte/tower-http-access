@@ -4,16 +4,20 @@
 
 # Tower HTTP Access Basic
 
-HTTP Basic authentication and password helpers for Tower HTTP Access.
+HTTP Basic authentication for Tower HTTP Access.
+
+User details, credential providers, and password helpers live in the standalone
+`user-password-auth` crate and are imported directly from it. The shared credentials type is
+`Credentials`.
 
 [`BasicRequestAuthenticator`] reads Basic credentials from the request and passes them to
-[`UserDetailAuthenticationProvider`]. The provider loads a [`UserDetail`] through a
-[`UserDetailService`] and verifies the password. On success, the identity is passed to
+[`UserDetailAuthenticationProvider`](https://docs.rs/user-password-auth/latest/user_password_auth/struct.UserDetailAuthenticationProvider.html). The provider loads a [`UserDetail`](https://docs.rs/user-password-auth/latest/user_password_auth/struct.UserDetail.html) through a
+[`UserDetailService`](https://docs.rs/user-password-auth/latest/user_password_auth/trait.UserDetailService.html) and verifies the password. On success, the identity is passed to
 Tower HTTP Access for authorization and made available to handlers as
-[`Authenticated<UserDetail>`](tower_http_access::authentication::Authenticated).
+[`Authenticated<UserDetail>`](tower_http_access_core::authentication::Authenticated).
 
-[`InMemoryUserDetailService`] provides a simple user store. Implement [`UserDetailService`]
-to load users from your database. [`AsyncStringPasswordManager`] runs password hashing and
+[`InMemoryUserDetailService`](https://docs.rs/user-password-auth/latest/user_password_auth/struct.InMemoryUserDetailService.html) provides a simple user store. Implement [`UserDetailService`](https://docs.rs/user-password-auth/latest/user_password_auth/trait.UserDetailService.html)
+to load users from your database. [`AsyncStringPasswordManager`](https://docs.rs/user-password-auth/latest/user_password_auth/struct.AsyncStringPasswordManager.html) runs password hashing and
 verification on blocking workers with a configurable concurrency limit; supply a hashing
 implementation such as Argon2.
 
@@ -24,8 +28,9 @@ This Axum example allows public health checks and requires the `ReadNote` author
 ```toml
 [dependencies]
 axum = "0.8"
-tower-http-access = { version = "0.0.1", features = ["request_matcher"] }
+tower-http-access-core = { version = "0.0.1", features = ["request_matcher", "user_password_auth"] }
 tower-http-access-basic = "0.0.1"
+user-password-auth = { version = "0.0.1", features = ["user_details"] }
 argon2 = "0.6"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "net"] }
 ```
@@ -36,15 +41,11 @@ use std::{num::NonZeroUsize, sync::Arc};
 
 use argon2::Argon2;
 use axum::{Router, http::Method, routing::get};
-use tower_http_access::{
-    SecurityLayer,
-    authentication::Authenticated,
-    authorization::RequestAuthorizationProvider,
-};
-use tower_http_access_basic::{
-    AsyncStringPasswordManager, Authority, BasicRequestAuthenticator,
-    InMemoryUserDetailService, UserDetail, UserDetailAuthenticationProvider,
-};
+use tower_http_access_core::SecurityLayer;
+use tower_http_access_core::authentication::Authenticated;
+use tower_http_access_core::authorization::request::RequestAuthorizationProvider;
+use tower_http_access_basic::BasicRequestAuthenticator;
+use user_password_auth::{AsyncStringPasswordManager, Authority, InMemoryUserDetailService, UserDetail, UserDetailAuthenticationProvider};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {

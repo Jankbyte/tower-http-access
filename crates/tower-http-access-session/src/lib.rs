@@ -8,6 +8,10 @@ pub use authenticator::{
 mod stored_identity;
 pub use stored_identity::SessionStoredIdentity;
 
+/// Form login middleware and configurable authentication handlers.
+#[cfg(feature = "form_login_layer")]
+pub mod form_login;
+
 #[cfg(feature = "browser_matcher")]
 mod browser_matcher;
 #[cfg(feature = "browser_matcher")]

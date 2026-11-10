@@ -1,50 +1,14 @@
-use super::BasicCredentials;
 use super::base64::extract_credentials;
 use bytes::Bytes;
-use futures_util::future::BoxFuture;
 use http::{StatusCode, header, request::Parts};
-use std::{error::Error, future::Future, pin::Pin, sync::Arc};
-use tower_http_access::SecurityResponse;
-use tower_http_access::{
-    authentication::{
-        AuthenticationAttempt, AuthenticationErrorReason, AuthenticatorError, RequestAuthenticator,
-    },
-    authorization::AuthenticationEntryPoint,
-};
-
-/// Authenticates decoded username/password credentials.
-///
-/// `Ok(Some(authentication))` means the credentials are valid, `Ok(None)` means they are invalid,
-/// and `Err(error)` represents an internal backend failure.
-pub trait UsernamePasswordAuthenticationProvider: Send + Sync {
-    /// Identity produced by successful authentication.
-    type Authentication: Clone + Send + Sync + 'static;
-    /// Internal authentication backend error.
-    type Error: Error + Send + Sync + 'static;
-
-    fn authenticate<'a>(
-        &'a self,
-        credentials: &'a BasicCredentials,
-    ) -> BoxFuture<'a, Result<Option<Self::Authentication>, Self::Error>>;
-}
-
-/// Implementation for using with values that does not implement `Clone` or it's not cheap.
-impl<T> UsernamePasswordAuthenticationProvider for Arc<T>
-where
-    T: UsernamePasswordAuthenticationProvider,
-{
-    /// Identity produced by successful authentication.
-    type Authentication = T::Authentication;
-    /// Internal authentication backend error.
-    type Error = T::Error;
-
-    fn authenticate<'a>(
-        &'a self,
-        credentials: &'a BasicCredentials,
-    ) -> BoxFuture<'a, Result<Option<Self::Authentication>, Self::Error>> {
-        T::authenticate(self.as_ref(), credentials)
-    }
-}
+use std::{error::Error, future::Future, pin::Pin};
+use tower_http_access_core::SecurityResponse;
+use tower_http_access_core::authentication::AuthenticationAttempt;
+use tower_http_access_core::authentication::AuthenticationErrorReason;
+use tower_http_access_core::authentication::AuthenticatorError;
+use tower_http_access_core::authentication::RequestAuthenticator;
+use tower_http_access_core::authorization::core::AuthenticationEntryPoint;
+use user_password_auth::UsernamePasswordAuthenticationProvider;
 
 /// HTTP Basic authentication for Axum requests.
 ///
@@ -73,10 +37,8 @@ where
 /// ```no_run
 /// # mod example {
 /// use argon2::Argon2;
-/// use tower_http_access_basic::{
-///     Authority, AsyncStringPasswordManager, BasicRequestAuthenticator,
-///     InMemoryUserDetailService, UserDetail, UserDetailAuthenticationProvider,
-/// };
+/// use tower_http_access_basic::BasicRequestAuthenticator;
+/// use user_password_auth::{Authority, AsyncStringPasswordManager, InMemoryUserDetailService, UserDetail, UserDetailAuthenticationProvider};
 /// use std::num::NonZeroUsize;
 /// use tokio::runtime::Handle;
 ///
@@ -136,7 +98,7 @@ where
 
     fn authenticate<'a>(
         &'a self,
-        parts: &'a mut Parts,
+        parts: &'a Parts,
     ) -> Pin<
         Box<
             dyn Future<

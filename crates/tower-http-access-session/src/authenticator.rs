@@ -2,10 +2,11 @@ use futures_util::future::BoxFuture;
 use http::{HeaderValue, StatusCode, Uri, header, request::Parts};
 use serde::de::DeserializeOwned;
 use std::{error::Error, future::Future};
-use tower_http_access::authentication::{
+use tower_http_access_core::SecurityResponse;
+use tower_http_access_core::authentication::{
     AuthenticationAttempt, AuthenticationErrorReason, AuthenticatorError, RequestAuthenticator,
 };
-use tower_http_access::{SecurityResponse, authorization::AuthenticationEntryPoint};
+use tower_http_access_core::authorization::core::AuthenticationEntryPoint;
 use tower_sessions::Session;
 
 type SessionIdExtractor<Id> = dyn Fn(Session) -> BoxFuture<'static, Result<Option<Id>, tower_sessions::session::Error>>
@@ -173,7 +174,7 @@ impl<P: SessionIdentityProvider> RequestAuthenticator for SessionRequestAuthenti
 
     fn authenticate<'a>(
         &'a self,
-        parts: &'a mut Parts,
+        parts: &'a Parts,
     ) -> BoxFuture<'a, Result<AuthenticationAttempt<Self::Authentication>, AuthenticatorError>>
     {
         Box::pin(async move {

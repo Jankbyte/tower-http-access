@@ -31,7 +31,7 @@ fn extract_basic_scheme_case_insensitively_preserves_colons_in_password() {
 
     assert_eq!(
         result,
-        Some(BasicCredentials {
+        Some(Credentials {
             username: "alex".to_owned(),
             password: "secret:123".to_owned(),
         })

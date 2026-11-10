@@ -29,7 +29,7 @@ be observed.
 
 ```toml
 [dependencies]
-tower-http-access = "0.0.1"
+tower-http-access-core = "0.0.1"
 tower-http-access-session = "0.0.1"
 tower-sessions = { version = "0.15", features = ["memory-store"] }
 axum = "0.8"
@@ -40,8 +40,9 @@ futures-util = "0.3"
 use std::{convert::Infallible, sync::Arc};
 use axum::{Router, routing::get};
 use futures_util::future::BoxFuture;
-use tower_http_access::{SecurityLayer, authentication::Authenticated,
-    authorization::AuthenticatedAuthorizationProvider};
+use tower_http_access_core::SecurityLayer;
+use tower_http_access_core::authentication::Authenticated;
+use tower_http_access_core::authorization::default_auth::AuthenticatedAuthorizationProvider;
 use tower_http_access_session::{SessionIdentityProvider, SessionRequestAuthenticator};
 use tower_sessions::{MemoryStore, SessionManagerLayer};
 
@@ -165,7 +166,7 @@ Enable `browser_matcher` to use [`BrowserRequestMatcher`] with
 `SecurityChainLayer` (enable the core crate's `filter_chain` feature):
 
 ```toml
-tower-http-access = { version = "0.0.1", features = ["filter_chain"] }
+tower-http-access-core = { version = "0.0.1", features = ["filter_chain"] }
 tower-http-access-session = { version = "0.0.1", features = ["browser_matcher"] }
 ```
 
@@ -201,3 +202,22 @@ To redirect only HTML requests while returning 401 to REST clients, configure
 `DelegatingAuthenticationEntryPoint` with a `MediaTypeRequestMatcher` for
 `text/html`, ignoring `*/*` and `text/*`, and use
 `.fallback(DefaultAuthenticationEntryPoint)`. See the form-login example.
+
+## Form login
+
+Enable the `form_login_layer` feature to use
+`tower_http_access_session::form_login::{FormLoginLayer, SuccessHandler, FailureHandler}`.
+`FormLoginLayer` authenticates form submissions through a
+`UsernamePasswordAuthenticationProvider`. Configure request matching, credential
+field names, and response handling with `request_matcher` (for example, a `PathPatternRequestMatcher` with `with_method`), `username_parameter`,
+`password_parameter`, `on_success`, and `on_failure`.
+
+Both handler traits support custom structs and async closures. Success handlers
+own session persistence and the response; failure handlers receive `FormLoginError`.
+Place session middleware outside the layer when handlers need session access.
+
+The layer stores concrete provider, matcher, and handler types. These must implement
+`Clone` when applying the layer. Wrap components in `Arc` to share them; providers,
+matchers, and both handler traits support `Arc`, including trait objects. The default
+handlers are `DefaultSuccessHandler` (200) and `DefaultFailureHandler` (a status based
+on the failure). Builder methods infer replacement matcher and handler types.

@@ -8,15 +8,16 @@
 //! ```
 use axum::{Router, routing::method_routing::get};
 use std::sync::Arc;
-use tower_http_access::{
-    SecurityLayer,
-    authentication::{Authenticated, RequestAuthenticator},
-    authorization::{AuthenticationEntryPoint, PermitAllAuthorizationProvider},
-};
+use tower_http_access_core::SecurityLayer;
+use tower_http_access_core::authentication::Authenticated;
+use tower_http_access_core::authentication::RequestAuthenticator;
+use tower_http_access_core::authorization::core::AuthenticationEntryPoint;
+use tower_http_access_core::authorization::default_auth::PermitAllAuthorizationProvider;
 
-use tower_http_access_basic::{
-    Authority, BasicRequestAuthenticator, InMemoryUserDetailService, PlainHashPasswordManager,
-    UserDetail, UserDetailAuthenticationProvider,
+use tower_http_access_basic::BasicRequestAuthenticator;
+use user_password_auth::{
+    Authority, InMemoryUserDetailService, PlainHashPasswordManager, UserDetail,
+    UserDetailAuthenticationProvider,
 };
 
 #[tokio::main(flavor = "current_thread")]

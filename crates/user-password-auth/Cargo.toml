@@ -1,0 +1,30 @@
+[package]
+name = "user-password-auth"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Username/password authentication providers, user details, and password verification"
+readme = "README.md"
+keywords = ["authentication", "password", "credentials"]
+categories = ["authentication"]
+
+[dependencies]
+futures-util = { workspace = true, features = ["alloc"] }
+password-hash = { workspace = true, features = ["getrandom", "phc"] }
+tokio = { workspace = true, features = ["rt", "sync"] }
+thiserror.workspace = true
+tracing = { workspace = true, optional = true }
+
+[dev-dependencies]
+argon2.workspace = true
+tokio = { workspace = true, features = ["full"] }
+
+[features]
+default = []
+user_details = []
+tracing = ["dep:tracing"]
+
+[package.metadata.docs.rs]
+all-features = true

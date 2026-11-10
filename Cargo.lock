@@ -351,6 +351,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "http-request-matcher"
+version = "0.0.1"
+dependencies = [
+ "http",
+ "matchit",
+ "mime",
+ "thiserror",
+]
+
+[[package]]
 name = "httparse"
 version = "1.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -895,25 +905,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tower-http-access"
-version = "0.0.1"
-dependencies = [
- "axum",
- "bytes",
- "futures-util",
- "http",
- "http-body",
- "http-body-util",
- "matchit",
- "mime",
- "thiserror",
- "tokio",
- "tower",
- "tower-layer",
- "tower-service",
-]
-
-[[package]]
 name = "tower-http-access-basic"
 version = "0.0.1"
 dependencies = [
@@ -923,12 +914,32 @@ dependencies = [
  "bytes",
  "futures-util",
  "http",
- "password-hash",
+ "http-request-matcher",
  "thiserror",
  "tokio",
  "tower",
- "tower-http-access",
+ "tower-http-access-core",
  "tracing",
+ "user-password-auth",
+]
+
+[[package]]
+name = "tower-http-access-core"
+version = "0.0.1"
+dependencies = [
+ "axum",
+ "bytes",
+ "futures-util",
+ "http",
+ "http-body",
+ "http-body-util",
+ "http-request-matcher",
+ "thiserror",
+ "tokio",
+ "tower",
+ "tower-layer",
+ "tower-service",
+ "user-password-auth",
 ]
 
 [[package]]
@@ -938,16 +949,18 @@ dependencies = [
  "argon2",
  "axum",
  "futures-util",
+ "http-request-matcher",
  "serde",
  "serde_json",
  "tokio",
  "tower",
- "tower-http-access",
  "tower-http-access-basic",
+ "tower-http-access-core",
  "tower-http-access-session",
  "tower-sessions",
  "tracing",
  "tracing-subscriber",
+ "user-password-auth",
 ]
 
 [[package]]
@@ -955,13 +968,21 @@ name = "tower-http-access-session"
 version = "0.0.1"
 dependencies = [
  "axum",
+ "bytes",
  "futures-util",
  "http",
+ "http-body",
+ "http-body-util",
+ "http-request-matcher",
  "serde",
+ "serde_urlencoded",
  "tokio",
  "tower",
- "tower-http-access",
+ "tower-http-access-core",
+ "tower-layer",
+ "tower-service",
  "tower-sessions",
+ "user-password-auth",
 ]
 
 [[package]]
@@ -1096,6 +1117,18 @@ name = "unicode-ident"
 version = "1.0.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2c754d6c33795a1c324727428e5a7dedb5b06195f9890bdbcba760d3e246563"
+
+[[package]]
+name = "user-password-auth"
+version = "0.0.1"
+dependencies = [
+ "argon2",
+ "futures-util",
+ "password-hash",
+ "thiserror",
+ "tokio",
+ "tracing",
+]
 
 [[package]]
 name = "valuable"

@@ -14,28 +14,28 @@ use axum::{
     routing::get,
 };
 use futures_util::future::BoxFuture;
+use http_request_matcher::MediaTypeRequestMatcher;
+use http_request_matcher::RequestMatcher;
 use serde::Deserialize;
 use std::{num::NonZeroUsize, sync::Arc};
-use tower_http_access::{
-    SecurityChainLayer, SecurityLayer,
-    authentication::Authenticated,
-    authorization::{
-        DefaultAuthenticationEntryPoint, DelegatingAuthenticationEntryPoint,
-        RequestAuthorizationProvider,
-    },
-    request_matchers::{MediaTypeRequestMatcher, RequestMatcher},
-};
-use tower_http_access_basic::{
-    AsyncStringPasswordManager, BasicCredentials, BasicRequestAuthenticator,
-    InMemoryUserDetailService, UserDetail, UserDetailAuthenticationProvider, UserDetailService,
-    UserLoadingError, UsernamePasswordAuthenticationProvider,
-};
+use tower_http_access_basic::BasicRequestAuthenticator;
+use tower_http_access_core::SecurityLayer;
+use tower_http_access_core::authentication::Authenticated;
+use tower_http_access_core::authorization::core::DefaultAuthenticationEntryPoint;
+use tower_http_access_core::authorization::entry_point::DelegatingAuthenticationEntryPoint;
+use tower_http_access_core::authorization::request::RequestAuthorizationProvider;
+use tower_http_access_core::filter_chain::SecurityChainLayer;
 use tower_http_access_session::{
     BrowserRequestMatcher, SessionIdentityProvider, SessionRequestAuthenticator, initialize_session,
 };
 use tower_sessions::{
     Expiry, MemoryStore, Session, SessionManagerLayer,
     cookie::{SameSite, time::Duration},
+};
+use user_password_auth::{
+    AsyncStringPasswordManager, Credentials, InMemoryUserDetailService, UserDetail,
+    UserDetailAuthenticationProvider, UserDetailService, UserLoadingError,
+    UsernamePasswordAuthenticationProvider,
 };
 
 const ORIGIN: &str = "http://127.0.0.1:3000";
@@ -180,7 +180,7 @@ async fn login_form() -> Html<&'static str> {
 }
 
 #[derive(Deserialize)]
-struct Credentials {
+struct LoginForm {
     username: String,
     password: String,
 }
@@ -210,12 +210,12 @@ async fn login(
     State(state): State<Arc<LoginState>>,
     session: Session,
     headers: HeaderMap,
-    Form(credentials): Form<Credentials>,
+    Form(credentials): Form<LoginForm>,
 ) -> Result<Redirect, WebError> {
     check_origin(&headers)?;
     let user = state
         .credentials
-        .authenticate(&BasicCredentials {
+        .authenticate(&Credentials {
             username: credentials.username,
             password: credentials.password,
         })

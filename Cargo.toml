@@ -1,5 +1,13 @@
 [workspace]
-members = ["crates/tower-http-access", "crates/tower-http-access-basic", "crates/tower-http-access-session", "examples"]
+members = [
+    "crates/http-request-matcher",
+    "crates/user-password-auth",
+    "crates/tower-http-access-core",
+    "crates/tower-http-access-basic",
+    "crates/tower-http-access-session",
+    "examples"
+]
+
 resolver = "3"
 
 [workspace.package]

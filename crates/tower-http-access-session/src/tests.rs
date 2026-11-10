@@ -8,9 +8,9 @@ use axum::{
 };
 use std::sync::Arc;
 use tower::ServiceExt;
-use tower_http_access::{
-    SecurityLayer, authentication::Authenticated, authorization::AuthenticatedAuthorizationProvider,
-};
+use tower_http_access_core::SecurityLayer;
+use tower_http_access_core::authentication::Authenticated;
+use tower_http_access_core::authorization::default_auth::AuthenticatedAuthorizationProvider;
 use tower_sessions::{MemoryStore, SessionManagerLayer};
 
 struct Users;
@@ -73,7 +73,7 @@ async fn resolves_current_identity_and_distinguishes_anonymous_from_errors() {
 async fn missing_middleware_and_malformed_data_are_internal_errors() {
     let authenticator = SessionRequestAuthenticator::new(Users);
     let (mut parts, _) = Request::new(()).into_parts();
-    let error = authenticator.authenticate(&mut parts).await.unwrap_err();
+    let error = authenticator.authenticate(&parts).await.unwrap_err();
     assert_eq!(
         error.into_security_response().status(),
         StatusCode::INTERNAL_SERVER_ERROR
@@ -81,7 +81,7 @@ async fn missing_middleware_and_malformed_data_are_internal_errors() {
     let session = Session::new(None, Arc::new(MemoryStore::default()), None);
     session.insert("user_id", 42).await.unwrap();
     parts.extensions.insert(session);
-    let error = authenticator.authenticate(&mut parts).await.unwrap_err();
+    let error = authenticator.authenticate(&parts).await.unwrap_err();
     assert_eq!(
         error.into_security_response().status(),
         StatusCode::INTERNAL_SERVER_ERROR
@@ -334,7 +334,7 @@ async fn stored_identity_accepts_custom_extraction_without_serde_bounds() {
     session.insert("username", "alice").await.unwrap();
     let (mut parts, _) = Request::new(()).into_parts();
     parts.extensions.insert(session);
-    let result = authenticator.authenticate(&mut parts).await.unwrap();
+    let result = authenticator.authenticate(&parts).await.unwrap();
     match result {
         AuthenticationAttempt::Authenticated(identity) => {
             assert_eq!(identity, Identity("alice".into()));
