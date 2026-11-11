@@ -103,13 +103,13 @@ impl<A, P, H, E, R> SecurityLayer<A, P, H, E, R> {
     /// Customize the response when authorization requires authentication.
     pub fn authentication_entry_point<NewE>(
         self,
-        entry_point: NewE,
+        authentication_entry_point: NewE,
     ) -> SecurityLayer<A, P, H, NewE, R> {
         SecurityLayer {
             authenticator: self.authenticator,
             authorizer: self.authorizer,
             failure_handler: self.failure_handler,
-            authentication_entry_point: entry_point,
+            authentication_entry_point,
             response_adapter: self.response_adapter,
         }
     }
