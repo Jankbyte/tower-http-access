@@ -88,7 +88,7 @@ pub trait AuthorizationProviderExt: AuthorizationProvider + Sized {
     /// The underlying provider's decisions and errors are returned unchanged.
     ///
     /// ```
-    /// use tower_http_access_core::authorization::default_auth::AuthenticatedAuthorizationProvider;
+    /// use tower_http_access_authorizers::default_auth::AuthenticatedAuthorizationProvider;
     /// use tower_http_access_core::authorization::core::AuthorizationProviderExt;
     ///
     /// struct AppUser { id: u64 }
@@ -271,26 +271,4 @@ where
     fn commence(&self, request: &Parts) -> SecurityResponse {
         T::commence(self.as_ref(), request)
     }
-}
-
-#[cfg(test)]
-pub(super) fn assert_builtin_decision(
-    actual: AuthorizationDecision,
-    expected: AuthorizationDecision,
-) {
-    assert!(
-        matches!(
-            (&actual, &expected),
-            (AuthorizationDecision::Allow, AuthorizationDecision::Allow)
-                | (
-                    AuthorizationDecision::Deny(AuthorizationDenial::AuthenticationRequired),
-                    AuthorizationDecision::Deny(AuthorizationDenial::AuthenticationRequired)
-                )
-                | (
-                    AuthorizationDecision::Deny(AuthorizationDenial::InsufficientPermissions),
-                    AuthorizationDecision::Deny(AuthorizationDenial::InsufficientPermissions)
-                )
-        ),
-        "expected {expected:?}, got {actual:?}"
-    );
 }

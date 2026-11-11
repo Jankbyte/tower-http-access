@@ -30,6 +30,7 @@ be observed.
 ```toml
 [dependencies]
 tower-http-access-core = "0.0.1"
+tower-http-access-authorizers = "0.0.1"
 tower-http-access-session = "0.0.1"
 tower-sessions = { version = "0.15", features = ["memory-store"] }
 axum = "0.8"
@@ -42,7 +43,7 @@ use axum::{Router, routing::get};
 use futures_util::future::BoxFuture;
 use tower_http_access_core::SecurityLayer;
 use tower_http_access_core::authentication::Authenticated;
-use tower_http_access_core::authorization::default_auth::AuthenticatedAuthorizationProvider;
+use tower_http_access_authorizers::default_auth::AuthenticatedAuthorizationProvider;
 use tower_http_access_session::{SessionIdentityProvider, SessionRequestAuthenticator};
 use tower_sessions::{MemoryStore, SessionManagerLayer};
 

@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "crates/tower-http-access-authorizers",
     "crates/http-request-matcher",
     "crates/user-password-auth",
     "crates/tower-http-access-core",

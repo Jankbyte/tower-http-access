@@ -11,7 +11,7 @@ use crate::authorization::core::AuthorizationDecision;
 use crate::authorization::core::AuthorizationDenial;
 use crate::authorization::core::AuthorizationFailure;
 use crate::authorization::core::AuthorizationProvider;
-use crate::authorization::default_auth::AuthenticatedAuthorizationProvider;
+use tower_http_access_authorizers::default_auth::AuthenticatedAuthorizationProvider;
 use futures_util::future::BoxFuture;
 use http::{Request, header, request::Parts};
 use http_body::{Body, Frame};
@@ -543,9 +543,9 @@ impl AuthorizationProvider for UnreachableProvider {
 
 fn custom_denial_chain() -> impl AuthorizationProvider<
     Authentication = String,
-    Error = crate::authorization::all::AllAuthorizationError,
+    Error = tower_http_access_authorizers::all::AllAuthorizationError,
 > {
-    crate::authorization::all::AllAuthorizationProvider::builder()
+    tower_http_access_authorizers::all::AllAuthorizationProvider::builder()
         .with(CustomDenialProvider)
         .with(UnreachableProvider)
         .build()
@@ -619,7 +619,7 @@ async fn custom_denial_uses_combined_response_adapter_once() {
 #[cfg(feature = "request_matcher")]
 #[tokio::test]
 async fn request_rule_preserves_custom_denial_without_falling_through() {
-    let provider = crate::authorization::request::RequestAuthorizationProvider::<String>::builder()
+    let provider = tower_http_access_authorizers::request::RequestAuthorizationProvider::<String>::builder()
         .request_matchers("/notes")
         .access(CustomDenialProvider)
         .any_request()

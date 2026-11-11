@@ -26,6 +26,7 @@ serde.workspace = true
 futures-util = { workspace = true, features = ["alloc"] }
 
 [dev-dependencies]
+tower-http-access-authorizers = { path = "../tower-http-access-authorizers", features = ["request_matcher", "authorities"] }
 tower-sessions = { workspace = true, features = ["memory-store", "axum-core"] }
 tower-http-access-core = { path = "../tower-http-access-core", features = ["axum"] }
 axum.workspace = true

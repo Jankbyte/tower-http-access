@@ -26,10 +26,6 @@ use std::{
 use tower_layer::Layer;
 use tower_service::Service;
 
-#[cfg(test)]
-#[path = "auth_tower_tests.rs"]
-pub(super) mod tests;
-
 /// Authorizes HTTP requests using an identity extracted from request extensions.
 ///
 /// For each request, the service looks up [`Authenticated<P::Authentication>`](Authenticated)

@@ -1,0 +1,33 @@
+[package]
+name = "tower-http-access-authorizers"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme = "README.md"
+description = "Composable request and authority authorization policies for Tower HTTP Access"
+
+[dependencies]
+tower-http-access-core = { version = "0.0.1", path = "../tower-http-access-core", default-features = false }
+http-request-matcher = { version = "0.0.1", path = "../http-request-matcher", optional = true }
+futures-util = { workspace = true, features = ["alloc"] }
+http.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+tower-http-access-core = { path = "../tower-http-access-core", features = ["split_auth", "axum"] }
+axum.workspace = true
+tokio = { workspace = true, features = ["full"] }
+tower = { workspace = true, features = ["util"] }
+tower-layer.workspace = true
+tower-service.workspace = true
+bytes.workspace = true
+
+[features]
+default = []
+request_matcher = ["dep:http-request-matcher"]
+authorities = []
+
+[package.metadata.docs.rs]
+all-features = true

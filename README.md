@@ -22,7 +22,8 @@ This example uses HTTP Basic authentication with Argon2 password hashing. It exp
 ```toml
 [dependencies]
 axum = "0.8"
-tower-http-access-core = { version = "0.0.1", features = ["request_matcher", "user_password_auth"] }
+tower-http-access-core = "0.0.1"
+tower-http-access-authorizers = { version = "0.0.1", features = ["request_matcher", "authorities"] }
 tower-http-access-basic = "0.0.1"
 user-password-auth = { version = "0.0.1", features = ["user_details"] }
 argon2 = "0.6"
@@ -36,10 +37,21 @@ use std::{num::NonZeroUsize, sync::Arc};
 use argon2::Argon2;
 use axum::{Router, http::Method, routing::get};
 use tower_http_access_core::SecurityLayer;
-use tower_http_access_core::authentication::Authenticated;
-use tower_http_access_core::authorization::request::RequestAuthorizationProvider;
+use tower_http_access_core::authentication::{Authenticated, RequestAuthenticatorExt};
+use tower_http_access_authorizers::request::RequestAuthorizationProvider;
+use tower_http_access_authorizers::authorities::{AuthorityRuleExt, HasAuthorities};
 use tower_http_access_basic::BasicRequestAuthenticator;
 use user_password_auth::{AsyncStringPasswordManager, Authority, InMemoryUserDetailService, UserDetail, UserDetailAuthenticationProvider};
+
+#[derive(Clone)]
+struct AppUser(UserDetail);
+
+impl HasAuthorities for AppUser {
+    fn has_authority(&self, authority: &str) -> bool {
+        self.0.authorities.iter().any(|granted| granted.0 == authority)
+    }
+}
+
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -60,9 +72,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     .await?;
     let authenticator = Arc::new(BasicRequestAuthenticator::new(
         UserDetailAuthenticationProvider::new(passwords, users).await?,
-    ));
+    ).map(AppUser));
 
-    let rules = RequestAuthorizationProvider::<UserDetail>::builder()
+    let rules = RequestAuthorizationProvider::<AppUser>::builder()
         .method_matchers(Method::GET, "/health")
         .permit_all()
         .method_matchers(Method::GET, "/notes/{id}")
@@ -84,8 +96,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     Ok(())
 }
 
-async fn read_note(Authenticated(user): Authenticated<UserDetail>) -> String {
-    format!("Authenticated as {}", user.username)
+async fn read_note(Authenticated(user): Authenticated<AppUser>) -> String {
+    format!("Authenticated as {}", user.0.username)
 }
 # }
 # fn main() {}
@@ -125,10 +137,17 @@ Authorization runs after authentication. By default, authentication-required dec
 ```rust,no_run
 # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 use axum::http::Method;
-use tower_http_access_core::authorization::request::RequestAuthorizationProvider;
-use user_password_auth::UserDetail;
+use tower_http_access_authorizers::request::RequestAuthorizationProvider;
+use tower_http_access_authorizers::authorities::{AuthorityRuleExt, HasAuthorities};
 
-let rules = RequestAuthorizationProvider::<UserDetail>::builder()
+struct User { authorities: Vec<String> }
+impl HasAuthorities for User {
+    fn has_authority(&self, authority: &str) -> bool {
+        self.authorities.iter().any(|granted| granted == authority)
+    }
+}
+
+let rules = RequestAuthorizationProvider::<User>::builder()
     .method_matchers(Method::GET, "/notes/1")
     .permit_all() // Anyone can read the first note.
     .method_matchers(Method::GET, "/notes/{id}")
@@ -162,7 +181,7 @@ use axum::{Router, routing::get};
 # use tower_http_access_core::SecurityLayer;
 # use tower_http_access_core::authentication::AuthenticationAttempt;
 # use tower_http_access_core::authentication::AuthenticatorError;
-# use tower_http_access_core::authorization::default_auth::AuthenticatedAuthorizationProvider;
+# use tower_http_access_authorizers::default_auth::AuthenticatedAuthorizationProvider;
 # let authenticator = |_: &axum::http::request::Parts| async { Ok::<_, AuthenticatorError>(AuthenticationAttempt::<String>::NotApplicable) };
 # let security_layer = SecurityLayer::new(authenticator, AuthenticatedAuthorizationProvider::<String>::new());
 # let notes_api = Router::new().route("/{id}", get(async || "note"));
@@ -180,7 +199,7 @@ Use `.matching(...)` to supply a `RequestMatcher` explicitly:
 
 ```rust,no_run
 # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-use tower_http_access_core::authorization::request::RequestAuthorizationProvider;
+use tower_http_access_authorizers::request::RequestAuthorizationProvider;
 use http_request_matcher::PathPatternRequestMatcher;
 
 let rules = RequestAuthorizationProvider::<String>::builder()
@@ -214,12 +233,12 @@ without depending on Tower or authentication. Add `http-request-matcher = "0.0.1
 to your dependencies to use custom matchers directly.
 
 Request authorization is available independently of Basic authentication with
-`features = ["request_matcher"]`. Import its builders from `tower_http_access_core::authorization::request`.
+`tower-http-access-authorizers` with `features = ["request_matcher"]`. Import its builders from `tower_http_access_authorizers::request`.
 Authentication-only and custom rules work with any `Send + Sync + 'static` identity:
 
 ```rust,no_run
 # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-use tower_http_access_core::authorization::request::RequestAuthorizationProvider;
+use tower_http_access_authorizers::request::RequestAuthorizationProvider;
 
 let rules = RequestAuthorizationProvider::<String>::builder()
     .request_matchers("/health").permit_all()
@@ -229,8 +248,13 @@ let rules = RequestAuthorizationProvider::<String>::builder()
 # }
 ```
 
-Only authority methods require `authorization::authorities::HasAuthorities`. Basic authentication and
+Only authority methods require `tower_http_access_authorizers::authorities::HasAuthorities`. Basic authentication and
 user-detail helpers are provided by the separate `user-password-auth` crate.
+
+Enable `authorities` and import
+`tower_http_access_authorizers::authorities::AuthorityRuleExt` to use the authority
+methods on selected request rules. These extension methods use the public
+`.access(...)` API, which applications can also use in their own builder extension traits.
 
 Available policies:
 
@@ -244,14 +268,15 @@ Available policies:
 | `has_all_authorities(["ReadNote", "WriteNote"])` | Requires every listed authority; an empty list requires authentication only. |
 | `access(manager)` | Delegates the complete decision to a custom `AuthorizationProvider`. |
 
-Custom identity types can implement `authorization::authorities::HasAuthorities`; `UserDetail` already
-implements it. Authority names are compared exactly; no role prefix is added.
+Implement `tower_http_access_authorizers::authorities::HasAuthorities` on a local identity type.
+For `UserDetail`, use a local wrapper and adapt the authenticator with `.map(...)`, as in the quick start. Authority names are compared exactly; no role prefix is added.
 
 Built-in rules delegate to reusable authorization providers:
 `PermitAllAuthorizationProvider`, `DenyAllAuthorizationProvider`,
 `AuthenticatedAuthorizationProvider`, `AuthorityAuthorizationProvider`,
 `AnyAuthorityAuthorizationProvider`, and `AllAuthoritiesAuthorizationProvider`.
-These providers are available without `request_matcher` and can be
+These providers live in `tower-http-access-authorizers`. Authority providers require its
+`authorities` feature; the other providers are available without `request_matcher` and can be
 used directly, composed with `AllAuthorizationProvider`, or adapted with `.map(...)`.
 
 ## 🔐 Custom authorization
@@ -276,7 +301,7 @@ not need to implement `Clone`; the layer shares them through `Arc`.
 # use tower_http_access_core::SecurityLayer;
 # use tower_http_access_core::authentication::AuthenticationAttempt;
 # use tower_http_access_core::authentication::AuthenticatorError;
-# use tower_http_access_core::authorization::default_auth::AuthenticatedAuthorizationProvider;
+# use tower_http_access_authorizers::default_auth::AuthenticatedAuthorizationProvider;
 # use tower_http_access_core::authorization::core::AuthorizationFailure;
 # let my_authenticator = |_: &Parts| async { Ok::<_, AuthenticatorError>(AuthenticationAttempt::Authenticated("alex".to_owned())) };
 # let my_authorizer = AuthenticatedAuthorizationProvider::<String>::new();
@@ -294,7 +319,7 @@ For multiple authentication mechanisms, build an ordered chain separately:
 # use axum::http::request::Parts;
 # use tower_http_access_core::authentication::AuthenticationAttempt;
 # use tower_http_access_core::authentication::AuthenticatorError;
-# use tower_http_access_core::authorization::default_auth::AuthenticatedAuthorizationProvider;
+# use tower_http_access_authorizers::default_auth::AuthenticatedAuthorizationProvider;
 # let session_authenticator = |_: &Parts| async { Ok::<_, AuthenticatorError>(AuthenticationAttempt::<String>::NotApplicable) };
 # let basic_authenticator = |_: &Parts| async { Ok::<_, AuthenticatorError>(AuthenticationAttempt::Authenticated("alex".to_owned())) };
 # let my_authorizer = AuthenticatedAuthorizationProvider::<String>::new();
@@ -322,7 +347,7 @@ The following composition uses `tower::ServiceBuilder` (`tower = "0.5"`).
 # use axum::{extract::Request, http::{StatusCode, request::Parts}};
 # use tower_http_access_core::authentication::AuthenticationAttempt;
 # use tower_http_access_core::authentication::AuthenticatorError;
-# use tower_http_access_core::authorization::default_auth::AuthenticatedAuthorizationProvider;
+# use tower_http_access_authorizers::default_auth::AuthenticatedAuthorizationProvider;
 # use tower_http_access_core::authorization::core::AuthorizationFailure;
 # let my_authenticator = |_: &Parts| async { Ok::<_, AuthenticatorError>(AuthenticationAttempt::Authenticated("alex".to_owned())) };
 # let my_authorizer = AuthenticatedAuthorizationProvider::<String>::new();
@@ -412,13 +437,18 @@ Add `bytes = "1"` and `http = "1"` to your application when constructing custom 
 
 The `axum` integration feature is enabled by default. Disable default features to use the core
 HTTP/Tower middleware without depending on Axum. Authentication and authorization traits,
-`SecurityLayer`, and the separate layers are always available.
+`SecurityLayer` are always available; separate layers require `split_auth`.
 
 | Feature | Enables |
 | --- | --- |
-| `axum` (default) | Axum extractors for `Authenticated<A>` and `Option<Authenticated<A>>`, plus `IntoResponse` for authentication errors. |
-| `request_matcher` | Ordered request-rule authorization and delegating entry points using `http-request-matcher`. |
-| `user_password_auth` | Implements `HasAuthorities` for `user_password_auth::UserDetail`. Enable when using the built-in user details with authority checks. |
+| `axum` (default) | Axum extractors for `Authenticated<A>` and `Option<Authenticated<A>>`. |
+| `request_matcher` | Delegating entry points using `http-request-matcher`. Request authorization policies live in `tower-http-access-authorizers`. |
+
+
+The `tower-http-access-authorizers` crate provides reusable policies. Its optional
+`request_matcher` feature enables request rules, and `authorities` enables the
+`HasAuthorities` trait and authority checks. Neither feature is enabled
+by default. Applications implement `HasAuthorities` on their own identity types.
 
 The separate `tower-http-access-basic` crate provides HTTP Basic authentication.
 The standalone `user-password-auth` crate provides `Credentials`, user details,

@@ -6,11 +6,12 @@
 //! `.access(provider)` to attach custom or composed checks.
 //!
 //! Authentication-only, permit, deny, and custom rules require no authority trait. Authority
-//! methods require [`HasAuthorities`] on the identity. This module needs only the
+//! methods come from `authorities::AuthorityRuleExt` and require `HasAuthorities`
+//! on the identity and the `authorities` feature. This module needs only the
 //! `request_matcher` feature, independently of the Basic authentication crate.
 //!
 //! ```
-//! use tower_http_access_core::authorization::request::RequestAuthorizationProvider;
+//! use tower_http_access_authorizers::request::RequestAuthorizationProvider;
 //!
 //! let rules = RequestAuthorizationProvider::<String>::builder()
 //!     .request_matchers("/health").permit_all()
@@ -34,22 +35,15 @@
 //! [`RequestAuthorizationError`] with their original source preserved. Matched path parameters
 //! are not extracted automatically.
 
+use crate::default_auth::{
+    AuthenticatedAuthorizationProvider, DenyAllAuthorizationProvider,
+    PermitAllAuthorizationProvider,
+};
 use futures_util::future::BoxFuture;
 use http::{Method, request::Parts};
+use http_request_matcher::{InvalidRequestPattern, PathPatternRequestMatcher, RequestMatcher};
 use std::marker::PhantomData;
-
-use crate::authorization::authorities::AllAuthoritiesAuthorizationProvider;
-use crate::authorization::authorities::AnyAuthorityAuthorizationProvider;
-use crate::authorization::authorities::AuthorityAuthorizationProvider;
-use crate::authorization::authorities::HasAuthorities;
-use crate::authorization::core::AuthorizationDecision;
-use crate::authorization::core::AuthorizationProvider;
-use crate::authorization::default_auth::AuthenticatedAuthorizationProvider;
-use crate::authorization::default_auth::DenyAllAuthorizationProvider;
-use crate::authorization::default_auth::PermitAllAuthorizationProvider;
-use http_request_matcher::InvalidRequestPattern;
-use http_request_matcher::PathPatternRequestMatcher;
-use http_request_matcher::RequestMatcher;
+use tower_http_access_core::authorization::core::{AuthorizationDecision, AuthorizationProvider};
 
 /// An error returned by a request authorization provider.
 ///
@@ -99,7 +93,7 @@ struct Rule<A> {
 /// An ordered, first-match authorization provider. Unmatched requests are denied.
 ///
 /// Declaration order determines priority, regardless of path specificity. The first
-/// matching rule's decision is final. See the [module documentation](crate::authorization::request) for an example.
+/// matching rule's decision is final. See the [module documentation](crate::request) for an example.
 /// Path rules use the URI visible to the middleware. Axum strips nesting prefixes
 /// inside nested routers; attach security outside the nest for full application
 /// paths, or use local patterns inside it. See the module's nested-router guidance.
@@ -151,7 +145,7 @@ impl<A> RequestAuthorizationBuilder<A> {
     /// async or CPU-bound access checks, offloading CPU work from the async executor.
     ///
     /// ```
-    /// use tower_http_access_core::authorization::request::RequestAuthorizationProvider;
+    /// use tower_http_access_authorizers::request::RequestAuthorizationProvider;
     /// use http_request_matcher::PathPatternRequestMatcher;
     ///
     /// let provider = RequestAuthorizationProvider::<String>::builder()
@@ -265,44 +259,6 @@ impl<A: Send + Sync + 'static> PendingRuleBuilder<A> {
     pub fn authenticated(self) -> RequestAuthorizationBuilder<A> {
         self.access(AuthenticatedAuthorizationProvider::<A>::new())
     }
-
-    /// Requires an exact authority name, without adding a prefix.
-    ///
-    /// Only authority rules require [`HasAuthorities`]. An identity without that trait can use
-    /// `.authenticated()`, `.permit_all()`, `.deny_all()`, and `.access(...)` instead.
-    ///
-    /// ```compile_fail,E0277
-    /// use tower_http_access_core::authorization::request::RequestAuthorizationProvider;
-    /// let rules = RequestAuthorizationProvider::<String>::builder()
-    ///     .any_request().has_authority("Admin");
-    /// ```
-    pub fn has_authority(self, authority: impl Into<String>) -> RequestAuthorizationBuilder<A>
-    where
-        A: HasAuthorities,
-    {
-        self.access(AuthorityAuthorizationProvider::<A>::new(authority))
-    }
-
-    /// Requires at least one authority. An empty collection grants no access.
-    pub fn has_any_authority<I, S>(self, authorities: I) -> RequestAuthorizationBuilder<A>
-    where
-        A: HasAuthorities,
-        I: IntoIterator<Item = S>,
-        S: Into<String>,
-    {
-        self.access(AnyAuthorityAuthorizationProvider::<A>::new(authorities))
-    }
-
-    /// Requires an authenticated identity with every listed authority.
-    /// An empty collection requires authentication but no specific authority.
-    pub fn has_all_authorities<I, S>(self, authorities: I) -> RequestAuthorizationBuilder<A>
-    where
-        A: HasAuthorities,
-        I: IntoIterator<Item = S>,
-        S: Into<String>,
-    {
-        self.access(AllAuthoritiesAuthorizationProvider::<A>::new(authorities))
-    }
 }
 
 impl<A: Send + Sync> AuthorizationProvider for RequestAuthorizationProvider<A> {
@@ -325,6 +281,6 @@ impl<A: Send + Sync> AuthorizationProvider for RequestAuthorizationProvider<A> {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "authorities"))]
 #[path = "request_tests.rs"]
 mod tests;

@@ -194,7 +194,7 @@ async fn different_identity_types_work_with_axum_and_service_builder() {
     use crate::authentication::Authenticated;
     use crate::authentication::AuthenticationAttempt;
     use crate::authentication::AuthenticatorError;
-    use crate::authorization::default_auth::AuthenticatedAuthorizationProvider;
+    use tower_http_access_authorizers::default_auth::AuthenticatedAuthorizationProvider;
     use axum::{Router, body::Body, routing::get};
     let strings = |_: &http::request::Parts| async {
         Ok::<_, AuthenticatorError>(AuthenticationAttempt::Authenticated("alice".to_owned()))

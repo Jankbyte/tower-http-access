@@ -1,4 +1,7 @@
-use super::*;
+use tower_http_access_authorizers::all::*;
+use crate::authorization::core::{AuthorizationDecision, AuthorizationProvider};
+use futures_util::future::BoxFuture;
+use http::request::Parts;
 use crate::authentication::Authenticated;
 use crate::authorization::auth_tower::AuthorizationLayer;
 use crate::authorization::auth_tower::tests::ErrorProvider;
@@ -6,7 +9,7 @@ use crate::authorization::auth_tower::tests::Inner;
 use crate::authorization::auth_tower::tests::MappedIdentityProvider;
 use crate::authorization::core::AuthorizationDenial;
 use crate::authorization::core::AuthorizationProviderExt;
-use crate::authorization::default_auth::AuthenticatedAuthorizationProvider;
+use tower_http_access_authorizers::default_auth::AuthenticatedAuthorizationProvider;
 use axum::{body::Body, extract::Request, http::StatusCode};
 use std::{convert::Infallible, io, sync::Arc};
 use tokio::sync::Mutex;

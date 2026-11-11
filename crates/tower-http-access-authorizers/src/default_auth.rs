@@ -1,9 +1,9 @@
-use crate::authorization::core::AuthorizationDecision;
-use crate::authorization::core::AuthorizationDenial;
-use crate::authorization::core::AuthorizationProvider;
 use futures_util::future::BoxFuture;
 use http::request::Parts;
 use std::{convert::Infallible, future::Future, marker::PhantomData, pin::Pin};
+use tower_http_access_core::authorization::core::AuthorizationDecision;
+use tower_http_access_core::authorization::core::AuthorizationDenial;
+use tower_http_access_core::authorization::core::AuthorizationProvider;
 
 /// Default implementation of [`AuthorizationProvider`], that checks only fact of authentication
 /// and does not inspect request metadata.

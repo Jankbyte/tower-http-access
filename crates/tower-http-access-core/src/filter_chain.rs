@@ -14,7 +14,7 @@
 //! use tower_http_access_core::SecurityLayer;
 //! use tower_http_access_core::authentication::AuthenticationAttempt;
 //! use tower_http_access_core::authentication::AuthenticatorError;
-//! use tower_http_access_core::authorization::default_auth::AuthenticatedAuthorizationProvider;
+//! use tower_http_access_authorizers::default_auth::AuthenticatedAuthorizationProvider;
 //! use http_request_matcher::PathPatternRequestMatcher;
 //!
 //! let authentication = |_: &http::request::Parts| async {
@@ -222,7 +222,3 @@ where
         Box::pin(service.oneshot(Request::from_parts(parts, body)))
     }
 }
-
-#[cfg(test)]
-#[path = "filter_chain_tests.rs"]
-mod tests;

@@ -7,9 +7,9 @@
 use axum::{Router, routing::get};
 use futures_util::future::BoxFuture;
 use std::sync::Arc;
+use tower_http_access_authorizers::default_auth::AuthenticatedAuthorizationProvider;
 use tower_http_access_core::SecurityLayer;
 use tower_http_access_core::authentication::Authenticated;
-use tower_http_access_core::authorization::default_auth::AuthenticatedAuthorizationProvider;
 
 use tower_http_access_basic::BasicRequestAuthenticator;
 use user_password_auth::{Credentials, UsernamePasswordAuthenticationProvider};

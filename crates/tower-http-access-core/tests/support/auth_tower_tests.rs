@@ -3,7 +3,7 @@ use crate::authentication::{
     Authenticated, AuthenticationAttempt, AuthenticationLayer, AuthenticatorError,
 };
 use crate::authorization::core::AuthorizationProviderExt;
-use crate::authorization::default_auth::AuthenticatedAuthorizationProvider;
+use tower_http_access_authorizers::default_auth::AuthenticatedAuthorizationProvider;
 use crate::response::test_response;
 use axum::{
     body::Body,

@@ -2,9 +2,9 @@ use super::*;
 use crate::authentication::AuthenticationErrorReason;
 use crate::authentication::AuthenticatorError;
 use crate::authentication::DelegatingRequestAuthenticator;
-use crate::authorization::all::AllAuthorizationProvider;
-use crate::authorization::core::AuthorizationProviderExt;
-use crate::authorization::default_auth::AuthenticatedAuthorizationProvider;
+use tower_http_access_authorizers::all::AllAuthorizationProvider;
+use tower_http_access_core::authorization::core::AuthorizationProviderExt;
+use tower_http_access_authorizers::default_auth::AuthenticatedAuthorizationProvider;
 use crate::response::test_response;
 use axum::{
     body::{Body, to_bytes},
@@ -412,7 +412,7 @@ fn providers_clone_without_requiring_clone_identities() {
     fn assert_clone<T: Clone>(_: &T) {}
     assert_clone(&AuthenticatedAuthorizationProvider::<Identity>::new());
     assert_clone(
-        &crate::authorization::authorities::AuthorityAuthorizationProvider::<Identity>::new("read"),
+        &tower_http_access_authorizers::authorities::AuthorityAuthorizationProvider::<Identity>::new("read"),
     );
     assert_clone(&AuthenticatedAuthorizationProvider::<usize>::new().map(|_: &Identity| 1));
 }

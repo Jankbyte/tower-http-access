@@ -18,12 +18,12 @@ use http_request_matcher::MediaTypeRequestMatcher;
 use http_request_matcher::RequestMatcher;
 use serde::Deserialize;
 use std::{num::NonZeroUsize, sync::Arc};
+use tower_http_access_authorizers::request::RequestAuthorizationProvider;
 use tower_http_access_basic::BasicRequestAuthenticator;
 use tower_http_access_core::SecurityLayer;
 use tower_http_access_core::authentication::Authenticated;
 use tower_http_access_core::authorization::core::DefaultAuthenticationEntryPoint;
 use tower_http_access_core::authorization::entry_point::DelegatingAuthenticationEntryPoint;
-use tower_http_access_core::authorization::request::RequestAuthorizationProvider;
 use tower_http_access_core::filter_chain::SecurityChainLayer;
 use tower_http_access_session::{
     BrowserRequestMatcher, SessionIdentityProvider, SessionRequestAuthenticator, initialize_session,

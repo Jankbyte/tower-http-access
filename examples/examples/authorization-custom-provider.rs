@@ -19,12 +19,14 @@ use std::{
     convert::Infallible,
     net::{IpAddr, Ipv4Addr, SocketAddr},
 };
+use tower_http_access_authorizers::request::{
+    PendingRuleBuilder, RequestAuthorizationBuilder, RequestAuthorizationProvider,
+};
 use tower_http_access_core::{
     SecurityResponse,
     authorization::{
         auth_tower::AuthorizationLayer,
         core::{AuthorizationDecision, AuthorizationDenial, AuthorizationProvider},
-        request::{PendingRuleBuilder, RequestAuthorizationBuilder, RequestAuthorizationProvider},
     },
 };
 

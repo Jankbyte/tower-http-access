@@ -1,7 +1,8 @@
 use super::*;
-use crate::authorization::core::AuthorizationDecision;
-use crate::authorization::core::AuthorizationDenial;
+use crate::authorities::{AuthorityRuleExt, HasAuthorities};
 use std::{future::Future, pin::Pin};
+use tower_http_access_core::authorization::core::AuthorizationDecision;
+use tower_http_access_core::authorization::core::AuthorizationDenial;
 
 struct TestAuthority(String);
 impl TestAuthority {
@@ -241,7 +242,7 @@ async fn custom_manager_receives_context_and_its_decision_is_final() {
             AuthorizationDecision::Deny(AuthorizationDenial::InsufficientPermissions),
         ),
     ] {
-        crate::authorization::core::assert_builtin_decision(
+        crate::assert_builtin_decision(
             decision(&provider, user, Method::GET, "/notes/7?shared=true").await,
             expected,
         );
@@ -258,7 +259,6 @@ async fn custom_manager_receives_context_and_its_decision_is_final() {
     assert_eq!(calls.load(Ordering::SeqCst), 3);
 }
 
-#[cfg(feature = "split_auth")]
 #[tokio::test]
 async fn custom_manager_errors_preserve_source_and_return_internal_server_error() {
     use axum::{body::Body, http::StatusCode};
@@ -303,7 +303,12 @@ async fn custom_manager_errors_preserve_source_and_return_internal_server_error(
             "/notes/{id}",
             axum::routing::get(|| async { StatusCode::OK }),
         )
-        .layer(crate::authorization::auth_tower::AuthorizationLayer::builder(provider).build());
+        .layer(
+            tower_http_access_core::authorization::auth_tower::AuthorizationLayer::builder(
+                provider,
+            )
+            .build(),
+        );
     let response = app
         .call(
             axum::extract::Request::builder()
@@ -416,7 +421,6 @@ async fn user_defined_matcher_can_select_rules() {
     ));
 }
 
-#[cfg(feature = "split_auth")]
 #[tokio::test]
 async fn middleware_matchers_borrow_original_headers_and_extensions() {
     use axum::{body::Body, http::StatusCode};
@@ -461,7 +465,12 @@ async fn middleware_matchers_borrow_original_headers_and_extensions() {
                 StatusCode::OK
             }),
         )
-        .layer(crate::authorization::auth_tower::AuthorizationLayer::builder(provider).build());
+        .layer(
+            tower_http_access_core::authorization::auth_tower::AuthorizationLayer::builder(
+                provider,
+            )
+            .build(),
+        );
 
     for (header, address, expected) in [
         (Some("internal"), Some("127.0.0.1"), StatusCode::OK),
@@ -543,8 +552,8 @@ async fn custom_manager_borrows_original_parts_across_await() {
 
 #[tokio::test]
 async fn string_identities_support_rules_without_authorities() {
-    use crate::authorization::core::AuthorizationProviderExt;
-    use crate::authorization::default_auth::AuthenticatedAuthorizationProvider;
+    use crate::default_auth::AuthenticatedAuthorizationProvider;
+    use tower_http_access_core::authorization::core::AuthorizationProviderExt;
     let provider = RequestAuthorizationProvider::<String>::builder()
         .request_matchers("/public")
         .permit_all()
@@ -592,27 +601,23 @@ async fn string_identities_support_rules_without_authorities() {
             .body(())
             .unwrap()
             .into_parts();
-        crate::authorization::core::assert_builtin_decision(
-            provider.authorize(None, &parts).await.unwrap(),
-            anonymous,
-        );
-        crate::authorization::core::assert_builtin_decision(
+        crate::assert_builtin_decision(provider.authorize(None, &parts).await.unwrap(), anonymous);
+        crate::assert_builtin_decision(
             provider.authorize(Some(&identity), &parts).await.unwrap(),
             authenticated,
         );
     }
 }
 
-#[cfg(feature = "axum")]
 #[tokio::test]
 async fn string_request_rules_integrate_with_combined_layer_without_basic_authentication() {
-    use crate::{
-        SecurityLayer,
-        authentication::{Authenticated, AuthenticationAttempt, AuthenticatorError},
-    };
     use axum::{
         body::{Body, to_bytes},
         extract::Request,
+    };
+    use tower_http_access_core::{
+        SecurityLayer,
+        authentication::{Authenticated, AuthenticationAttempt, AuthenticatorError},
     };
     use tower_service::Service;
 

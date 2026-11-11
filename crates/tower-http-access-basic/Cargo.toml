@@ -22,12 +22,13 @@ thiserror.workspace = true
 tracing = { workspace = true, optional = true }
 
 [dev-dependencies]
+tower-http-access-authorizers = { path = "../tower-http-access-authorizers", features = ["request_matcher", "authorities"] }
 http-request-matcher = { version = "0.0.1", path = "../http-request-matcher" }
 user-password-auth = { path = "../user-password-auth", features = ["user_details"] }
 argon2.workspace = true
 tower = { workspace = true, features = ["util"] }
 axum.workspace = true
-tower-http-access-core = { path = "../tower-http-access-core", features = ["axum", "request_matcher", "user_password_auth"] }
+tower-http-access-core = { path = "../tower-http-access-core", features = ["axum", "request_matcher"] }
 tokio = { workspace = true, features = ["full"] }
 
 [features]

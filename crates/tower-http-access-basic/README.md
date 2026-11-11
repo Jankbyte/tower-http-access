@@ -28,7 +28,8 @@ This Axum example allows public health checks and requires the `ReadNote` author
 ```toml
 [dependencies]
 axum = "0.8"
-tower-http-access-core = { version = "0.0.1", features = ["request_matcher", "user_password_auth"] }
+tower-http-access-core = "0.0.1"
+tower-http-access-authorizers = { version = "0.0.1", features = ["request_matcher", "authorities"] }
 tower-http-access-basic = "0.0.1"
 user-password-auth = { version = "0.0.1", features = ["user_details"] }
 argon2 = "0.6"
@@ -42,10 +43,21 @@ use std::{num::NonZeroUsize, sync::Arc};
 use argon2::Argon2;
 use axum::{Router, http::Method, routing::get};
 use tower_http_access_core::SecurityLayer;
-use tower_http_access_core::authentication::Authenticated;
-use tower_http_access_core::authorization::request::RequestAuthorizationProvider;
+use tower_http_access_core::authentication::{Authenticated, RequestAuthenticatorExt};
+use tower_http_access_authorizers::request::RequestAuthorizationProvider;
+use tower_http_access_authorizers::authorities::{AuthorityRuleExt, HasAuthorities};
 use tower_http_access_basic::BasicRequestAuthenticator;
 use user_password_auth::{AsyncStringPasswordManager, Authority, InMemoryUserDetailService, UserDetail, UserDetailAuthenticationProvider};
+
+#[derive(Clone)]
+struct AppUser(UserDetail);
+
+impl HasAuthorities for AppUser {
+    fn has_authority(&self, authority: &str) -> bool {
+        self.0.authorities.iter().any(|granted| granted.0 == authority)
+    }
+}
+
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -66,9 +78,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     .await?;
     let authenticator = Arc::new(BasicRequestAuthenticator::new(
         UserDetailAuthenticationProvider::new(passwords, users).await?,
-    ));
+    ).map(AppUser));
 
-    let rules = RequestAuthorizationProvider::<UserDetail>::builder()
+    let rules = RequestAuthorizationProvider::<AppUser>::builder()
         .method_matchers(Method::GET, "/health")
         .permit_all()
         .method_matchers(Method::GET, "/notes/{id}")
@@ -90,8 +102,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     Ok(())
 }
 
-async fn read_note(Authenticated(user): Authenticated<UserDetail>) -> String {
-    format!("Authenticated as {}", user.username)
+async fn read_note(Authenticated(user): Authenticated<AppUser>) -> String {
+    format!("Authenticated as {}", user.0.username)
 }
 # }
 # fn main() {}

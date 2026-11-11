@@ -14,6 +14,7 @@ pub trait RequestMatcher: Send + Sync {
     fn matches(&self, request: &Parts) -> bool;
 }
 
+/// Implementation for using with values that does not implement `Clone` or it's not cheap.
 impl<T> RequestMatcher for std::sync::Arc<T>
 where
     T: RequestMatcher + ?Sized,

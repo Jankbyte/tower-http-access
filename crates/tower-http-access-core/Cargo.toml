@@ -12,7 +12,6 @@ keywords = ["axum", "authentication", "authorization", "middleware", "tower"]
 categories = ["authentication", "web-programming::http-server"]
 
 [dependencies]
-user-password-auth = { version = "0.0.1", path = "../user-password-auth", optional = true }
 bytes.workspace = true
 futures-util = { workspace = true, default-features = false, features = ["alloc"] }
 http-request-matcher = { version = "0.0.1", path = "../http-request-matcher", optional = true }
@@ -24,6 +23,7 @@ thiserror.workspace = true
 axum = { workspace = true, optional = true }
 
 [dev-dependencies]
+tower-http-access-authorizers = { path = "../tower-http-access-authorizers", features = ["request_matcher", "authorities"] }
 axum.workspace = true
 http-body.workspace = true
 http-body-util.workspace = true
@@ -31,7 +31,6 @@ tower = { workspace = true, features = ["util"] }
 tokio = { workspace = true, features = ["full"] }
 
 [features]
-user_password_auth = ["dep:user-password-auth", "user-password-auth/user_details"]
 default = ["axum"]
 axum = ["dep:axum"]
 request_matcher = ["dep:http-request-matcher"]

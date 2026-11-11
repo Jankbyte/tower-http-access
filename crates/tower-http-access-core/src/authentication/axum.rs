@@ -1,12 +1,10 @@
 //! Axum extractor implementations for authenticated identities.
 
-use super::{Authenticated, AuthenticatorError};
+use super::Authenticated;
 use ::axum::{
     Extension,
-    body::Body,
     extract::{FromRequestParts, OptionalFromRequestParts, rejection::ExtensionRejection},
     http::request::Parts,
-    response::{IntoResponse, Response},
 };
 
 impl<S, A> FromRequestParts<S> for Authenticated<A>
@@ -38,9 +36,3 @@ where
 #[cfg(test)]
 #[path = "axum_tests.rs"]
 mod tests;
-
-impl IntoResponse for AuthenticatorError {
-    fn into_response(self) -> Response {
-        self.into_security_response().map(Body::from)
-    }
-}

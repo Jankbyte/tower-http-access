@@ -29,8 +29,8 @@ This keeps credential handling, access policy, and application request handling 
 | Feature name | Adds |
 | --- | --- |
 | `default` | Enables `axum`. |
-| `axum` | Axum extractors for [`Authenticated<T>`](authentication::Authenticated) and `Option<Authenticated<T>>`, plus `IntoResponse` for authentication errors. |
-| `request_matcher` | [HTTP request matchers](https://docs.rs/http-request-matcher) and ordered authorization rules through [`RequestAuthorizationProvider`](authorization::request::RequestAuthorizationProvider). |
+| `axum` | Axum extractors for [`Authenticated<T>`](authentication::Authenticated) and `Option<Authenticated<T>>`. |
+| `request_matcher` | Request-based authentication entry-point selection using `http-request-matcher`. |
 | `split_auth` | Standalone [`AuthenticationLayer`](authentication::AuthenticationLayer) and [`AuthorizationLayer`](authorization::auth_tower::AuthorizationLayer) for independent middleware placement. |
 | `filter_chain` | Selects complete middleware stacks through [`SecurityChainLayer`](filter_chain::SecurityChainLayer). Also enables `request_matcher`. |
 
@@ -40,3 +40,7 @@ Use `default-features = false` for Tower integration without Axum.
 ```toml
 tower-http-access-core = { version = "0.0.1", features = ["filter_chain"] }
 ```
+
+Reusable policies, including request rules, authentication requirements, authority checks,
+and all-of composition, live in `tower-http-access-authorizers`. Authority support is
+opt-in through that crate's `authorities` feature and includes the `HasAuthorities` trait for application-defined identities.

@@ -13,9 +13,12 @@
 //! curl -v -X POST -u "onlyreader:onlyreader123" -H "Content-Type: application/json" --data '{"title":"Test","content":"Hello"}' "http://127.0.0.1:3000/v1/notes"
 //!
 //! ```
+//!
+//! Request and authentication logs share the `x-request-id` returned in responses.
+//! Existing request IDs are preserved; otherwise a UUID is generated.
 use axum::{
     Json, Router,
-    extract::{Path, State},
+    extract::{Path, Request, State},
     http::{Method, StatusCode},
     routing::method_routing::{get, post},
 };
@@ -23,12 +26,16 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use tower_http::request_id::{
+    MakeRequestUuid, PropagateRequestIdLayer, RequestId, SetRequestIdLayer,
+};
+use tower_http::trace::TraceLayer;
+use tower_http_access_authorizers::authorities::{AuthorityRuleExt, HasAuthorities};
+use tower_http_access_authorizers::request::RequestAuthorizationProvider;
 use tower_http_access_core::SecurityLayer;
 use tower_http_access_core::authentication::RequestAuthenticator;
 use tower_http_access_core::authentication::RequestAuthenticatorExt;
-use tower_http_access_core::authorization::authorities::HasAuthorities;
 use tower_http_access_core::authorization::core::AuthenticationEntryPoint;
-use tower_http_access_core::authorization::request::RequestAuthorizationProvider;
 
 use tower_http_access_basic::BasicRequestAuthenticator;
 use user_password_auth::{
@@ -73,6 +80,26 @@ async fn create_app() -> Router {
         .nest("/v1/notes", notes_api)
         // Match full application paths before Axum strips the nesting prefix.
         .route_layer(security_layer)
+        // Propagate IDs even when security rejects a request.
+        .layer(PropagateRequestIdLayer::x_request_id())
+        // Trace wraps propagation and security; the ID is installed outside it.
+        .layer(
+            TraceLayer::new_for_http().make_span_with(|request: &Request| {
+                let request_id = request
+                    .extensions()
+                    .get::<RequestId>()
+                    .and_then(|id| id.header_value().to_str().ok())
+                    .unwrap_or("unknown");
+                tracing::info_span!(
+                    "request",
+                    request_id = %request_id,
+                    method = %request.method(),
+                    path = %request.uri().path(),
+                )
+            }),
+        )
+        // Added last: set the ID before tracing creates the request span.
+        .layer(SetRequestIdLayer::x_request_id(MakeRequestUuid))
 }
 
 #[derive(Serialize)]
@@ -199,6 +226,9 @@ impl NoteRepository {
 
     async fn read(&self, id: u32) -> Result<Note, NoteError> {
         let notes = &self.inner.read().await.1;
+        tracing::info!(note_id = %id, "Getting note");
+        // Emulate hard-job of reading
+        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
         let note = notes.get(&id).ok_or(NoteError::NotFound)?;
         Ok(note.clone())
     }
@@ -217,7 +247,10 @@ impl From<UserDetail> for SharedUser {
 
 impl HasAuthorities for SharedUser {
     fn has_authority(&self, authority: &str) -> bool {
-        self.0.has_authority(authority)
+        self.0
+            .authorities
+            .iter()
+            .any(|granted| granted.0 == authority)
     }
 }
 

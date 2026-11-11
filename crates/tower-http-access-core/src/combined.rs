@@ -1,17 +1,13 @@
 //! Authentication and authorization in a single Tower service.
-
-use crate::authentication::Authenticated;
-use crate::authentication::AuthenticationAttempt;
-use crate::authentication::RequestAuthenticator;
-use crate::authorization::core::AuthenticationEntryPoint;
-use crate::authorization::core::AuthorizationDecision;
-use crate::authorization::core::AuthorizationDenial;
-use crate::authorization::core::AuthorizationFailure;
-use crate::authorization::core::AuthorizationFailureHandler;
-use crate::authorization::core::AuthorizationProvider;
-use crate::authorization::core::DefaultAuthenticationEntryPoint;
-use crate::authorization::core::DefaultAuthorizationFailureHandler;
-use crate::{DefaultSecurityResponseAdapter, SecurityResponseAdapter};
+use crate::{
+    DefaultSecurityResponseAdapter, SecurityResponseAdapter,
+    authentication::{Authenticated, AuthenticationAttempt, RequestAuthenticator},
+    authorization::core::{
+        AuthenticationEntryPoint, AuthorizationDecision, AuthorizationDenial, AuthorizationFailure,
+        AuthorizationFailureHandler, AuthorizationProvider, DefaultAuthenticationEntryPoint,
+        DefaultAuthorizationFailureHandler,
+    },
+};
 use futures_util::future::BoxFuture;
 use http::{Request, Response};
 use std::task::{Context, Poll};
@@ -47,7 +43,7 @@ use tower_service::Service;
 /// remove existing authentication extensions.
 ///
 /// Use [`crate::authentication::DelegatingRequestAuthenticator`] to combine authentication
-/// mechanisms, or [`crate::authorization::all::AllAuthorizationProvider`] to combine authorization
+/// mechanisms, or `tower_http_access_authorizers::all::AllAuthorizationProvider` to combine authorization
 /// checks. Use the separate authentication and authorization layers when the stages need
 /// independent placement in the middleware stack.
 ///
@@ -55,7 +51,7 @@ use tower_service::Service;
 /// use http::request::Parts;
 /// use tower_http_access_core::authentication::AuthenticationAttempt;
 /// use tower_http_access_core::authentication::AuthenticatorError;
-/// use tower_http_access_core::authorization::default_auth::AuthenticatedAuthorizationProvider;
+/// use tower_http_access_authorizers::default_auth::AuthenticatedAuthorizationProvider;
 /// use tower_http_access_core::SecurityLayer;
 ///
 /// let authenticator = |_: &Parts| async {
@@ -130,7 +126,7 @@ impl<A, P, H, E, R> SecurityLayer<A, P, H, E, R> {
     /// ```
     /// use tower_http_access_core::{SecurityLayer, SecurityResponseAdapter};
     /// use tower_http_access_core::authentication::{AuthenticationAttempt, AuthenticatorError};
-    /// use tower_http_access_core::authorization::default_auth::AuthenticatedAuthorizationProvider;
+    /// use tower_http_access_authorizers::default_auth::AuthenticatedAuthorizationProvider;
     /// use http::request::Parts;
     ///
     /// fn configure<B, R: SecurityResponseAdapter<B>>(adapter: R) {
@@ -285,7 +281,3 @@ where
         })
     }
 }
-
-#[cfg(test)]
-#[path = "combined_tests.rs"]
-mod tests;

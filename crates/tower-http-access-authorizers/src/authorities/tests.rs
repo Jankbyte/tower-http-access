@@ -1,9 +1,9 @@
 use super::*;
-use crate::authorization::all::AllAuthorizationProvider;
-use crate::authorization::core::AuthorizationDenial;
-use crate::authorization::core::AuthorizationProviderExt;
-use crate::authorization::default_auth::DenyAllAuthorizationProvider;
-use crate::authorization::default_auth::PermitAllAuthorizationProvider;
+use crate::all::AllAuthorizationProvider;
+use crate::default_auth::DenyAllAuthorizationProvider;
+use crate::default_auth::PermitAllAuthorizationProvider;
+use tower_http_access_core::authorization::core::AuthorizationDenial;
+use tower_http_access_core::authorization::core::AuthorizationProviderExt;
 
 struct Principal(Vec<&'static str>);
 impl HasAuthorities for Principal {
@@ -47,7 +47,7 @@ async fn authority_providers_preserve_anonymous_any_all_and_empty_list_semantics
             } else {
                 AuthorizationDecision::Deny(AuthorizationDenial::InsufficientPermissions)
             };
-            crate::authorization::core::assert_builtin_decision(
+            crate::assert_builtin_decision(
                 provider.authorize(Some(&identity), &parts).await.unwrap(),
                 expected,
             );
@@ -100,9 +100,6 @@ async fn permit_and_deny_providers_work_without_authority_traits() {
             permit.authorize(identity, &parts).await.unwrap(),
             AuthorizationDecision::Allow
         ));
-        crate::authorization::core::assert_builtin_decision(
-            deny.authorize(identity, &parts).await.unwrap(),
-            expected,
-        );
+        crate::assert_builtin_decision(deny.authorize(identity, &parts).await.unwrap(), expected);
     }
 }

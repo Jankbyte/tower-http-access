@@ -1,25 +1,18 @@
-//! Reusable authority checks independent of authentication schemes and request matching.
-
-use super::default_auth::denied;
-use crate::authorization::core::AuthorizationDecision;
-use crate::authorization::core::AuthorizationProvider;
+use crate::default_auth::denied;
 use futures_util::future::BoxFuture;
 use http::request::Parts;
 use std::{convert::Infallible, marker::PhantomData};
+use tower_http_access_core::authorization::core::AuthorizationDecision;
+use tower_http_access_core::authorization::core::AuthorizationProvider;
 
-/// An identity whose authorities can be checked by authorization providers.
+/// An application identity whose authorities can be checked by authorization policies.
+///
+/// Implement this trait for your own identity type. To use an external identity such
+/// as `user_password_auth::UserDetail`, wrap it in a local newtype and adapt the
+/// authenticator with `RequestAuthenticatorExt::map`.
 pub trait HasAuthorities {
     /// Check an exact authority name, without adding a prefix.
     fn has_authority(&self, authority: &str) -> bool;
-}
-
-#[cfg(feature = "user_password_auth")]
-impl HasAuthorities for user_password_auth::UserDetail {
-    fn has_authority(&self, authority: &str) -> bool {
-        self.authorities
-            .iter()
-            .any(|granted| granted.0 == authority)
-    }
 }
 
 /// Requires authentication and one exact authority.
@@ -154,7 +147,7 @@ impl<A: HasAuthorities + Send + Sync> AuthorizationProvider
 }
 
 #[cfg(test)]
-#[path = "authorities_tests.rs"]
+#[path = "tests.rs"]
 mod tests;
 
 impl<A> Clone for AuthorityAuthorizationProvider<A> {

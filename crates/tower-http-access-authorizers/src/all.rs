@@ -1,7 +1,6 @@
-use crate::authorization::core::AuthorizationDecision;
-use crate::authorization::core::AuthorizationProvider;
 use futures_util::future::BoxFuture;
 use http::request::Parts;
+use tower_http_access_core::authorization::core::{AuthorizationDecision, AuthorizationProvider};
 
 /// Error returned by a provider in an all-of authorization chain.
 ///
@@ -56,8 +55,8 @@ where
 /// [`AllAuthorizationError`] with their original source preserved.
 ///
 /// ```
-/// use tower_http_access_core::authorization::all::AllAuthorizationProvider;
-/// use tower_http_access_core::authorization::default_auth::AuthenticatedAuthorizationProvider;
+/// use tower_http_access_authorizers::all::AllAuthorizationProvider;
+/// use tower_http_access_authorizers::default_auth::AuthenticatedAuthorizationProvider;
 /// use tower_http_access_core::authorization::core::AuthorizationProviderExt;
 ///
 /// struct AppUser { id: u64 }
@@ -130,7 +129,3 @@ impl<A: Send + Sync> AuthorizationProvider for AllAuthorizationProvider<A> {
         })
     }
 }
-
-#[cfg(all(test, feature = "split_auth"))]
-#[path = "all_tests.rs"]
-mod tests;
