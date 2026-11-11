@@ -1,6 +1,6 @@
 [package]
 name = "tower-http-access-form-login"
-version.workspace = true
+version = "0.0.1"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -11,9 +11,9 @@ keywords = ["authentication", "form", "middleware", "tower"]
 categories = ["authentication", "web-programming::http-server"]
 
 [dependencies]
-http-request-matcher = { version = "0.0.1", path = "../http-request-matcher" }
-user-password-auth = { version = "0.0.1", path = "../user-password-auth" }
-tower-http-access-core = { version = "0.0.1", path = "../tower-http-access-core", default-features = false }
+http-request-matcher = { workspace = true }
+user-password-auth = { workspace = true }
+tower-http-access-core = { workspace = true, default-features = false }
 bytes.workspace = true
 http.workspace = true
 http-body.workspace = true

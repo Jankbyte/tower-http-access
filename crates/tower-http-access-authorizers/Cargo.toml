@@ -1,6 +1,6 @@
 [package]
 name = "tower-http-access-authorizers"
-version.workspace = true
+version = "0.0.1"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -9,14 +9,14 @@ readme = "README.md"
 description = "Composable request and authority authorization policies for Tower HTTP Access"
 
 [dependencies]
-tower-http-access-core = { version = "0.0.1", path = "../tower-http-access-core", default-features = false }
-http-request-matcher = { version = "0.0.1", path = "../http-request-matcher", optional = true }
+tower-http-access-core = { workspace = true, default-features = false }
+http-request-matcher = { workspace = true, optional = true }
 futures-util = { workspace = true, features = ["alloc"] }
 http.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
-tower-http-access-core = { path = "../tower-http-access-core", features = ["split_auth", "axum"] }
+tower-http-access-core = { workspace = true, features = ["split_auth", "axum"] }
 axum.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tower = { workspace = true, features = ["util"] }

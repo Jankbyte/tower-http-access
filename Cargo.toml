@@ -20,6 +20,14 @@ license = "MIT"
 repository = "https://github.com/Jankbyte/tower-http-access"
 
 [workspace.dependencies]
+http-request-matcher = { version = "0.0.1", path = "crates/http-request-matcher" }
+tower-http-access-core = { version = "0.0.1", path = "crates/tower-http-access-core" }
+tower-http-access-authorizers = { version = "0.0.1", path = "crates/tower-http-access-authorizers" }
+tower-http-access-basic = { version = "0.0.1", path = "crates/tower-http-access-basic" }
+tower-http-access-form-login = { version = "0.0.1", path = "crates/tower-http-access-form-login" }
+tower-http-access-session = { version = "0.0.1", path = "crates/tower-http-access-session" }
+user-password-auth = { version = "0.0.1", path = "crates/user-password-auth" }
+
 tower-sessions = { version = "0.15", default-features = false }
 bytes = "1"
 http-body = "1"

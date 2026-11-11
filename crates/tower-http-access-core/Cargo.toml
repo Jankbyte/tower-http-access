@@ -14,7 +14,7 @@ categories = ["authentication", "web-programming::http-server"]
 [dependencies]
 bytes.workspace = true
 futures-util = { workspace = true, default-features = false, features = ["alloc"] }
-http-request-matcher = { version = "0.0.1", path = "../http-request-matcher", optional = true }
+http-request-matcher = { workspace = true, optional = true }
 http.workspace = true
 tower-service.workspace = true
 tower-layer.workspace = true
@@ -23,7 +23,7 @@ thiserror.workspace = true
 axum = { workspace = true, optional = true }
 
 [dev-dependencies]
-tower-http-access-authorizers = { path = "../tower-http-access-authorizers", features = ["request_matcher", "authorities"] }
+tower-http-access-authorizers = { workspace = true, features = ["request_matcher", "authorities"] }
 axum.workspace = true
 http-body.workspace = true
 http-body-util.workspace = true

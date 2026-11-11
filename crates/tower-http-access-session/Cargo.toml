@@ -1,6 +1,6 @@
 [package]
 name = "tower-http-access-session"
-version.workspace = true
+version = "0.0.1"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -11,23 +11,23 @@ keywords = ["authentication", "session", "middleware", "tower"]
 categories = ["authentication", "web-programming::http-server"]
 
 [dependencies]
-tower-http-access-form-login = { version = "0.0.1", path = "../tower-http-access-form-login", optional = true }
-http-request-matcher = { version = "0.0.1", path = "../http-request-matcher", optional = true }
-tower-http-access-core = { version = "0.0.1", path = "../tower-http-access-core", default-features = false }
+tower-http-access-form-login = { workspace = true, optional = true }
+http-request-matcher = { workspace = true, optional = true }
+tower-http-access-core = { workspace = true, default-features = false }
 tower-sessions = { workspace = true, optional = true }
 http.workspace = true
 serde.workspace = true
 futures-util = { workspace = true, features = ["alloc"] }
 
 [dev-dependencies]
-user-password-auth = { path = "../user-password-auth" }
+user-password-auth = { workspace = true }
 bytes.workspace = true
 http-body-util.workspace = true
 tower-layer.workspace = true
-http-request-matcher = { path = "../http-request-matcher" }
-tower-http-access-authorizers = { path = "../tower-http-access-authorizers", features = ["request_matcher", "authorities"] }
+http-request-matcher = { workspace = true }
+tower-http-access-authorizers = { workspace = true, features = ["request_matcher", "authorities"] }
 tower-sessions = { workspace = true, features = ["memory-store", "axum-core"] }
-tower-http-access-core = { path = "../tower-http-access-core", features = ["axum"] }
+tower-http-access-core = { workspace = true, features = ["axum"] }
 axum.workspace = true
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tower = { workspace = true, features = ["util"] }
