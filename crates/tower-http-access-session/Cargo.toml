@@ -20,7 +20,7 @@ serde.workspace = true
 futures-util = { workspace = true, features = ["alloc"] }
 
 [dev-dependencies]
-user-password-auth = { workspace = true }
+user-password-auth.workspace = true
 bytes.workspace = true
 http-body-util.workspace = true
 tower-layer.workspace = true

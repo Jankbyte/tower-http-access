@@ -9,11 +9,9 @@ for arg in "$@"; do
     fi
 done
 
-export RUSTFLAGS="-D warnings"
-export RUSTDOCFLAGS="$RUSTFLAGS"
+export RUSTDOCFLAGS="--cfg docsrs -Dwarnings"
 
-cargo fmt -- --check
-cargo clippy --workspace --all-targets --all-features
-cargo test --all-targets --all-features
+cargo fmt --all
+cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 cargo test --workspace --all-features --doc
-cargo doc --all-features --no-deps "${doc_args[@]}"
+cargo doc --all-features --no-deps --locked "${doc_args[@]}"

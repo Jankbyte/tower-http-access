@@ -12,7 +12,7 @@ keywords = ["authentication", "basic", "middleware", "tower"]
 categories = ["authentication", "web-programming::http-server"]
 
 [dependencies]
-user-password-auth = { workspace = true }
+user-password-auth.workspace = true
 tower-http-access-core = { workspace = true, default-features = false }
 bytes.workspace = true
 http.workspace = true

@@ -12,9 +12,9 @@ keywords = ["axum", "authentication", "authorization", "middleware", "tower"]
 categories = ["authentication", "web-programming::http-server"]
 
 [dependencies]
+http-request-matcher = { workspace = true, optional = true }
 bytes.workspace = true
 futures-util = { workspace = true, default-features = false, features = ["alloc"] }
-http-request-matcher = { workspace = true, optional = true }
 http.workspace = true
 tower-service.workspace = true
 tower-layer.workspace = true
