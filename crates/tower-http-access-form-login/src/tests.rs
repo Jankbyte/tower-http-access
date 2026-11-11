@@ -1,5 +1,5 @@
 use super::*;
-use crate::form_login::{RedirectSuccessHandler, SessionSetSuccessHandler};
+use crate::RedirectSuccessHandler;
 use http::request::Parts;
 use http_body_util::Full;
 use std::convert::Infallible;
@@ -47,7 +47,7 @@ where
     P: UsernamePasswordAuthenticationProvider + Clone + 'static,
     M: RequestMatcher + Clone + 'static,
     H: SuccessHandler<P::Authentication> + Clone + 'static,
-    F: FailureHandler<P::Error> + Clone + 'static,
+    F: FailureHandler + Clone + 'static,
 {
     layer
         .layer(tower::service_fn(
@@ -155,6 +155,24 @@ async fn failures_are_distinguished_and_customizable() {
 }
 
 #[tokio::test]
+async fn custom_failure_handler_receives_boxed_backend_error() {
+    let layer =
+        FormLoginLayer::new(Provider).on_failure(|_: Parts, error: FormLoginError| async move {
+            use std::error::Error;
+
+            assert!(matches!(&error, FormLoginError::Backend(_)));
+            assert_eq!(error.source().unwrap().to_string(), "backend unavailable");
+            response(StatusCode::SERVICE_UNAVAILABLE)
+        });
+    let result = run(
+        layer,
+        request(Method::POST, "/login", "username=backend&password=x"),
+    )
+    .await;
+    assert_eq!(result.status(), StatusCode::SERVICE_UNAVAILABLE);
+}
+
+#[tokio::test]
 async fn rejects_oversized_body_and_wrong_content_type() {
     assert_eq!(
         run(
@@ -194,12 +212,8 @@ impl SuccessHandler<String> for RedirectSuccess {
 #[derive(Clone)]
 struct RejectFailure;
 
-impl FailureHandler<std::io::Error> for RejectFailure {
-    fn on_failure(
-        &self,
-        _: Parts,
-        error: FormLoginError<std::io::Error>,
-    ) -> BoxFuture<'_, SecurityResponse> {
+impl FailureHandler for RejectFailure {
+    fn on_failure(&self, _: Parts, error: FormLoginError) -> BoxFuture<'_, SecurityResponse> {
         Box::pin(async move {
             assert!(matches!(error, FormLoginError::InvalidCredentials));
             response(StatusCode::FORBIDDEN)
@@ -259,135 +273,6 @@ async fn matcher_supports_path_patterns_and_method_restrictions() {
     assert_eq!(response.body(), "untouched");
 }
 
-#[tokio::test]
-async fn session_success_rotates_stores_and_then_delegates() {
-    use tower_sessions::{MemoryStore, Session};
-    let store = Arc::new(MemoryStore::default());
-    let session = Session::new(None, store.clone(), None);
-    session.insert("existing", true).await.unwrap();
-    session.save().await.unwrap();
-    let old_id = session.id();
-    let handler = SessionSetSuccessHandler::new(
-        |identity: &String| identity.clone(),
-        |parts: Parts, identity: String| async move {
-            let session = parts.extensions.get::<Session>().unwrap();
-            assert_eq!(
-                session.get::<String>("user_id").await.unwrap(),
-                Some(identity)
-            );
-            assert_eq!(session.get::<bool>("existing").await.unwrap(), Some(true));
-            Response::builder()
-                .status(StatusCode::SEE_OTHER)
-                .header(header::LOCATION, "/private")
-                .body(Bytes::new())
-                .unwrap()
-        },
-    );
-    let mut req = request(
-        Method::POST,
-        "/login",
-        "username=alice&password=p%2Bss+word",
-    );
-    req.extensions_mut().insert(session.clone());
-    let result = run(FormLoginLayer::new(Provider).on_success(handler), req).await;
-    assert_eq!(result.status(), StatusCode::SEE_OTHER);
-    assert_eq!(result.headers()[header::LOCATION], "/private");
-    session.save().await.unwrap();
-    assert_ne!(session.id(), old_id);
-    let restored = Session::new(session.id(), store.clone(), None);
-    assert_eq!(
-        restored.get::<String>("user_id").await.unwrap().as_deref(),
-        Some("alice")
-    );
-    let previous = Session::new(old_id, store, None);
-    assert_eq!(previous.get::<String>("user_id").await.unwrap(), None);
-}
-
-#[tokio::test]
-async fn session_success_supports_custom_key_and_requires_session() {
-    use tower_sessions::{MemoryStore, Session};
-    let handler = SessionSetSuccessHandler::new(
-        |identity: &String| identity.clone(),
-        |_: Parts, _: String| async { response(StatusCode::NO_CONTENT) },
-    )
-    .with_session_key("principal");
-    let layer = FormLoginLayer::new(Provider).on_success(handler);
-    let body = "username=alice&password=p%2Bss+word";
-    assert_eq!(
-        run(layer.clone(), request(Method::POST, "/login", body))
-            .await
-            .status(),
-        StatusCode::INTERNAL_SERVER_ERROR
-    );
-    let session = Session::new(None, Arc::new(MemoryStore::default()), None);
-    let mut req = request(Method::POST, "/login", body);
-    req.extensions_mut().insert(session.clone());
-    assert_eq!(run(layer, req).await.status(), StatusCode::NO_CONTENT);
-    assert_eq!(
-        session.get::<String>("principal").await.unwrap().as_deref(),
-        Some("alice")
-    );
-    assert_eq!(session.get::<String>("user_id").await.unwrap(), None);
-}
-
-#[tokio::test]
-async fn session_success_does_not_delegate_on_serialization_failure() {
-    use tower_sessions::{MemoryStore, Session};
-    struct Unserializable;
-    impl serde::Serialize for Unserializable {
-        fn serialize<S: serde::Serializer>(&self, _: S) -> Result<S::Ok, S::Error> {
-            Err(serde::ser::Error::custom("cannot serialize identity"))
-        }
-    }
-    let handler = SessionSetSuccessHandler::new(
-        |_: &String| Unserializable,
-        |_: Parts, _: String| async { panic!("must not delegate after session failure") },
-    );
-    let mut req = request(
-        Method::POST,
-        "/login",
-        "username=alice&password=p%2Bss+word",
-    );
-    req.extensions_mut()
-        .insert(Session::new(None, Arc::new(MemoryStore::default()), None));
-    assert_eq!(
-        run(FormLoginLayer::new(Provider).on_success(handler), req)
-            .await
-            .status(),
-        StatusCode::INTERNAL_SERVER_ERROR
-    );
-}
-
-#[tokio::test]
-async fn builtin_success_handlers_return_ok_or_redirect() {
-    let body = "username=alice&password=p%2Bss+word";
-    let result = run(
-        FormLoginLayer::new(Provider).on_success(DefaultSuccessHandler),
-        request(Method::POST, "/login", body),
-    )
-    .await;
-    assert_eq!(result.status(), StatusCode::OK);
-    assert!(result.body().is_empty());
-    assert!(!result.headers().contains_key(header::LOCATION));
-
-    let session =
-        tower_sessions::Session::new(None, Arc::new(tower_sessions::MemoryStore::default()), None);
-    let handler = SessionSetSuccessHandler::new(
-        |user: &String| user.clone(),
-        RedirectSuccessHandler::new("/private?welcome=true").unwrap(),
-    );
-    let mut req = request(Method::POST, "/login", body);
-    req.extensions_mut().insert(session.clone());
-    let result = run(FormLoginLayer::new(Provider).on_success(handler), req).await;
-    assert_eq!(result.status(), StatusCode::SEE_OTHER);
-    assert_eq!(result.headers()[header::LOCATION], "/private?welcome=true");
-    assert!(result.body().is_empty());
-    assert_eq!(
-        session.get::<String>("user_id").await.unwrap().as_deref(),
-        Some("alice")
-    );
-}
-
 #[test]
 fn redirect_handler_validates_configured_path() {
     for path in [
@@ -434,12 +319,8 @@ async fn shared_trait_objects_support_non_clone_components() {
             })
         }
     }
-    impl FailureHandler<std::io::Error> for Handlers {
-        fn on_failure(
-            &self,
-            _: Parts,
-            error: FormLoginError<std::io::Error>,
-        ) -> BoxFuture<'_, SecurityResponse> {
+    impl FailureHandler for Handlers {
+        fn on_failure(&self, _: Parts, error: FormLoginError) -> BoxFuture<'_, SecurityResponse> {
             Box::pin(async move {
                 assert!(matches!(error, FormLoginError::InvalidCredentials));
                 self.0.fetch_add(1, Ordering::SeqCst);
@@ -453,7 +334,7 @@ async fn shared_trait_objects_support_non_clone_components() {
     let matcher: Arc<dyn RequestMatcher> = Arc::new(LoginMatcher);
     let handlers = Arc::new(Handlers(AtomicUsize::new(0)));
     let success: Arc<dyn SuccessHandler<String>> = handlers.clone();
-    let failure: Arc<dyn FailureHandler<std::io::Error>> = handlers.clone();
+    let failure: Arc<dyn FailureHandler> = handlers.clone();
     let layer = FormLoginLayer::new(provider)
         .request_matcher(matcher)
         .on_success(success)
@@ -485,4 +366,27 @@ async fn shared_trait_objects_support_non_clone_components() {
         StatusCode::FORBIDDEN
     );
     assert_eq!(handlers.0.load(Ordering::SeqCst), 2);
+}
+
+#[tokio::test]
+async fn builtin_success_handlers_return_ok_or_redirect() {
+    let body = "username=alice&password=p%2Bss+word";
+    let result = run(
+        FormLoginLayer::new(Provider).on_success(DefaultSuccessHandler),
+        request(Method::POST, "/login", body),
+    )
+    .await;
+    assert_eq!(result.status(), StatusCode::OK);
+    assert!(result.body().is_empty());
+    assert!(!result.headers().contains_key(header::LOCATION));
+
+    let result = run(
+        FormLoginLayer::new(Provider)
+            .on_success(RedirectSuccessHandler::new("/private?welcome=true").unwrap()),
+        request(Method::POST, "/login", body),
+    )
+    .await;
+    assert_eq!(result.status(), StatusCode::SEE_OTHER);
+    assert_eq!(result.headers()[header::LOCATION], "/private?welcome=true");
+    assert!(result.body().is_empty());
 }

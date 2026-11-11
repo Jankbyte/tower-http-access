@@ -146,8 +146,8 @@ impl<A> AuthenticationAttempt<A> {
 ///
 /// # Restrictions
 ///
-/// * The authenticator does not support extracting requet body. For example, it means, if you want implement
-///   form-login authentication, you must create your own endpoint in axum that accept `Content-Type: application/x-www-form-urlencoded`.
+/// * Authenticators do not read the request body. For form login, use the
+///   `tower-http-access-form-login` crate or an application-defined login endpoint.
 ///
 /// Request metadata is borrowed immutably. Use separate middleware before
 /// authentication to enrich headers or extensions; return the identity through

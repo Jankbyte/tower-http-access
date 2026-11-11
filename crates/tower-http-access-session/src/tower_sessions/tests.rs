@@ -1,5 +1,6 @@
 use super::*;
-use crate::SessionStoredIdentity;
+use crate::tower_sessions::SessionStoredIdentity;
+use ::tower_sessions::{MemoryStore, SessionManagerLayer};
 use axum::{
     Router,
     body::Body,
@@ -11,7 +12,6 @@ use tower::ServiceExt;
 use tower_http_access_authorizers::default_auth::AuthenticatedAuthorizationProvider;
 use tower_http_access_core::SecurityLayer;
 use tower_http_access_core::authentication::Authenticated;
-use tower_sessions::{MemoryStore, SessionManagerLayer};
 
 struct Users;
 impl SessionIdentityProvider for Users {

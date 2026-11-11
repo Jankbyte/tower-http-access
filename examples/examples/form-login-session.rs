@@ -25,8 +25,9 @@ use tower_http_access_core::authentication::Authenticated;
 use tower_http_access_core::authorization::core::DefaultAuthenticationEntryPoint;
 use tower_http_access_core::authorization::entry_point::DelegatingAuthenticationEntryPoint;
 use tower_http_access_core::filter_chain::SecurityChainLayer;
-use tower_http_access_session::{
-    BrowserRequestMatcher, SessionIdentityProvider, SessionRequestAuthenticator, initialize_session,
+use tower_http_access_session::BrowserRequestMatcher;
+use tower_http_access_session::tower_sessions::{
+    SessionIdentityProvider, SessionRequestAuthenticator, initialize_session,
 };
 use tower_sessions::{
     Expiry, MemoryStore, Session, SessionManagerLayer,

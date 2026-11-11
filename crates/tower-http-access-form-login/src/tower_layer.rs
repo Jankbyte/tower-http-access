@@ -34,7 +34,7 @@ use user_password_auth::{Credentials, UsernamePasswordAuthenticationProvider};
 /// use http::{Method, Response, StatusCode, request::Parts};
 /// use user_password_auth::UsernamePasswordAuthenticationProvider;
 /// use http_request_matcher::PathPatternRequestMatcher;
-/// use tower_http_access_session::form_login::FormLoginLayer;
+/// use tower_http_access_form_login::FormLoginLayer;
 ///
 /// fn configure<P: UsernamePasswordAuthenticationProvider>(provider: P) {
 ///     let layer = FormLoginLayer::new(provider)
@@ -52,7 +52,7 @@ use user_password_auth::{Credentials, UsernamePasswordAuthenticationProvider};
 ///                 .header("location", "/ui")
 ///                 .body(Bytes::new()).unwrap()
 ///         })
-///         .on_failure(|parts: Parts, error: tower_http_access_session::form_login::FormLoginError<P::Error>| async move {
+///         .on_failure(|parts: Parts, error: tower_http_access_form_login::FormLoginError| async move {
 ///             // Inspect error to distinguish invalid credentials from backend failure.
 ///             Response::builder()
 ///                 .status(StatusCode::UNAUTHORIZED)
@@ -142,7 +142,7 @@ impl<P, M, H, F> FormLoginLayer<P, M, H, F> {
     pub fn on_failure<N>(self, handler: N) -> FormLoginLayer<P, M, H, N>
     where
         P: UsernamePasswordAuthenticationProvider,
-        N: FailureHandler<P::Error>,
+        N: FailureHandler,
     {
         FormLoginLayer {
             provider: self.provider,
@@ -187,7 +187,7 @@ where
     P: UsernamePasswordAuthenticationProvider + Clone + 'static,
     M: RequestMatcher + Clone + 'static,
     H: SuccessHandler<P::Authentication> + Clone + 'static,
-    F: FailureHandler<P::Error> + Clone + 'static,
+    F: FailureHandler + Clone + 'static,
     B: http_body::Body<Data = Bytes> + Send + 'static,
     B::Error: std::error::Error + Send + Sync + 'static,
     R: From<Bytes> + 'static,
@@ -254,7 +254,7 @@ where
                 provider
                     .authenticate(&credentials)
                     .await
-                    .map_err(FormLoginError::Backend)?
+                    .map_err(|error| FormLoginError::Backend(Box::new(error)))?
                     .ok_or(FormLoginError::InvalidCredentials)
             }
             .await;

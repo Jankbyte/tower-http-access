@@ -2,9 +2,15 @@
 
 Session authentication for Tower HTTP Access using `tower-sessions`.
 
+The `tower_sessions` feature is enabled by default and exposes the integration in
+`tower_http_access_session::tower_sessions`. Disable default features to omit this
+backend. `SessionSetSuccessHandler` requires both `tower_sessions` and `form_login`.
+The `browser_matcher` and `session_matcher` features expose backend-independent
+request matchers at the crate root.
+
 Session middleware loads the cookie-backed session into request extensions.
-[`SessionRequestAuthenticator`] reads its `user_id` and calls your
-[`SessionIdentityProvider`] to load the current identity. `SecurityLayer` passes
+`SessionRequestAuthenticator` reads its `user_id` and calls your
+`SessionIdentityProvider` to load the current identity. `SecurityLayer` passes
 that identity to your authorization provider and exposes it as `Authenticated<T>`
 to handlers. Existing role and path policies work without modification.
 
@@ -38,13 +44,15 @@ futures-util = "0.3"
 ```
 
 ```rust,no_run
+# #[cfg(feature = "tower_sessions")]
+# fn main() -> Result<(), Box<dyn std::error::Error>> {
 use std::{convert::Infallible, sync::Arc};
 use axum::{Router, routing::get};
 use futures_util::future::BoxFuture;
 use tower_http_access_core::SecurityLayer;
 use tower_http_access_core::authentication::Authenticated;
 use tower_http_access_authorizers::default_auth::AuthenticatedAuthorizationProvider;
-use tower_http_access_session::{SessionIdentityProvider, SessionRequestAuthenticator};
+use tower_http_access_session::tower_sessions::{SessionIdentityProvider, SessionRequestAuthenticator};
 use tower_sessions::{MemoryStore, SessionManagerLayer};
 
 struct Users;
@@ -74,6 +82,9 @@ let app: Router = Router::new()
     // Added last so sessions are available before authentication runs.
     .layer(SessionManagerLayer::new(MemoryStore::default()));
 # Ok::<(), Box<dyn std::error::Error>>(())
+# }
+# #[cfg(not(feature = "tower_sessions"))]
+# fn main() {}
 ```
 
 In your public login handler, verify credentials first, then call
@@ -86,7 +97,9 @@ to implement `DeserializeOwned`. To use a custom session schema or construct an
 identifier that does not implement deserialization, supply an async extractor:
 
 ```rust
-use tower_http_access_session::{SessionIdentityProvider, SessionRequestAuthenticator};
+# #[cfg(feature = "tower_sessions")]
+# fn main() -> Result<(), Box<dyn std::error::Error>> {
+use tower_http_access_session::tower_sessions::{SessionIdentityProvider, SessionRequestAuthenticator};
 
 fn custom_authenticator<P>(provider: P) -> SessionRequestAuthenticator<P>
 where
@@ -96,6 +109,10 @@ where
         session.get::<String>("account_id").await
     })
 }
+# Ok(())
+# }
+# #[cfg(not(feature = "tower_sessions"))]
+# fn main() {}
 ```
 
 The extractor receives an owned, cloned `Session` handle and returns
@@ -110,14 +127,16 @@ Authorization decides whether anonymous access is permitted.
 
 ## Store the identity in the session
 
-Use [`SessionStoredIdentity<T>`] when the session already contains the complete
+Use `tower_sessions::SessionStoredIdentity<T>` when the session already contains the complete
 identity needed for authorization. It implements `SessionIdentityProvider` with
 both `Id` and `Identity` set to `T`, returning the extracted value unchanged.
 `tower-sessions` still loads the session from its configured backend; this provider
 performs no additional user database lookup.
 
 ```rust,no_run
-use tower_http_access_session::{SessionRequestAuthenticator, SessionStoredIdentity};
+# #[cfg(feature = "tower_sessions")]
+# fn main() -> Result<(), Box<dyn std::error::Error>> {
+use tower_http_access_session::tower_sessions::{SessionRequestAuthenticator, SessionStoredIdentity};
 use tower_sessions::Session;
 
 // A simple identity consisting of the username and role names.
@@ -136,6 +155,10 @@ async fn establish_session(
     session.cycle_id().await?;
     session.insert("authenticated_user", identity).await
 }
+# Ok(())
+# }
+# #[cfg(not(feature = "tower_sessions"))]
+# fn main() {}
 ```
 
 The default extractor requires `T: DeserializeOwned`; inserting the identity
@@ -155,7 +178,7 @@ including login and logout, against CSRF. `MemoryStore` is for the example.
 
 Session identifiers are managed by `tower-sessions` using its `session::Id` type.
 
-Call [`initialize_session`] from middleware after `SessionManagerLayer` runs and
+Call `initialize_session` from middleware after `SessionManagerLayer` runs and
 before calling the next handler to initialize anonymous sessions. It adds a
 reserved marker without setting `user_id`; the session manager saves the session
 and sets its cookie on eligible responses. Existing initialized sessions are not
@@ -163,7 +186,7 @@ rewritten. See the form-login example for Axum middleware placement.
 
 ## Browser flow selection
 
-Enable `browser_matcher` to use [`BrowserRequestMatcher`] with
+Enable `browser_matcher` to use `BrowserRequestMatcher` with
 `SecurityChainLayer` (enable the core crate's `filter_chain` feature):
 
 ```toml
@@ -206,19 +229,28 @@ To redirect only HTML requests while returning 401 to REST clients, configure
 
 ## Form login
 
-Enable the `form_login_layer` feature to use
-`tower_http_access_session::form_login::{FormLoginLayer, SuccessHandler, FailureHandler}`.
-`FormLoginLayer` authenticates form submissions through a
-`UsernamePasswordAuthenticationProvider`. Configure request matching, credential
-field names, and response handling with `request_matcher` (for example, a `PathPatternRequestMatcher` with `with_method`), `username_parameter`,
-`password_parameter`, `on_success`, and `on_failure`.
+Use `tower-http-access-form-login` for `FormLoginLayer` and its generic success
+and failure handlers. Enable this crate's `form_login` feature to use
+`SessionSetSuccessHandler` with that layer:
 
-Both handler traits support custom structs and async closures. Success handlers
-own session persistence and the response; failure handlers receive `FormLoginError`.
-Place session middleware outside the layer when handlers need session access.
+```rust
+# #[cfg(all(feature = "tower_sessions", feature = "form_login"))]
+# fn main() -> Result<(), Box<dyn std::error::Error>> {
+use tower_http_access_form_login::RedirectSuccessHandler;
+use tower_http_access_session::tower_sessions::SessionSetSuccessHandler;
 
-The layer stores concrete provider, matcher, and handler types. These must implement
-`Clone` when applying the layer. Wrap components in `Arc` to share them; providers,
-matchers, and both handler traits support `Arc`, including trait objects. The default
-handlers are `DefaultSuccessHandler` (200) and `DefaultFailureHandler` (a status based
-on the failure). Builder methods infer replacement matcher and handler types.
+let handler = SessionSetSuccessHandler::new(
+    |user: &String| user.clone(),
+    RedirectSuccessHandler::new("/private").unwrap(),
+);
+// FormLoginLayer::new(provider).on_success(handler)
+# Ok(())
+# }
+# #[cfg(not(all(feature = "tower_sessions", feature = "form_login")))]
+# fn main() {}
+```
+
+The session handler rotates the session ID and stores the mapped identity before
+calling the next success handler. Its default key is `user_id`; configure the same
+key on the handler and `SessionRequestAuthenticator`. Place `SessionManagerLayer`
+outside the form-login layer so the session is available in request extensions.

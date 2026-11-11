@@ -1024,6 +1024,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "tower-http-access-form-login"
+version = "0.0.1"
+dependencies = [
+ "bytes",
+ "futures-util",
+ "http",
+ "http-body",
+ "http-body-util",
+ "http-request-matcher",
+ "serde_urlencoded",
+ "thiserror",
+ "tokio",
+ "tower",
+ "tower-http-access-core",
+ "tower-layer",
+ "tower-service",
+ "user-password-auth",
+]
+
+[[package]]
 name = "tower-http-access-session"
 version = "0.0.1"
 dependencies = [
@@ -1031,17 +1051,15 @@ dependencies = [
  "bytes",
  "futures-util",
  "http",
- "http-body",
  "http-body-util",
  "http-request-matcher",
  "serde",
- "serde_urlencoded",
  "tokio",
  "tower",
  "tower-http-access-authorizers",
  "tower-http-access-core",
+ "tower-http-access-form-login",
  "tower-layer",
- "tower-service",
  "tower-sessions",
  "user-password-auth",
 ]

@@ -2,7 +2,7 @@ use std::{convert::Infallible, marker::PhantomData};
 
 use futures_util::future::BoxFuture;
 
-use crate::SessionIdentityProvider;
+use crate::tower_sessions::SessionIdentityProvider;
 
 /// Uses an identity stored in the session without an additional backend lookup.
 ///

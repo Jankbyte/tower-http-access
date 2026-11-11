@@ -6,6 +6,7 @@ members = [
     "crates/tower-http-access-core",
     "crates/tower-http-access-basic",
     "crates/tower-http-access-session",
+    "crates/tower-http-access-form-login",
     "examples"
 ]
 

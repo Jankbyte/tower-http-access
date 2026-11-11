@@ -1,3 +1,4 @@
+use ::tower_sessions::Session;
 use futures_util::future::BoxFuture;
 use http::{HeaderValue, StatusCode, Uri, header, request::Parts};
 use serde::de::DeserializeOwned;
@@ -7,7 +8,6 @@ use tower_http_access_core::authentication::{
     AuthenticationAttempt, AuthenticationErrorReason, AuthenticatorError, RequestAuthenticator,
 };
 use tower_http_access_core::authorization::core::AuthenticationEntryPoint;
-use tower_sessions::Session;
 
 type SessionIdExtractor<Id> = dyn Fn(Session) -> BoxFuture<'static, Result<Option<Id>, tower_sessions::session::Error>>
     + Send
@@ -47,7 +47,7 @@ pub async fn initialize_session(session: &Session) -> Result<(), tower_sessions:
 ///
 /// Return `None` for deleted or disabled users. Backend failures must return an error.
 /// To use a complete identity already stored in the session without another lookup,
-/// use [`SessionStoredIdentity`](crate::SessionStoredIdentity).
+/// use [`SessionStoredIdentity`](crate::tower_sessions::SessionStoredIdentity).
 pub trait SessionIdentityProvider: Send + Sync {
     type Id: Send;
     type Identity: Clone + Send + Sync + 'static;

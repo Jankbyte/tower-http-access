@@ -380,7 +380,11 @@ their own `Clone` implementations.
 
 ## 🪪 Sessions and form login
 
-The library provides extension points for session authentication; it does not include a session store or form-login flow. Implement a login endpoint that verifies credentials, creates a session, and sets a cookie. A custom `RequestAuthenticator` can resolve that cookie into a typed identity on subsequent requests.
+Use `tower-http-access-session` for authentication with `tower-sessions`, and
+`tower-http-access-form-login` for configurable form-login middleware. Enable the
+session crate's `form_login` feature to persist successful logins with
+`SessionSetSuccessHandler`. Applications can also implement their own login
+endpoints and `RequestAuthenticator` integrations.
 
 Authenticators only inspect request parts, so parse login form bodies in a handler. Cookie-based applications also need CSRF protection, including on login and logout. Add CSRF validation separately from authorization so public endpoints remain protected against forged submissions.
 

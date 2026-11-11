@@ -1,16 +1,10 @@
 #![doc = include_str!("../README.md")]
 
-mod authenticator;
-pub use authenticator::{
-    InvalidLoginPagePath, SessionIdentityProvider, SessionRequestAuthenticator, initialize_session,
-};
-
-mod stored_identity;
-pub use stored_identity::SessionStoredIdentity;
-
-/// Form login middleware and configurable authentication handlers.
-#[cfg(feature = "form_login_layer")]
-pub mod form_login;
+/// Authentication and login persistence using `tower-sessions`.
+///
+/// Available with the `tower_sessions` feature, enabled by default.
+#[cfg(feature = "tower_sessions")]
+pub mod tower_sessions;
 
 #[cfg(feature = "browser_matcher")]
 mod browser_matcher;

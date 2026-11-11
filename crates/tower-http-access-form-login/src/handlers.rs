@@ -24,21 +24,16 @@ where
 
 /// Handles rejected submissions, invalid credentials, and authentication backend errors.
 /// Async closures implement this trait automatically.
-pub trait FailureHandler<E>: Send + Sync {
-    fn on_failure(&self, parts: Parts, error: FormLoginError<E>)
-    -> BoxFuture<'_, SecurityResponse>;
+pub trait FailureHandler: Send + Sync {
+    fn on_failure(&self, parts: Parts, error: FormLoginError) -> BoxFuture<'_, SecurityResponse>;
 }
 
-impl<E, F, Fut> FailureHandler<E> for F
+impl<F, Fut> FailureHandler for F
 where
-    F: Fn(Parts, FormLoginError<E>) -> Fut + Send + Sync,
+    F: Fn(Parts, FormLoginError) -> Fut + Send + Sync,
     Fut: Future<Output = SecurityResponse> + Send + 'static,
 {
-    fn on_failure(
-        &self,
-        parts: Parts,
-        error: FormLoginError<E>,
-    ) -> BoxFuture<'_, SecurityResponse> {
+    fn on_failure(&self, parts: Parts, error: FormLoginError) -> BoxFuture<'_, SecurityResponse> {
         Box::pin(self(parts, error))
     }
 }
@@ -63,11 +58,11 @@ pub struct RedirectSuccessHandler {
 impl RedirectSuccessHandler {
     /// Configure a path such as `/private` or `/account?welcome=true`.
     /// External URLs, network-path URLs, and relative paths are rejected.
-    pub fn new(path: impl AsRef<str>) -> Result<Self, crate::InvalidLoginPagePath> {
+    pub fn new(path: impl AsRef<str>) -> Result<Self, crate::InvalidRedirectPath> {
         let path = path.as_ref();
         let uri = path
             .parse::<http::Uri>()
-            .map_err(|_| crate::InvalidLoginPagePath)?;
+            .map_err(|_| crate::InvalidRedirectPath)?;
         if !path.starts_with('/')
             || path.starts_with("//")
             || path.contains('\\')
@@ -75,10 +70,9 @@ impl RedirectSuccessHandler {
             || uri.scheme().is_some()
             || uri.authority().is_some()
         {
-            return Err(crate::InvalidLoginPagePath);
+            return Err(crate::InvalidRedirectPath);
         }
-        let location =
-            http::HeaderValue::from_str(path).map_err(|_| crate::InvalidLoginPagePath)?;
+        let location = http::HeaderValue::from_str(path).map_err(|_| crate::InvalidRedirectPath)?;
         Ok(Self { location })
     }
 }
@@ -97,8 +91,8 @@ impl<A> SuccessHandler<A> for RedirectSuccessHandler {
 #[derive(Clone, Copy, Debug, Default)]
 pub struct DefaultFailureHandler;
 
-impl<E> FailureHandler<E> for DefaultFailureHandler {
-    fn on_failure(&self, _: Parts, error: FormLoginError<E>) -> BoxFuture<'_, SecurityResponse> {
+impl FailureHandler for DefaultFailureHandler {
+    fn on_failure(&self, _: Parts, error: FormLoginError) -> BoxFuture<'_, SecurityResponse> {
         let status = match error {
             FormLoginError::InvalidCredentials => http::StatusCode::UNAUTHORIZED,
             FormLoginError::UnsupportedMediaType => http::StatusCode::UNSUPPORTED_MEDIA_TYPE,
@@ -116,12 +110,8 @@ impl<A, T: SuccessHandler<A> + ?Sized> SuccessHandler<A> for std::sync::Arc<T> {
     }
 }
 
-impl<E, T: FailureHandler<E> + ?Sized> FailureHandler<E> for std::sync::Arc<T> {
-    fn on_failure(
-        &self,
-        parts: Parts,
-        error: FormLoginError<E>,
-    ) -> BoxFuture<'_, SecurityResponse> {
+impl<T: FailureHandler + ?Sized> FailureHandler for std::sync::Arc<T> {
+    fn on_failure(&self, parts: Parts, error: FormLoginError) -> BoxFuture<'_, SecurityResponse> {
         self.as_ref().on_failure(parts, error)
     }
 }
