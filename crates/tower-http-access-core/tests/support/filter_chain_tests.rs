@@ -148,6 +148,42 @@ async fn only_selected_chain_is_polled_and_request_is_preserved() {
 }
 
 #[tokio::test]
+async fn service_clones_keep_non_clone_matchers_alive_after_layer_is_dropped() {
+    struct Matcher(Arc<AtomicUsize>);
+    impl http_request_matcher::RequestMatcher for Matcher {
+        fn matches(&self, _: &http::request::Parts) -> bool {
+            true
+        }
+    }
+    impl Drop for Matcher {
+        fn drop(&mut self) {
+            self.0.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+
+    let drops = Arc::new(AtomicUsize::new(0));
+    let calls = Arc::new(AtomicUsize::new(0));
+    let layer = SecurityChainLayer::builder()
+        .chain(Matcher(Arc::clone(&drops)), tower_layer::Identity::new())
+        .fallback_deny()
+        .build()
+        .unwrap();
+    let service = layer.clone().layer(App(Arc::clone(&calls)));
+    drop(layer);
+    assert_eq!(drops.load(Ordering::SeqCst), 0);
+
+    for _ in 0..2 {
+        let response = service.clone().oneshot(request("/private")).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.into_body(), "stream contents");
+    }
+    assert_eq!(calls.load(Ordering::SeqCst), 2);
+    assert_eq!(drops.load(Ordering::SeqCst), 0);
+    drop(service);
+    assert_eq!(drops.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
 async fn explicit_fallbacks() {
     assert!(
         SecurityChainLayer::<App, Bytes, Bytes, &'static str>::builder()

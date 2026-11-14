@@ -45,21 +45,20 @@ use tower_layer::Layer;
 use tower_service::Service;
 
 type BoxService<B, R, E> = BoxCloneSyncService<Request<B>, Response<R>, E>;
-type Factory<S, B, R, E> = Arc<dyn Fn(S) -> BoxService<B, R, E> + Send + Sync>;
-type ServiceChain<B, R, E> = (Arc<dyn RequestMatcher>, BoxService<B, R, E>);
-type Chain<S, B, R, E> = (Arc<dyn RequestMatcher>, Factory<S, B, R, E>);
+type Factory<S, B, R, E> = dyn Fn(S) -> BoxService<B, R, E> + Send + Sync;
+type Chain<S, B, R, E> = (Box<dyn RequestMatcher>, Box<Factory<S, B, R, E>>);
 
 /// An ordered collection of middleware stacks and an explicit fallback.
 /// Available with the `filter_chain` feature.
 pub struct SecurityChainLayer<S, B, R, E> {
-    chains: Vec<Chain<S, B, R, E>>,
-    fallback: Factory<S, B, R, E>,
+    chains: Arc<[Chain<S, B, R, E>]>,
+    fallback: Arc<Factory<S, B, R, E>>,
 }
 
 impl<S, B, R, E> Clone for SecurityChainLayer<S, B, R, E> {
     fn clone(&self) -> Self {
         Self {
-            chains: self.chains.clone(),
+            chains: Arc::clone(&self.chains),
             fallback: Arc::clone(&self.fallback),
         }
     }
@@ -68,7 +67,7 @@ impl<S, B, R, E> Clone for SecurityChainLayer<S, B, R, E> {
 /// Configures chains in declaration order. Call a fallback method before `build`.
 pub struct SecurityChainBuilder<S, B, R, E> {
     chains: Vec<Chain<S, B, R, E>>,
-    fallback: Option<Factory<S, B, R, E>>,
+    fallback: Option<Arc<Factory<S, B, R, E>>>,
 }
 
 /// Returned when no fallback was explicitly configured.
@@ -85,14 +84,14 @@ impl<S, B, R, E> SecurityChainLayer<S, B, R, E> {
     }
 }
 
-fn factory<S, B, R, E, L>(layer: L) -> Factory<S, B, R, E>
+fn factory<S, B, R, E, L>(layer: L) -> impl Fn(S) -> BoxService<B, R, E> + Send + Sync + 'static
 where
     L: Layer<S> + Send + Sync + 'static,
     L::Service:
         Service<Request<B>, Response = Response<R>, Error = E> + Clone + Send + Sync + 'static,
     <L::Service as Service<Request<B>>>::Future: Send + 'static,
 {
-    Arc::new(move |inner| BoxCloneSyncService::new(layer.layer(inner)))
+    move |inner| BoxCloneSyncService::new(layer.layer(inner))
 }
 
 impl<S, B, R, E> SecurityChainBuilder<S, B, R, E> {
@@ -106,7 +105,8 @@ impl<S, B, R, E> SecurityChainBuilder<S, B, R, E> {
             Service<Request<B>, Response = Response<R>, Error = E> + Clone + Send + Sync + 'static,
         <L::Service as Service<Request<B>>>::Future: Send + 'static,
     {
-        self.chains.push((Arc::new(matcher), factory(layer)));
+        self.chains
+            .push((Box::new(matcher), Box::new(factory(layer))));
         self
     }
 
@@ -118,7 +118,7 @@ impl<S, B, R, E> SecurityChainBuilder<S, B, R, E> {
             Service<Request<B>, Response = Response<R>, Error = E> + Clone + Send + Sync + 'static,
         <L::Service as Service<Request<B>>>::Future: Send + 'static,
     {
-        self.fallback = Some(factory(layer));
+        self.fallback = Some(Arc::new(factory(layer)));
         self
     }
 
@@ -151,21 +151,22 @@ impl<S, B, R, E> SecurityChainBuilder<S, B, R, E> {
 
     pub fn build(self) -> Result<SecurityChainLayer<S, B, R, E>, MissingSecurityChainFallback> {
         Ok(SecurityChainLayer {
-            chains: self.chains,
+            chains: self.chains.into(),
             fallback: self.fallback.ok_or(MissingSecurityChainFallback)?,
         })
     }
 }
 
 impl<S: Clone, B, R, E> Layer<S> for SecurityChainLayer<S, B, R, E> {
-    type Service = SecurityChainService<B, R, E>;
+    type Service = SecurityChainService<S, B, R, E>;
 
     fn layer(&self, inner: S) -> Self::Service {
         SecurityChainService {
-            chains: self
+            chains: Arc::clone(&self.chains),
+            services: self
                 .chains
                 .iter()
-                .map(|(matcher, make)| (Arc::clone(matcher), make(inner.clone())))
+                .map(|(_, make)| make(inner.clone()))
                 .collect(),
             fallback: (self.fallback)(inner),
         }
@@ -179,21 +180,23 @@ impl<S: Clone, B, R, E> Layer<S> for SecurityChainLayer<S, B, R, E> {
 /// This does not reserve capacity before accepting a request: put a concurrency
 /// limit outside this layer when admission backpressure is required. Service clones
 /// must preserve shared resources such as queues and concurrency limits.
-pub struct SecurityChainService<B, R, E> {
-    chains: Vec<ServiceChain<B, R, E>>,
+pub struct SecurityChainService<S, B, R, E> {
+    chains: Arc<[Chain<S, B, R, E>]>,
+    services: Vec<BoxService<B, R, E>>,
     fallback: BoxService<B, R, E>,
 }
 
-impl<B, R, E> Clone for SecurityChainService<B, R, E> {
+impl<S, B, R, E> Clone for SecurityChainService<S, B, R, E> {
     fn clone(&self) -> Self {
         Self {
-            chains: self.chains.clone(),
+            chains: Arc::clone(&self.chains),
+            services: self.services.clone(),
             fallback: self.fallback.clone(),
         }
     }
 }
 
-impl<B, R, E> Service<Request<B>> for SecurityChainService<B, R, E>
+impl<S, B, R, E> Service<Request<B>> for SecurityChainService<S, B, R, E>
 where
     B: Send + 'static,
     R: 'static,
@@ -211,9 +214,9 @@ where
         let (parts, body) = request.into_parts();
         let selected = self
             .chains
-            .iter_mut()
-            .find(|(matcher, _)| matcher.matches(&parts))
-            .map(|(_, service)| service)
+            .iter()
+            .position(|(matcher, _)| matcher.matches(&parts))
+            .map(|index| &mut self.services[index])
             .unwrap_or(&mut self.fallback);
         // Move the selected instance into the future so readiness and call operate
         // on the same instance; retain a clone for subsequent requests.
