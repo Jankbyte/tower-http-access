@@ -35,7 +35,6 @@ default = ["axum"]
 axum = ["dep:axum"]
 request_matcher = ["dep:http-request-matcher"]
 filter_chain = ["request_matcher", "dep:tower"]
-split_auth = []
 
 [package.metadata.docs.rs]
 all-features = true

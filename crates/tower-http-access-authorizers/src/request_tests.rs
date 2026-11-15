@@ -4,6 +4,7 @@ use std::{future::Future, pin::Pin};
 use tower_http_access_core::authorization::core::AuthorizationDecision;
 use tower_http_access_core::authorization::core::AuthorizationDenial;
 
+#[derive(Clone)]
 struct TestAuthority(String);
 impl TestAuthority {
     fn new(value: &str) -> Self {
@@ -11,6 +12,7 @@ impl TestAuthority {
     }
 }
 
+#[derive(Clone)]
 struct TestIdentity {
     username: String,
     authorities: Vec<TestAuthority>,
@@ -304,10 +306,14 @@ async fn custom_manager_errors_preserve_source_and_return_internal_server_error(
             axum::routing::get(|| async { StatusCode::OK }),
         )
         .layer(
-            tower_http_access_core::authorization::auth_tower::AuthorizationLayer::builder(
-                provider,
-            )
-            .build(),
+            tower_http_access_core::SecurityLayer::new(
+                |_: &Parts| async {
+                    Ok::<_, tower_http_access_core::authentication::AuthenticatorError>(
+                        tower_http_access_core::authentication::AuthenticationAttempt::<TestIdentity>::NotApplicable,
+                    )
+                },
+                std::sync::Arc::new(provider),
+            ),
         );
     let response = app
         .call(
@@ -466,10 +472,14 @@ async fn middleware_matchers_borrow_original_headers_and_extensions() {
             }),
         )
         .layer(
-            tower_http_access_core::authorization::auth_tower::AuthorizationLayer::builder(
-                provider,
-            )
-            .build(),
+            tower_http_access_core::SecurityLayer::new(
+                |_: &Parts| async {
+                    Ok::<_, tower_http_access_core::authentication::AuthenticatorError>(
+                        tower_http_access_core::authentication::AuthenticationAttempt::<TestIdentity>::NotApplicable,
+                    )
+                },
+                std::sync::Arc::new(provider),
+            ),
         );
 
     for (header, address, expected) in [

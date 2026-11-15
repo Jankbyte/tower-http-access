@@ -1,9 +1,15 @@
 use super::*;
-use crate::authentication::{
-    AuthenticationErrorReason, AuthenticationLayer, auth_tower::tests::IdentityService,
-};
+use crate::SecurityLayer;
+use crate::authentication::{Authenticated, AuthenticationErrorReason};
+use crate::authorization::core::{AuthorizationDecision, AuthorizationProvider};
 use crate::response::test_response;
+use axum::response::{IntoResponse, Response};
 use axum::{body::Body, extract::Request, http::StatusCode};
+use std::{
+    convert::Infallible,
+    future::{Ready, ready},
+    task::{Context, Poll},
+};
 use tower::{Layer, Service};
 
 #[tokio::test]
@@ -44,7 +50,7 @@ async fn authentication_chain_uses_first_applicable_authenticator() {
         .authenticator(first)
         .authenticator(second)
         .build();
-    let mut service = AuthenticationLayer::new(authenticator).layer(IdentityService);
+    let mut service = SecurityLayer::new(authenticator, Allow).layer(IdentityService);
 
     let response = service.call(Request::new(Body::empty())).await.unwrap();
 
@@ -71,7 +77,7 @@ async fn authenticators_read_the_same_request_metadata() {
         .authenticator(first)
         .authenticator(second)
         .build();
-    let mut service = AuthenticationLayer::new(authenticator).layer(IdentityService);
+    let mut service = SecurityLayer::new(authenticator, Allow).layer(IdentityService);
 
     let response = service
         .call(
@@ -99,7 +105,7 @@ async fn authentication_chain_without_applicable_authenticator_continues_anonymo
     let authenticator = DelegatingRequestAuthenticator::builder()
         .authenticator(authenticator)
         .build();
-    let mut service = AuthenticationLayer::new(authenticator).layer(IdentityService);
+    let mut service = SecurityLayer::new(authenticator, Allow).layer(IdentityService);
 
     let response = service.call(Request::new(Body::empty())).await.unwrap();
 
@@ -122,7 +128,7 @@ async fn authenticator_error_response_stops_chain_and_becomes_service_response()
     let authenticator = DelegatingRequestAuthenticator::builder()
         .authenticator(reject)
         .build();
-    let mut service = AuthenticationLayer::new(authenticator).layer(IdentityService);
+    let mut service = SecurityLayer::new(authenticator, Allow).layer(IdentityService);
 
     let response = service.call(Request::new(Body::empty())).await.unwrap();
 
@@ -133,4 +139,36 @@ async fn authenticator_error_response_stops_chain_and_becomes_service_response()
             .unwrap(),
         "invalid token"
     );
+}
+
+#[derive(Clone)]
+struct Allow;
+impl AuthorizationProvider for Allow {
+    type Authentication = String;
+    type Error = Infallible;
+    fn authorize<'a>(
+        &'a self,
+        _: Option<&'a String>,
+        _: &'a Parts,
+    ) -> BoxFuture<'a, Result<AuthorizationDecision, Infallible>> {
+        Box::pin(async { Ok(AuthorizationDecision::Allow) })
+    }
+}
+#[derive(Clone)]
+struct IdentityService;
+impl Service<Request> for IdentityService {
+    type Response = Response;
+    type Error = Infallible;
+    type Future = Ready<Result<Response, Infallible>>;
+    fn poll_ready(&mut self, _: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        Poll::Ready(Ok(()))
+    }
+    fn call(&mut self, request: Request) -> Self::Future {
+        let identity = request
+            .extensions()
+            .get::<Authenticated<String>>()
+            .map(|value| value.as_inner().clone())
+            .unwrap_or_else(|| "anonymous".to_owned());
+        ready(Ok(identity.into_response()))
+    }
 }

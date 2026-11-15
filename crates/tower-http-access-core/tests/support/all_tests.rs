@@ -1,18 +1,18 @@
-use tower_http_access_authorizers::all::*;
-use crate::authorization::core::{AuthorizationDecision, AuthorizationProvider};
-use futures_util::future::BoxFuture;
-use http::request::Parts;
-use crate::authentication::Authenticated;
-use crate::authorization::auth_tower::AuthorizationLayer;
-use crate::authorization::auth_tower::tests::ErrorProvider;
-use crate::authorization::auth_tower::tests::Inner;
-use crate::authorization::auth_tower::tests::MappedIdentityProvider;
+use crate::SecurityLayer;
+use crate::authentication::{AuthenticationAttempt, AuthenticatorError};
 use crate::authorization::core::AuthorizationDenial;
 use crate::authorization::core::AuthorizationProviderExt;
-use tower_http_access_authorizers::default_auth::AuthenticatedAuthorizationProvider;
+use crate::authorization::core::{AuthorizationDecision, AuthorizationProvider};
+use crate::authorization::provider_tests::tests::ErrorProvider;
+use crate::authorization::provider_tests::tests::Inner;
+use crate::authorization::provider_tests::tests::MappedIdentityProvider;
 use axum::{body::Body, extract::Request, http::StatusCode};
+use futures_util::future::BoxFuture;
+use http::request::Parts;
 use std::{convert::Infallible, io, sync::Arc};
 use tokio::sync::Mutex;
+use tower_http_access_authorizers::all::*;
+use tower_http_access_authorizers::default_auth::AuthenticatedAuthorizationProvider;
 use tower_layer::Layer;
 use tower_service::Service;
 
@@ -146,13 +146,17 @@ async fn all_authorization_integrates_with_mapper_and_http_failure_handling() {
             .with(MappedIdentityProvider.map(|identity: &String| identity.len()))
             .build()
             .unwrap();
-        let mut service = AuthorizationLayer::builder(provider).build().layer(Inner);
-        let mut request = Request::builder().uri(path).body(Body::empty()).unwrap();
-        if let Some(identity) = identity {
-            request
-                .extensions_mut()
-                .insert(Authenticated(identity.to_owned()));
-        }
+        let mut service = SecurityLayer::new(
+            move |_: &Parts| async move {
+                Ok::<_, AuthenticatorError>(match identity {
+                    Some(identity) => AuthenticationAttempt::Authenticated(identity.to_owned()),
+                    None => AuthenticationAttempt::NotApplicable,
+                })
+            },
+            Arc::new(provider),
+        )
+        .layer(Inner);
+        let request = Request::builder().uri(path).body(Body::empty()).unwrap();
         assert_eq!(service.call(request).await.unwrap().status(), expected);
     }
 }

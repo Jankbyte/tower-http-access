@@ -4,20 +4,17 @@ mod response {
     use bytes::Bytes;
     use http::{Response, StatusCode};
     pub use tower_http_access_core::SecurityResponse;
-    #[cfg(feature = "split_auth")]
     pub use tower_http_access_core::SecurityResponseAdapter;
     pub(crate) fn test_response(status: StatusCode, body: impl Into<Bytes>) -> SecurityResponse {
         let mut response = Response::new(body.into());
         *response.status_mut() = status;
         response
     }
-    #[cfg(feature = "split_auth")]
     mod tests {
         include!("support/response_tests.rs");
     }
 }
 
-#[cfg(feature = "split_auth")]
 mod authorization {
     pub mod core {
         pub use tower_http_access_core::authorization::core::*;
@@ -51,12 +48,10 @@ mod authorization {
             );
         }
     }
-    pub mod auth_tower {
-        use std::pin::Pin;
-        pub use tower_http_access_core::authorization::auth_tower::*;
+    pub mod provider_tests {
         use tower_http_access_core::authorization::core::*;
         pub mod tests {
-            include!("support/auth_tower_tests.rs");
+            include!("support/authorization_tests.rs");
         }
     }
     mod all_tests {

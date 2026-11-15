@@ -3,15 +3,12 @@ use crate::SecurityLayer;
 use crate::authentication::Authenticated;
 use crate::authentication::AuthenticationAttempt;
 use crate::authentication::AuthenticationErrorReason;
-use crate::authentication::AuthenticationLayer;
 use crate::authentication::AuthenticatorError;
 use crate::authentication::RequestAuthenticator;
-use crate::authorization::auth_tower::AuthorizationLayer;
 use crate::authorization::core::AuthorizationDecision;
 use crate::authorization::core::AuthorizationDenial;
 use crate::authorization::core::AuthorizationFailure;
 use crate::authorization::core::AuthorizationProvider;
-use tower_http_access_authorizers::default_auth::AuthenticatedAuthorizationProvider;
 use futures_util::future::BoxFuture;
 use http::{Request, header, request::Parts};
 use http_body::{Body, Frame};
@@ -29,6 +26,7 @@ use std::{
     task::{Context, Poll},
 };
 use tower::{Layer, Service, ServiceExt, service_fn, util::BoxCloneService};
+use tower_http_access_authorizers::default_auth::AuthenticatedAuthorizationProvider;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct ResponseMarker;
@@ -140,36 +138,24 @@ fn request(token: Option<&str>) -> Request<Vec<u8>> {
 }
 
 #[tokio::test]
-async fn combined_and_separate_layers_support_plain_byte_responses() {
+async fn security_layer_supports_plain_byte_responses() {
     let calls = Arc::new(AtomicUsize::new(0));
     let raw = inner(|| Bytes::from_static(b"success"), Arc::clone(&calls));
-    let services = [
-        BoxCloneService::new(
-            SecurityLayer::new(
-                TokenAuthenticator,
-                AuthenticatedAuthorizationProvider::<String>::new(),
-            )
-            .layer(raw.clone()),
-        ),
-        BoxCloneService::new(
-            AuthenticationLayer::new(TokenAuthenticator).layer(
-                AuthorizationLayer::builder(AuthenticatedAuthorizationProvider::<String>::new())
-                    .build()
-                    .layer(raw),
-            ),
-        ),
-    ];
-    for service in services {
-        let response = service.oneshot(request(Some("valid"))).await.unwrap();
-        assert_eq!(response.status(), StatusCode::ACCEPTED);
-        assert_eq!(response.headers()["x-inner"], "preserved");
-        assert_eq!(
-            response.extensions().get::<ResponseMarker>(),
-            Some(&ResponseMarker)
-        );
-        assert_eq!(response.into_body(), Bytes::from_static(b"success"));
-    }
-    assert_eq!(calls.load(Ordering::SeqCst), 2);
+    let service = SecurityLayer::new(
+        TokenAuthenticator,
+        AuthenticatedAuthorizationProvider::<String>::new(),
+    )
+    .layer(raw);
+    let response = service.oneshot(request(Some("valid"))).await.unwrap();
+    assert_eq!(response.status(), StatusCode::ACCEPTED);
+    assert_eq!(response.headers()["x-inner"], "preserved");
+    assert_eq!(
+        response.extensions().get::<ResponseMarker>(),
+        Some(&ResponseMarker)
+    );
+    assert_eq!(response.into_body(), Bytes::from_static(b"success"));
+
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
 }
 
 #[tokio::test]
@@ -198,12 +184,6 @@ async fn security_responses_convert_to_full_bodies_and_preserve_http_metadata() 
     };
     let cases = [
         (
-            BoxCloneService::new(AuthenticationLayer::new(TokenAuthenticator).layer(raw.clone())),
-            Some("invalid"),
-            StatusCode::UNAUTHORIZED,
-            "invalid token",
-        ),
-        (
             BoxCloneService::new(
                 SecurityLayer::new(
                     TokenAuthenticator,
@@ -230,17 +210,6 @@ async fn security_responses_convert_to_full_bodies_and_preserve_http_metadata() 
         ),
         (
             BoxCloneService::new(
-                AuthorizationLayer::builder(AuthenticatedAuthorizationProvider::<String>::new())
-                    .authentication_entry_point(entry_point)
-                    .build()
-                    .layer(raw.clone()),
-            ),
-            None,
-            StatusCode::UNAUTHORIZED,
-            "authentication required",
-        ),
-        (
-            BoxCloneService::new(
                 SecurityLayer::new(TokenAuthenticator, DenyProvider(false))
                     .failure_handler(handler)
                     .layer(raw.clone()),
@@ -256,28 +225,6 @@ async fn security_responses_convert_to_full_bodies_and_preserve_http_metadata() 
                     .layer(raw.clone()),
             ),
             Some("valid"),
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "backend failed",
-        ),
-        (
-            BoxCloneService::new(
-                AuthorizationLayer::builder(DenyProvider(false))
-                    .failure_handler(handler)
-                    .build()
-                    .layer(raw.clone()),
-            ),
-            None,
-            StatusCode::FORBIDDEN,
-            "denied",
-        ),
-        (
-            BoxCloneService::new(
-                AuthorizationLayer::builder(DenyProvider(true))
-                    .failure_handler(handler)
-                    .build()
-                    .layer(raw),
-            ),
-            None,
             StatusCode::INTERNAL_SERVER_ERROR,
             "backend failed",
         ),
@@ -331,41 +278,28 @@ impl Body for StreamingBody {
 
 #[tokio::test]
 async fn successful_streaming_body_is_forwarded_without_polling_or_replacing_it() {
-    for combined in [false, true] {
-        let polls = Arc::new(AtomicUsize::new(0));
-        let body_polls = Arc::clone(&polls);
-        let raw = inner(
-            move || StreamingBody {
-                chunks: VecDeque::from([
-                    Bytes::from_static(b"first"),
-                    Bytes::from_static(b"second"),
-                ]),
-                polls: Arc::clone(&body_polls),
-            },
-            Arc::new(AtomicUsize::new(0)),
-        );
-        let service = if combined {
-            BoxCloneService::new(
-                SecurityLayer::new(
-                    TokenAuthenticator,
-                    AuthenticatedAuthorizationProvider::<String>::new(),
-                )
-                .layer(raw),
-            )
-        } else {
-            BoxCloneService::new(AuthenticationLayer::new(TokenAuthenticator).layer(
-                AuthorizationLayer::builder(AuthenticatedAuthorizationProvider::<String>::new()).build().layer(raw),
-            ))
-        };
-        let response = service.oneshot(request(Some("valid"))).await.unwrap();
-        assert_eq!(polls.load(Ordering::SeqCst), 0);
-        assert!(Arc::ptr_eq(&response.body().polls, &polls));
-        assert_eq!(
-            response.into_body().collect().await.unwrap().to_bytes(),
-            "firstsecond"
-        );
-        assert!(polls.load(Ordering::SeqCst) > 0);
-    }
+    let polls = Arc::new(AtomicUsize::new(0));
+    let body_polls = Arc::clone(&polls);
+    let raw = inner(
+        move || StreamingBody {
+            chunks: VecDeque::from([Bytes::from_static(b"first"), Bytes::from_static(b"second")]),
+            polls: Arc::clone(&body_polls),
+        },
+        Arc::new(AtomicUsize::new(0)),
+    );
+    let service = SecurityLayer::new(
+        TokenAuthenticator,
+        AuthenticatedAuthorizationProvider::<String>::new(),
+    )
+    .layer(raw);
+    let response = service.oneshot(request(Some("valid"))).await.unwrap();
+    assert_eq!(polls.load(Ordering::SeqCst), 0);
+    assert!(Arc::ptr_eq(&response.body().polls, &polls));
+    assert_eq!(
+        response.into_body().collect().await.unwrap().to_bytes(),
+        "firstsecond"
+    );
+    assert!(polls.load(Ordering::SeqCst) > 0);
 }
 
 // Deliberately has no From<Bytes> implementation.
@@ -559,29 +493,18 @@ async fn custom_denial_survives_composition_and_default_failure_handlers() {
     let entry_point = |_: &Parts| -> SecurityResponse {
         panic!("custom denials must bypass the authentication entry point")
     };
-    let services = [
-        BoxCloneService::new(
-            AuthorizationLayer::builder(custom_denial_chain())
-                .authentication_entry_point(entry_point)
-                .build()
-                .layer(raw.clone()),
-        ),
-        BoxCloneService::new(
-            SecurityLayer::new(TokenAuthenticator, Arc::new(custom_denial_chain()))
-                .authentication_entry_point(entry_point)
-                .layer(raw),
-        ),
-    ];
-    for service in services {
-        let response = service.oneshot(request(None)).await.unwrap();
-        assert_eq!(response.status(), StatusCode::FORBIDDEN);
-        assert!(response.extensions().get::<ResponseMarker>().is_some());
-        assert!(response.headers().contains_key(header::WWW_AUTHENTICATE));
-        assert_eq!(
-            response.into_body().collect().await.unwrap().to_bytes(),
-            "office network required"
-        );
-    }
+    let service = SecurityLayer::new(TokenAuthenticator, Arc::new(custom_denial_chain()))
+        .authentication_entry_point(entry_point)
+        .layer(raw);
+    let response = service.oneshot(request(None)).await.unwrap();
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    assert!(response.extensions().get::<ResponseMarker>().is_some());
+    assert!(response.headers().contains_key(header::WWW_AUTHENTICATE));
+    assert_eq!(
+        response.into_body().collect().await.unwrap().to_bytes(),
+        "office network required"
+    );
+
     assert_eq!(inner_calls.load(Ordering::SeqCst), 0);
 }
 
@@ -619,13 +542,14 @@ async fn custom_denial_uses_combined_response_adapter_once() {
 #[cfg(feature = "request_matcher")]
 #[tokio::test]
 async fn request_rule_preserves_custom_denial_without_falling_through() {
-    let provider = tower_http_access_authorizers::request::RequestAuthorizationProvider::<String>::builder()
-        .request_matchers("/notes")
-        .access(CustomDenialProvider)
-        .any_request()
-        .permit_all()
-        .build()
-        .unwrap();
+    let provider =
+        tower_http_access_authorizers::request::RequestAuthorizationProvider::<String>::builder()
+            .request_matchers("/notes")
+            .access(CustomDenialProvider)
+            .any_request()
+            .permit_all()
+            .build()
+            .unwrap();
     let (parts, _) = request(None).into_parts();
     let AuthorizationDecision::Deny(AuthorizationDenial::Custom(response)) =
         provider.authorize(None, &parts).await.unwrap()
@@ -637,7 +561,7 @@ async fn request_rule_preserves_custom_denial_without_falling_through() {
 }
 
 #[tokio::test]
-async fn custom_failure_handlers_can_modify_custom_denials_in_both_layers() {
+async fn custom_failure_handler_can_modify_custom_denials() {
     let handler_calls = Arc::new(AtomicUsize::new(0));
     let inner_calls = Arc::new(AtomicUsize::new(0));
     let raw = inner(|| Full::new(Bytes::new()), Arc::clone(&inner_calls));
@@ -657,29 +581,18 @@ async fn custom_failure_handlers_can_modify_custom_denials_in_both_layers() {
         *response.body_mut() = Bytes::from_static(b"modified by failure handler");
         response
     };
-    let services = [
-        BoxCloneService::new(
-            AuthorizationLayer::builder(CustomDenialProvider)
-                .failure_handler(handler.clone())
-                .build()
-                .layer(raw.clone()),
-        ),
-        BoxCloneService::new(
-            SecurityLayer::new(TokenAuthenticator, CustomDenialProvider)
-                .failure_handler(handler)
-                .layer(raw),
-        ),
-    ];
-    for service in services {
-        let response = service.oneshot(request(None)).await.unwrap();
-        assert_eq!(response.status(), StatusCode::LOCKED);
-        assert_eq!(response.headers()["x-failure-handler"], "processed");
-        assert!(response.extensions().get::<ResponseMarker>().is_some());
-        assert_eq!(
-            response.into_body().collect().await.unwrap().to_bytes(),
-            "modified by failure handler"
-        );
-    }
-    assert_eq!(handler_calls.load(Ordering::SeqCst), 2);
+    let service = SecurityLayer::new(TokenAuthenticator, CustomDenialProvider)
+        .failure_handler(handler)
+        .layer(raw);
+    let response = service.oneshot(request(None)).await.unwrap();
+    assert_eq!(response.status(), StatusCode::LOCKED);
+    assert_eq!(response.headers()["x-failure-handler"], "processed");
+    assert!(response.extensions().get::<ResponseMarker>().is_some());
+    assert_eq!(
+        response.into_body().collect().await.unwrap().to_bytes(),
+        "modified by failure handler"
+    );
+
+    assert_eq!(handler_calls.load(Ordering::SeqCst), 1);
     assert_eq!(inner_calls.load(Ordering::SeqCst), 0);
 }

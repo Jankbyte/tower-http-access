@@ -16,7 +16,7 @@ tower = { workspace = true, features = ["util"] }
 tower-http = { version = "0.6", features = ["trace", "request-id"] }
 argon2.workspace = true
 axum.workspace = true
-tower-http-access-core = { path = "../crates/tower-http-access-core", features = ["filter_chain", "split_auth"] }
+tower-http-access-core = { path = "../crates/tower-http-access-core", features = ["filter_chain"] }
 tower-http-access-basic = { path = "../crates/tower-http-access-basic", features = ["tracing"] }
 tokio = { workspace = true, features = ["full"] }
 tracing-subscriber.workspace = true

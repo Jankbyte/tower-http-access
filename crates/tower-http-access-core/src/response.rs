@@ -46,8 +46,7 @@ pub type SecurityResponse = Response<Bytes>;
 /// Configure an adapter with [`crate::SecurityLayer::response_adapter`]. The combined layer invokes
 /// it for all security rejections; successful inner responses bypass it. The default
 /// [`DefaultSecurityResponseAdapter`] preserves HTTP metadata and converts only the body through
-/// `From<Bytes>`. No protocol-specific adapters are supplied. The standalone authentication and
-/// authorization layers continue to use their existing `From<Bytes>` conversion.
+/// `From<Bytes>`. No protocol-specific adapters are supplied.
 ///
 /// ```
 /// use tower_http_access_core::{SecurityResponse, SecurityResponseAdapter};

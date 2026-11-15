@@ -1,9 +1,9 @@
 use super::*;
-use crate::authentication::{
-    Authenticated, AuthenticationAttempt, AuthenticationLayer, AuthenticatorError,
-};
+use crate::SecurityLayer;
+#[cfg(feature = "axum")]
+use crate::authentication::Authenticated;
+use crate::authentication::{AuthenticationAttempt, AuthenticatorError};
 use crate::authorization::core::AuthorizationProviderExt;
-use tower_http_access_authorizers::default_auth::AuthenticatedAuthorizationProvider;
 use crate::response::test_response;
 use axum::{
     body::Body,
@@ -17,8 +17,33 @@ use std::{
     io,
     task::{Context, Poll},
 };
+use std::{future::Future, pin::Pin, sync::Arc};
+use tower_http_access_authorizers::default_auth::AuthenticatedAuthorizationProvider;
 use tower_layer::Layer;
 use tower_service::Service;
+
+fn security<P: AuthorizationProvider<Authentication = String> + 'static>(
+    provider: P,
+) -> SecurityLayer<
+    impl crate::authentication::RequestAuthenticator<Authentication = String> + Clone,
+    Arc<P>,
+> {
+    SecurityLayer::new(
+        |parts: &Parts| {
+            let identity = parts
+                .headers
+                .get("x-test-identity")
+                .map(|v| v.to_str().unwrap().to_owned());
+            async move {
+                Ok::<_, AuthenticatorError>(match identity {
+                    Some(identity) => AuthenticationAttempt::Authenticated(identity),
+                    None => AuthenticationAttempt::NotApplicable,
+                })
+            }
+        },
+        Arc::new(provider),
+    )
+}
 
 #[derive(Clone)]
 pub(in crate::authorization) struct Inner;
@@ -37,9 +62,7 @@ impl Service<Request> for Inner {
     }
 }
 fn authenticated_service() -> impl Service<Request, Response = Response, Error = Infallible> {
-    AuthorizationLayer::builder(AuthenticatedAuthorizationProvider::<String>::new())
-        .build()
-        .layer(Inner)
+    security(AuthenticatedAuthorizationProvider::<String>::new()).layer(Inner)
 }
 
 #[tokio::test]
@@ -54,17 +77,15 @@ async fn authenticated_provider_without_identity_returns_unauthorized() {
 
 #[tokio::test]
 async fn authentication_required_uses_configured_entry_point() {
-    let mut service =
-        AuthorizationLayer::builder(AuthenticatedAuthorizationProvider::<String>::new())
-            .authentication_entry_point(move |request: &Parts| {
-                let mut response = test_response(StatusCode::UNAUTHORIZED, "");
-                response
-                    .headers_mut()
-                    .insert("x-request-path", request.uri.path().parse().unwrap());
-                response
-            })
-            .build()
-            .layer(Inner);
+    let mut service = security(AuthenticatedAuthorizationProvider::<String>::new())
+        .authentication_entry_point(move |request: &Parts| {
+            let mut response = test_response(StatusCode::UNAUTHORIZED, "");
+            response
+                .headers_mut()
+                .insert("x-request-path", request.uri.path().parse().unwrap());
+            response
+        })
+        .layer(Inner);
     let request = Request::builder()
         .uri("/private")
         .body(Body::empty())
@@ -80,8 +101,8 @@ async fn authentication_required_uses_configured_entry_point() {
 async fn authenticated_provider_with_identity_forwards_request() {
     let mut request = Request::new(Body::empty());
     request
-        .extensions_mut()
-        .insert(Authenticated::new("alex".to_owned()));
+        .headers_mut()
+        .insert("x-test-identity", "alex".parse().unwrap());
 
     let response = authenticated_service().call(request).await.unwrap();
 
@@ -125,9 +146,7 @@ impl AuthorizationProvider for DenyProvider {
 
 #[tokio::test]
 async fn insufficient_permissions_returns_forbidden() {
-    let mut service = AuthorizationLayer::builder(DenyProvider)
-        .build()
-        .layer(Inner);
+    let mut service = security(DenyProvider).layer(Inner);
 
     let response = service.call(Request::new(Body::empty())).await.unwrap();
 
@@ -136,7 +155,7 @@ async fn insufficient_permissions_returns_forbidden() {
 
 #[tokio::test]
 async fn custom_failure_handler_receives_request_and_denial() {
-    let mut service = AuthorizationLayer::builder(DenyProvider)
+    let mut service = security(DenyProvider)
         .failure_handler(
             |request: &Parts, failure: AuthorizationFailure<Infallible>| {
                 let denial = match failure {
@@ -150,7 +169,6 @@ async fn custom_failure_handler_receives_request_and_denial() {
                 response
             },
         )
-        .build()
         .layer(Inner);
     let request = Request::builder()
         .uri("/admin")
@@ -186,29 +204,11 @@ impl AuthorizationProvider for ErrorProvider {
 
 #[tokio::test]
 async fn provider_error_returns_internal_server_error() {
-    let mut service = AuthorizationLayer::builder(ErrorProvider)
-        .build()
-        .layer(Inner);
+    let mut service = security(ErrorProvider).layer(Inner);
 
     let response = service.call(Request::new(Body::empty())).await.unwrap();
 
     assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
-}
-
-#[tokio::test]
-async fn authentication_then_authorization_forwards_identity() {
-    let authenticator = |_: &Parts| async {
-        Ok::<_, AuthenticatorError>(AuthenticationAttempt::Authenticated("alex".to_owned()))
-    };
-    let authorization =
-        AuthorizationLayer::builder(AuthenticatedAuthorizationProvider::<String>::new())
-            .build()
-            .layer(Inner);
-    let mut service = AuthenticationLayer::new(authenticator).layer(authorization);
-
-    let response = service.call(Request::new(Body::empty())).await.unwrap();
-
-    assert_eq!(response.status(), StatusCode::OK);
 }
 
 pub(in crate::authorization) struct MappedIdentityProvider;
@@ -285,22 +285,22 @@ async fn mapped_provider_passes_anonymous_requests_without_mapping() {
 
 #[cfg(feature = "axum")]
 #[tokio::test]
-async fn mapped_provider_supports_separate_layers_and_preserves_handler_identity() {
+async fn mapped_provider_preserves_handler_identity() {
     let authenticator = |_: &Parts| async {
         Ok::<_, AuthenticatorError>(AuthenticationAttempt::Authenticated("alex".to_owned()))
     };
-    let authorization =
-        AuthorizationLayer::builder(MappedIdentityProvider.map(|identity: &String| identity.len()))
-            .build();
-    let authentication = AuthenticationLayer::new(authenticator);
+    let security = SecurityLayer::new(
+        authenticator,
+        Arc::new(MappedIdentityProvider.map(|identity: &String| identity.len())),
+    );
     let router = axum::Router::new().route(
         "/",
         axum::routing::get(
             |Authenticated(identity): Authenticated<String>| async move { identity },
         ),
     );
-    let response = authentication
-        .layer(authorization.layer(router))
+    let response = security
+        .layer(router)
         .call(Request::new(Body::empty()))
         .await
         .unwrap();

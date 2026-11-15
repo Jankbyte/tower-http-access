@@ -23,11 +23,9 @@ use tower_http_access_authorizers::request::{
     PendingRuleBuilder, RequestAuthorizationBuilder, RequestAuthorizationProvider,
 };
 use tower_http_access_core::{
-    SecurityResponse,
-    authorization::{
-        auth_tower::AuthorizationLayer,
-        core::{AuthorizationDecision, AuthorizationDenial, AuthorizationProvider},
-    },
+    SecurityLayer, SecurityResponse,
+    authentication::{AuthenticationAttempt, AuthenticatorError},
+    authorization::core::{AuthorizationDecision, AuthorizationDenial, AuthorizationProvider},
 };
 
 #[tokio::main(flavor = "current_thread")]
@@ -52,9 +50,13 @@ fn create_app() -> Router {
 
     Router::new()
         .route("/private", get(|| async { "Your IP is allowed.\n" }))
-        // In this example, we dont need authentication, so we can just use
-        // only `AuthorizationLayer`
-        .route_layer(AuthorizationLayer::builder(authorizer).build())
+        // This policy checks request metadata and allows anonymous callers.
+        .route_layer(SecurityLayer::new(
+            |_: &Parts| async {
+                Ok::<_, AuthenticatorError>(AuthenticationAttempt::<()>::NotApplicable)
+            },
+            std::sync::Arc::new(authorizer),
+        ))
 }
 
 /// Extend the library's builder through its public API, without accessing its fields.

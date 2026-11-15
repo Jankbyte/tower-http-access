@@ -337,46 +337,8 @@ The chain skips non-applicable authenticators and stops at the first authenticat
 identity or error. Use `.authenticator(...)` to add an authenticator already
 held in an `Arc`.
 
-Use separate layers when authentication and authorization need independent placement,
-for example to authenticate once before applying different authorization rules to
-nested routers, or to run context-enrichment middleware between the stages.
-
-The following composition uses `tower::ServiceBuilder` (`tower = "0.5"`).
-
-```rust,no_run
-# use axum::{extract::Request, http::{StatusCode, request::Parts}};
-# use tower_http_access_core::authentication::AuthenticationAttempt;
-# use tower_http_access_core::authentication::AuthenticatorError;
-# use tower_http_access_authorizers::default_auth::AuthenticatedAuthorizationProvider;
-# use tower_http_access_core::authorization::core::AuthorizationFailure;
-# let my_authenticator = |_: &Parts| async { Ok::<_, AuthenticatorError>(AuthenticationAttempt::Authenticated("alex".to_owned())) };
-# let my_authorizer = AuthenticatedAuthorizationProvider::<String>::new();
-# let my_entry_point = |_: &Parts| http::Response::builder().status(StatusCode::UNAUTHORIZED).body(bytes::Bytes::new()).unwrap();
-# let my_failure_handler = |_: &Parts, _: AuthorizationFailure<std::convert::Infallible>| http::Response::builder().status(StatusCode::FORBIDDEN).body(bytes::Bytes::new()).unwrap();
-use tower_http_access_core::authentication::AuthenticationLayer;
-use tower_http_access_core::authorization::auth_tower::AuthorizationLayer;
-use tower::ServiceBuilder;
-
-let authentication = AuthenticationLayer::new(my_authenticator);
-let authorization = AuthorizationLayer::builder(my_authorizer)
-    .authentication_entry_point(my_entry_point)
-    .failure_handler(my_failure_handler)
-    .build();
-let security = ServiceBuilder::new()
-    .layer(authentication)
-    .layer(authorization);
-# let _: axum::Router = axum::Router::new().layer(security);
-```
-
-For separate layers, authentication must run before authorization, and both must use
-the same identity type. They communicate through `Authenticated<A>` in request
-extensions. To insert middleware between them, add it between the two `.layer(...)`
-calls. Do not stack `AuthenticationLayer` before `SecurityLayer` for the same identity
-type; the combined layer obtains its identity from its own authenticator.
-
-Clone a configured layer to attach it to multiple routers. Authentication providers,
-authorization rules, and entry points are shared through `Arc`; failure handlers use
-their own `Clone` implementations.
+Clone a configured `SecurityLayer` to attach it to multiple routers. Wrap components
+in `Arc` when their state should be shared across clones.
 
 ## 🪪 Sessions and form login
 
@@ -413,8 +375,8 @@ assert_eq!(error.into_security_response().status(), StatusCode::UNAUTHORIZED);
 # Ok::<(), http::Error>(())
 ```
 
-The Tower middleware accepts generic request and response bodies. With the default combined-layer
-adapter, or the standalone layers, its inner service must return `http::Response<ResBody>` where
+The Tower middleware accepts generic request and response bodies. With the default response
+adapter, its inner service must return `http::Response<ResBody>` where
 `ResBody: From<Bytes>`. Axum's `Body`, `Bytes` itself, and
 `http_body_util::Full<Bytes>` support this conversion. Other body types can be wrapped in an
 application type implementing `From<Bytes>`. Successful handler responses are passed through
@@ -428,11 +390,9 @@ an HTTP-to-gRPC adapter could map HTTP 401 to `Unauthenticated`, 403 to `Permiss
 application responses should bypass adaptation so their streaming bodies remain untouched.
 Configure it with `SecurityLayer::new(authenticator, authorizer).response_adapter(adapter)`.
 The combined layer invokes the adapter for every security rejection, including authentication
-errors, and bypasses it for successful handler responses. Adapters are shared through `Arc` and
-need not implement `Clone`. The default `DefaultSecurityResponseAdapter` preserves HTTP metadata
+errors, and bypasses it for successful handler responses. Adapters must implement `Clone`. The default `DefaultSecurityResponseAdapter` preserves HTTP metadata
 and converts the body through `From<Bytes>`; no gRPC-specific adapter is supplied. A custom adapter
-can produce a body type without `From<Bytes>`. The separate authentication and authorization
-layers retain their existing body conversion.
+can produce a body type without `From<Bytes>`.
 
 For a core-only dependency, use `tower-http-access-core = { version = "0.1", default-features = false }`.
 Add `bytes = "1"` and `http = "1"` to your application when constructing custom responses directly.
@@ -441,7 +401,7 @@ Add `bytes = "1"` and `http = "1"` to your application when constructing custom 
 
 The `axum` integration feature is enabled by default. Disable default features to use the core
 HTTP/Tower middleware without depending on Axum. Authentication and authorization traits,
-`SecurityLayer` are always available; separate layers require `split_auth`.
+`SecurityLayer` are always available.
 
 | Feature | Enables |
 | --- | --- |

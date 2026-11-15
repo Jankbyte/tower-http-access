@@ -173,6 +173,6 @@ impl<A: Clone + Send + Sync + 'static> DelegatingRequestAuthenticatorBuilder<A> 
     }
 }
 
-#[cfg(all(test, feature = "split_auth"))]
+#[cfg(test)]
 #[path = "delegator_tests.rs"]
 mod tests;

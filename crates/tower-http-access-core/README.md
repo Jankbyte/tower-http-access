@@ -31,7 +31,6 @@ This keeps credential handling, access policy, and application request handling 
 | `default` | Enables `axum`. |
 | `axum` | Axum extractors for [`Authenticated<T>`](authentication::Authenticated) and `Option<Authenticated<T>>`. |
 | `request_matcher` | Request-based authentication entry-point selection using `http-request-matcher`. |
-| `split_auth` | Standalone [`AuthenticationLayer`](authentication::AuthenticationLayer) and [`AuthorizationLayer`](authorization::auth_tower::AuthorizationLayer) for independent middleware placement. |
 | `filter_chain` | Selects complete middleware stacks through [`SecurityChainLayer`](filter_chain::SecurityChainLayer). Also enables `request_matcher`. |
 
 Authentication and authorization traits and `SecurityLayer` are always available.

@@ -6,10 +6,7 @@
 //! and provider errors use [`core::AuthorizationFailureHandler`].
 //!
 //! Reusable policies are provided by the `tower-http-access-authorizers` crate.
-//! The `split_auth` feature provides a separate authorization layer in [`auth_tower`].
 
-#[cfg(feature = "split_auth")]
-pub mod auth_tower;
 pub mod core;
 #[cfg(feature = "request_matcher")]
 pub mod entry_point;

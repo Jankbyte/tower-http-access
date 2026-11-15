@@ -16,7 +16,7 @@ http.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
-tower-http-access-core = { workspace = true, features = ["split_auth", "axum"] }
+tower-http-access-core = { workspace = true, features = ["axum"] }
 axum.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tower = { workspace = true, features = ["util"] }

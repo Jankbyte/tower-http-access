@@ -44,8 +44,7 @@ use tower_service::Service;
 ///
 /// Use [`crate::authentication::DelegatingRequestAuthenticator`] to combine authentication
 /// mechanisms, or `tower_http_access_authorizers::all::AllAuthorizationProvider` to combine authorization
-/// checks. Use the separate authentication and authorization layers when the stages need
-/// independent placement in the middleware stack.
+/// checks.
 ///
 /// ```
 /// use http::request::Parts;
