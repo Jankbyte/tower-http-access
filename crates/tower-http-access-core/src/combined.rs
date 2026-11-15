@@ -81,6 +81,11 @@ pub struct SecurityLayer<
     R = DefaultSecurityResponseAdapter,
     C = DefaultAuthenticationSuccessHandler,
 > {
+    components: Components<A, P, H, E, R, C>,
+}
+
+#[derive(Clone)]
+struct Components<A, P, H, E, R, C> {
     authenticator: A,
     authorizer: P,
     failure_handler: H,
@@ -122,12 +127,14 @@ where
     /// Combine an authenticator and a authorizer accepting the same identity type.
     pub fn new(authenticator: A, authorizer: P) -> Self {
         Self {
-            authenticator,
-            authorizer,
-            failure_handler: DefaultAuthorizationFailureHandler,
-            authentication_entry_point: DefaultAuthenticationEntryPoint,
-            response_adapter: DefaultSecurityResponseAdapter,
-            authentication_success_handler: DefaultAuthenticationSuccessHandler,
+            components: Components {
+                authenticator,
+                authorizer,
+                failure_handler: DefaultAuthorizationFailureHandler,
+                authentication_entry_point: DefaultAuthenticationEntryPoint,
+                response_adapter: DefaultSecurityResponseAdapter,
+                authentication_success_handler: DefaultAuthenticationSuccessHandler,
+            },
         }
     }
 }
@@ -161,12 +168,14 @@ impl<A, P, H, E, R, C> SecurityLayer<A, P, H, E, R, C> {
         handler: NewC,
     ) -> SecurityLayer<A, P, H, E, R, NewC> {
         SecurityLayer {
-            authenticator: self.authenticator,
-            authorizer: self.authorizer,
-            failure_handler: self.failure_handler,
-            authentication_entry_point: self.authentication_entry_point,
-            response_adapter: self.response_adapter,
-            authentication_success_handler: handler,
+            components: Components {
+                authenticator: self.components.authenticator,
+                authorizer: self.components.authorizer,
+                failure_handler: self.components.failure_handler,
+                authentication_entry_point: self.components.authentication_entry_point,
+                response_adapter: self.components.response_adapter,
+                authentication_success_handler: handler,
+            },
         }
     }
 
@@ -176,12 +185,14 @@ impl<A, P, H, E, R, C> SecurityLayer<A, P, H, E, R, C> {
         authentication_entry_point: NewE,
     ) -> SecurityLayer<A, P, H, NewE, R, C> {
         SecurityLayer {
-            authenticator: self.authenticator,
-            authorizer: self.authorizer,
-            failure_handler: self.failure_handler,
-            authentication_entry_point,
-            response_adapter: self.response_adapter,
-            authentication_success_handler: self.authentication_success_handler,
+            components: Components {
+                authenticator: self.components.authenticator,
+                authorizer: self.components.authorizer,
+                failure_handler: self.components.failure_handler,
+                authentication_entry_point,
+                response_adapter: self.components.response_adapter,
+                authentication_success_handler: self.components.authentication_success_handler,
+            },
         }
     }
 
@@ -212,24 +223,28 @@ impl<A, P, H, E, R, C> SecurityLayer<A, P, H, E, R, C> {
     /// ```
     pub fn response_adapter<NewR>(self, adapter: NewR) -> SecurityLayer<A, P, H, E, NewR, C> {
         SecurityLayer {
-            authenticator: self.authenticator,
-            authorizer: self.authorizer,
-            failure_handler: self.failure_handler,
-            authentication_entry_point: self.authentication_entry_point,
-            response_adapter: adapter,
-            authentication_success_handler: self.authentication_success_handler,
+            components: Components {
+                authenticator: self.components.authenticator,
+                authorizer: self.components.authorizer,
+                failure_handler: self.components.failure_handler,
+                authentication_entry_point: self.components.authentication_entry_point,
+                response_adapter: adapter,
+                authentication_success_handler: self.components.authentication_success_handler,
+            },
         }
     }
 
     /// Customize responses to insufficient permissions and authorizer errors.
     pub fn failure_handler<NewH>(self, handler: NewH) -> SecurityLayer<A, P, NewH, E, R, C> {
         SecurityLayer {
-            authenticator: self.authenticator,
-            authorizer: self.authorizer,
-            failure_handler: handler,
-            authentication_entry_point: self.authentication_entry_point,
-            response_adapter: self.response_adapter,
-            authentication_success_handler: self.authentication_success_handler,
+            components: Components {
+                authenticator: self.components.authenticator,
+                authorizer: self.components.authorizer,
+                failure_handler: handler,
+                authentication_entry_point: self.components.authentication_entry_point,
+                response_adapter: self.components.response_adapter,
+                authentication_success_handler: self.components.authentication_success_handler,
+            },
         }
     }
 }
@@ -239,12 +254,7 @@ impl<A: Clone, P: Clone, H: Clone, E: Clone, R: Clone, C: Clone> Clone
 {
     fn clone(&self) -> Self {
         Self {
-            authenticator: self.authenticator.clone(),
-            authorizer: self.authorizer.clone(),
-            failure_handler: self.failure_handler.clone(),
-            authentication_entry_point: self.authentication_entry_point.clone(),
-            response_adapter: self.response_adapter.clone(),
-            authentication_success_handler: self.authentication_success_handler.clone(),
+            components: self.components.clone(),
         }
     }
 }
@@ -257,7 +267,7 @@ impl<S, A: Clone, P: Clone, H: Clone, E: Clone, R: Clone, C: Clone> Layer<S>
     fn layer(&self, inner: S) -> Self::Service {
         SecurityService {
             inner,
-            layer: self.clone(),
+            components: self.components.clone(),
         }
     }
 }
@@ -273,7 +283,7 @@ pub struct SecurityService<
     C = DefaultAuthenticationSuccessHandler,
 > {
     inner: S,
-    layer: SecurityLayer<A, P, H, E, R, C>,
+    components: Components<A, P, H, E, R, C>,
 }
 
 impl<S: Clone, A: Clone, P: Clone, H: Clone, E: Clone, R: Clone, C: Clone> Clone
@@ -282,7 +292,7 @@ impl<S: Clone, A: Clone, P: Clone, H: Clone, E: Clone, R: Clone, C: Clone> Clone
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
-            layer: self.layer.clone(),
+            components: self.components.clone(),
         }
     }
 }
@@ -312,20 +322,22 @@ where
     }
 
     fn call(&mut self, request: Request<ReqBody>) -> Self::Future {
-        let layer = self.layer.clone();
+        let components = self.components.clone();
         let clone = self.inner.clone();
         let mut inner = std::mem::replace(&mut self.inner, clone);
 
         Box::pin(async move {
             let (parts, body) = request.into_parts();
-            let authentication = match layer.authenticator.authenticate(&parts).await {
+            let authentication = match components.authenticator.authenticate(&parts).await {
                 Ok(AuthenticationAttempt::Authenticated(authentication)) => Some(authentication),
                 Ok(AuthenticationAttempt::NotApplicable) => None,
                 Err(error) => {
-                    return Ok(layer.response_adapter.adapt(error.into_security_response()));
+                    return Ok(components
+                        .response_adapter
+                        .adapt(error.into_security_response()));
                 }
             };
-            let decision = layer
+            let decision = components
                 .authorizer
                 .authorize(authentication.as_ref(), &parts)
                 .await;
@@ -334,24 +346,24 @@ where
                 Ok(AuthorizationDecision::Allow) => {
                     let mut parts = parts;
                     if let Some(authentication) = authentication {
-                        layer
+                        components
                             .authentication_success_handler
                             .on_success(authentication, &mut parts);
                     }
                     inner.call(Request::from_parts(parts, body)).await
                 }
                 Ok(AuthorizationDecision::Deny(AuthorizationDenial::AuthenticationRequired)) => {
-                    Ok(layer
+                    Ok(components
                         .response_adapter
-                        .adapt(layer.authentication_entry_point.commence(&parts)))
+                        .adapt(components.authentication_entry_point.commence(&parts)))
                 }
-                Ok(AuthorizationDecision::Deny(denial)) => Ok(layer.response_adapter.adapt(
-                    layer
+                Ok(AuthorizationDecision::Deny(denial)) => Ok(components.response_adapter.adapt(
+                    components
                         .failure_handler
                         .handle(&parts, AuthorizationFailure::Denied(denial)),
                 )),
-                Err(error) => Ok(layer.response_adapter.adapt(
-                    layer
+                Err(error) => Ok(components.response_adapter.adapt(
+                    components
                         .failure_handler
                         .handle(&parts, AuthorizationFailure::Provider(error)),
                 )),
