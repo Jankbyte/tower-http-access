@@ -2,12 +2,13 @@ use super::base64::extract_credentials;
 use bytes::Bytes;
 use http::{StatusCode, header, request::Parts};
 use std::{error::Error, future::Future, pin::Pin};
-use tower_http_access_core::SecurityResponse;
-use tower_http_access_core::authentication::AuthenticationAttempt;
-use tower_http_access_core::authentication::AuthenticationErrorReason;
-use tower_http_access_core::authentication::AuthenticatorError;
-use tower_http_access_core::authentication::RequestAuthenticator;
-use tower_http_access_core::authorization::core::AuthenticationEntryPoint;
+use tower_http_access_core::{
+    SecurityResponse,
+    authentication::{
+        AuthenticationAttempt, AuthenticationErrorReason, AuthenticatorError, RequestAuthenticator,
+    },
+    authorization::core::AuthenticationEntryPoint,
+};
 use user_password_auth::UsernamePasswordAuthenticationProvider;
 
 /// HTTP Basic authentication for Axum requests.

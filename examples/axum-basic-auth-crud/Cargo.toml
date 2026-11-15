@@ -8,7 +8,7 @@ publish = false
 tower-http-access-core = { workspace = true, features = ["authorizers", "axum"] }
 tower-http-access-basic = { workspace = true, features = ["tracing"] }
 user-password-auth = { workspace = true, features = ["tracing", "user_details"] }
-tower-http-access-authorizers = { workspace = true, features = ["authorities"] }
+tower-http-access-authorizers = { workspace = true, features = ["authorities", "request_matcher"] }
 
 http.workspace = true
 tower-http = { workspace = true, features = ["trace", "request-id"] }
