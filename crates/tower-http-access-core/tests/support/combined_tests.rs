@@ -416,3 +416,79 @@ fn providers_clone_without_requiring_clone_identities() {
     );
     assert_clone(&AuthenticatedAuthorizationProvider::<usize>::new().map(|_: &Identity| 1));
 }
+
+#[tokio::test]
+async fn success_handler_runs_after_authorization_and_replaces_default_identity_storage() {
+    use crate::authentication::AuthenticationSuccessHandler;
+    use tower_http_access_core::{DefaultSecurityResponseAdapter, authorization::core::{DefaultAuthenticationEntryPoint, DefaultAuthorizationFailureHandler}};
+
+    #[derive(Clone)]
+    struct CurrentUser(String);
+
+    let authorization_calls = Arc::new(AtomicUsize::new(0));
+    let handler_calls = Arc::new(AtomicUsize::new(0));
+    let authorized = Arc::clone(&authorization_calls);
+    let handled = Arc::clone(&handler_calls);
+    let handler: Arc<dyn AuthenticationSuccessHandler<String>> = Arc::new(
+        move |identity: String, parts: &mut Parts| {
+            assert_eq!(authorized.load(Ordering::SeqCst), 1);
+            assert!(parts.extensions.get::<Authenticated<String>>().is_none());
+            handled.fetch_add(1, Ordering::SeqCst);
+            parts.extensions.insert(CurrentUser(identity));
+            parts.headers.insert("x-current-user", "set".parse().unwrap());
+        },
+    );
+    let layer = SecurityLayer::new(
+        Authenticator { outcome: 1 },
+        Arc::new(Authorizer {
+            identity: Some("alex"),
+            outcome: 0,
+            calls: authorization_calls,
+        }),
+    )
+    .authentication_success_handler(handler)
+    // Other setters must preserve the configured success handler.
+    .authentication_entry_point(DefaultAuthenticationEntryPoint)
+    .failure_handler(DefaultAuthorizationFailureHandler)
+    .response_adapter(DefaultSecurityResponseAdapter);
+    let mut service = layer.clone().layer(tower::service_fn(|request: Request| async move {
+        assert!(request.extensions().get::<Authenticated<String>>().is_none());
+        assert_eq!(request.extensions().get::<CurrentUser>().unwrap().0, "alex");
+        assert_eq!(request.headers()["x-current-user"], "set");
+        assert_eq!(request.headers()["x-auth"], "checked");
+        assert_eq!(request.uri().path(), "/notes");
+        assert_eq!(to_bytes(request.into_body(), usize::MAX).await.unwrap(), "payload");
+        Ok::<_, io::Error>("allowed".into_response())
+    })).clone();
+    assert_eq!(execute(&mut service, request()).await.unwrap().status(), StatusCode::OK);
+    assert_eq!(handler_calls.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn success_handler_skips_anonymous_requests_and_all_security_rejections() {
+    for (authentication, authorization, status) in [
+        (0, 0, StatusCode::OK),
+        (2, 0, StatusCode::UNAUTHORIZED),
+        (1, 1, StatusCode::UNAUTHORIZED),
+        (1, 2, StatusCode::FORBIDDEN),
+        (1, 3, StatusCode::INTERNAL_SERVER_ERROR),
+    ] {
+        let mut service = SecurityLayer::new(
+            Authenticator { outcome: authentication },
+            Arc::new(Authorizer {
+                identity: if authentication == 1 { Some("alex") } else { None },
+                outcome: authorization,
+                calls: Arc::new(AtomicUsize::new(0)),
+            }),
+        )
+        .authentication_success_handler(|_: String, _: &mut Parts| {
+            panic!("success handler must only run for allowed authenticated requests");
+        })
+        .layer(Inner {
+            ready: false,
+            calls: Arc::new(AtomicUsize::new(0)),
+            fail: false,
+        });
+        assert_eq!(execute(&mut service, request()).await.unwrap().status(), status);
+    }
+}

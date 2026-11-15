@@ -16,8 +16,11 @@ authorization policy. [`SecurityLayer`](SecurityLayer) connects them and wraps a
 2. The service passes the optional identity and request parts to [`AuthorizationProvider`](authorization::core::AuthorizationProvider).
    The provider decides whether to allow the request or deny access. Both components share
    the same `Authentication` type, so the identity flows directly between them.
-3. If allowed, the service stores any identity in the request extensions as [`Authenticated<T>`](authentication::Authenticated)
-   and forwards the request to the inner service. Authentication errors, authorization denials,
+3. If allowed and authenticated, the service passes the identity to
+   [`AuthenticationSuccessHandler`](authentication::AuthenticationSuccessHandler). The default handler
+   stores it in request extensions as [`Authenticated<T>`](authentication::Authenticated). Configure
+   [`SecurityLayer::authentication_success_handler`] to use custom identity storage. The handler runs
+   synchronously before forwarding the request to the inner service. Authentication errors, authorization denials,
    and provider errors produce a response without calling the inner service.
 
 An authentication-required denial invokes the configured [`AuthenticationEntryPoint`](authorization::core::AuthenticationEntryPoint);

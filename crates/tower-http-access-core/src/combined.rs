@@ -1,7 +1,10 @@
 //! Authentication and authorization in a single Tower service.
 use crate::{
     DefaultSecurityResponseAdapter, SecurityResponseAdapter,
-    authentication::{Authenticated, AuthenticationAttempt, RequestAuthenticator},
+    authentication::{
+        AuthenticationAttempt, AuthenticationSuccessHandler, DefaultAuthenticationSuccessHandler,
+        RequestAuthenticator,
+    },
     authorization::core::{
         AuthenticationEntryPoint, AuthorizationDecision, AuthorizationDenial, AuthorizationFailure,
         AuthorizationFailureHandler, AuthorizationProvider, DefaultAuthenticationEntryPoint,
@@ -22,7 +25,7 @@ use tower_service::Service;
 /// [`Self::response_adapter`] to support other body types or response protocols.
 /// Only security-generated responses are converted.
 ///
-/// The authenticator, authorizer, entry point, response adapter, and failure handler are
+/// The authenticator, authorizer, entry point, response adapter, success handler, and failure handler are
 /// cloned for each service and request. Use `Arc` for shared authenticators, authorizers,
 /// or entry points that do not implement `Clone`.
 /// For Axum this conversion uses `axum::body::Body::from`; other Tower services can use `Bytes`,
@@ -31,7 +34,8 @@ use tower_service::Service;
 ///
 /// The authenticator's result is passed directly to the authorizer, without using
 /// request extensions to communicate between stages. After authorization allows the request,
-/// the identity is inserted as [`Authenticated`] for downstream handlers.
+/// the success handler receives the identity. By default, it inserts
+/// [`Authenticated`](crate::authentication::Authenticated) for downstream handlers.
 ///
 /// # Authentication contract
 ///
@@ -39,8 +43,8 @@ use tower_service::Service;
 /// authenticator must not insert `Authenticated<A::Authentication>` into request extensions.
 /// The authenticator returns its identity through [`AuthenticationAttempt`]; the authorizer
 /// receives that result directly, with `NotApplicable` represented as `None`. The combined layer
-/// inserts the returned identity only after authorization allows access. It does not read or
-/// remove existing authentication extensions.
+/// invokes the success handler only after authorization allows access. The default handler
+/// inserts the identity into extensions; the layer does not read existing authentication extensions.
 ///
 /// Use [`crate::authentication::DelegatingRequestAuthenticator`] to combine authentication
 /// mechanisms, or `tower_http_access_authorizers::all::AllAuthorizationProvider` to combine authorization
@@ -73,12 +77,14 @@ pub struct SecurityLayer<
     H = DefaultAuthorizationFailureHandler,
     E = DefaultAuthenticationEntryPoint,
     R = DefaultSecurityResponseAdapter,
+    C = DefaultAuthenticationSuccessHandler,
 > {
     authenticator: A,
     authorizer: P,
     failure_handler: H,
     authentication_entry_point: E,
     response_adapter: R,
+    authentication_success_handler: C,
 }
 
 impl<A, P> SecurityLayer<A, P>
@@ -94,22 +100,61 @@ where
             failure_handler: DefaultAuthorizationFailureHandler,
             authentication_entry_point: DefaultAuthenticationEntryPoint,
             response_adapter: DefaultSecurityResponseAdapter,
+            authentication_success_handler: DefaultAuthenticationSuccessHandler,
         }
     }
 }
 
-impl<A, P, H, E, R> SecurityLayer<A, P, H, E, R> {
+impl<A, P, H, E, R, C> SecurityLayer<A, P, H, E, R, C> {
+    /// Choose how an authenticated identity is passed to downstream handlers.
+    ///
+    /// Runs synchronously after authorization allows an authenticated request. It is
+    /// skipped for anonymous or rejected requests and replaces the default insertion
+    /// of `Authenticated<A::Authentication>`. The handler is cloned for each service
+    /// and request; shared state can be captured through `Arc`.
+    ///
+    /// ```
+    /// use http::request::Parts;
+    /// use tower_http_access_core::{SecurityLayer, authentication::{AuthenticationAttempt, AuthenticatorError}};
+    /// use tower_http_access_authorizers::default_auth::AuthenticatedAuthorizationProvider;
+    ///
+    /// #[derive(Clone)]
+    /// struct CurrentUser(String);
+    /// let layer = SecurityLayer::new(
+    ///     |_: &Parts| async {
+    ///         Ok::<_, AuthenticatorError>(AuthenticationAttempt::Authenticated("alex".to_owned()))
+    ///     },
+    ///     AuthenticatedAuthorizationProvider::<String>::new(),
+    /// ).authentication_success_handler(|identity: String, parts: &mut Parts| {
+    ///     parts.extensions.insert(CurrentUser(identity));
+    /// });
+    /// ```
+    pub fn authentication_success_handler<NewC>(
+        self,
+        handler: NewC,
+    ) -> SecurityLayer<A, P, H, E, R, NewC> {
+        SecurityLayer {
+            authenticator: self.authenticator,
+            authorizer: self.authorizer,
+            failure_handler: self.failure_handler,
+            authentication_entry_point: self.authentication_entry_point,
+            response_adapter: self.response_adapter,
+            authentication_success_handler: handler,
+        }
+    }
+
     /// Customize the response when authorization requires authentication.
     pub fn authentication_entry_point<NewE>(
         self,
         authentication_entry_point: NewE,
-    ) -> SecurityLayer<A, P, H, NewE, R> {
+    ) -> SecurityLayer<A, P, H, NewE, R, C> {
         SecurityLayer {
             authenticator: self.authenticator,
             authorizer: self.authorizer,
             failure_handler: self.failure_handler,
             authentication_entry_point,
             response_adapter: self.response_adapter,
+            authentication_success_handler: self.authentication_success_handler,
         }
     }
 
@@ -138,29 +183,33 @@ impl<A, P, H, E, R> SecurityLayer<A, P, H, E, R> {
     ///     ).response_adapter(adapter);
     /// }
     /// ```
-    pub fn response_adapter<NewR>(self, adapter: NewR) -> SecurityLayer<A, P, H, E, NewR> {
+    pub fn response_adapter<NewR>(self, adapter: NewR) -> SecurityLayer<A, P, H, E, NewR, C> {
         SecurityLayer {
             authenticator: self.authenticator,
             authorizer: self.authorizer,
             failure_handler: self.failure_handler,
             authentication_entry_point: self.authentication_entry_point,
             response_adapter: adapter,
+            authentication_success_handler: self.authentication_success_handler,
         }
     }
 
     /// Customize responses to insufficient permissions and authorizer errors.
-    pub fn failure_handler<NewH>(self, handler: NewH) -> SecurityLayer<A, P, NewH, E, R> {
+    pub fn failure_handler<NewH>(self, handler: NewH) -> SecurityLayer<A, P, NewH, E, R, C> {
         SecurityLayer {
             authenticator: self.authenticator,
             authorizer: self.authorizer,
             failure_handler: handler,
             authentication_entry_point: self.authentication_entry_point,
             response_adapter: self.response_adapter,
+            authentication_success_handler: self.authentication_success_handler,
         }
     }
 }
 
-impl<A: Clone, P: Clone, H: Clone, E: Clone, R: Clone> Clone for SecurityLayer<A, P, H, E, R> {
+impl<A: Clone, P: Clone, H: Clone, E: Clone, R: Clone, C: Clone> Clone
+    for SecurityLayer<A, P, H, E, R, C>
+{
     fn clone(&self) -> Self {
         Self {
             authenticator: self.authenticator.clone(),
@@ -168,14 +217,15 @@ impl<A: Clone, P: Clone, H: Clone, E: Clone, R: Clone> Clone for SecurityLayer<A
             failure_handler: self.failure_handler.clone(),
             authentication_entry_point: self.authentication_entry_point.clone(),
             response_adapter: self.response_adapter.clone(),
+            authentication_success_handler: self.authentication_success_handler.clone(),
         }
     }
 }
 
-impl<S, A: Clone, P: Clone, H: Clone, E: Clone, R: Clone> Layer<S>
-    for SecurityLayer<A, P, H, E, R>
+impl<S, A: Clone, P: Clone, H: Clone, E: Clone, R: Clone, C: Clone> Layer<S>
+    for SecurityLayer<A, P, H, E, R, C>
 {
-    type Service = SecurityService<S, A, P, H, E, R>;
+    type Service = SecurityService<S, A, P, H, E, R, C>;
 
     fn layer(&self, inner: S) -> Self::Service {
         SecurityService {
@@ -193,13 +243,14 @@ pub struct SecurityService<
     H = DefaultAuthorizationFailureHandler,
     E = DefaultAuthenticationEntryPoint,
     R = DefaultSecurityResponseAdapter,
+    C = DefaultAuthenticationSuccessHandler,
 > {
     inner: S,
-    layer: SecurityLayer<A, P, H, E, R>,
+    layer: SecurityLayer<A, P, H, E, R, C>,
 }
 
-impl<S: Clone, A: Clone, P: Clone, H: Clone, E: Clone, R: Clone> Clone
-    for SecurityService<S, A, P, H, E, R>
+impl<S: Clone, A: Clone, P: Clone, H: Clone, E: Clone, R: Clone, C: Clone> Clone
+    for SecurityService<S, A, P, H, E, R, C>
 {
     fn clone(&self) -> Self {
         Self {
@@ -209,8 +260,8 @@ impl<S: Clone, A: Clone, P: Clone, H: Clone, E: Clone, R: Clone> Clone
     }
 }
 
-impl<S, A, P, H, E, R, ReqBody, ResBody> Service<Request<ReqBody>>
-    for SecurityService<S, A, P, H, E, R>
+impl<S, A, P, H, E, R, C, ReqBody, ResBody> Service<Request<ReqBody>>
+    for SecurityService<S, A, P, H, E, R, C>
 where
     S: Service<Request<ReqBody>, Response = Response<ResBody>> + Clone + Send + 'static,
     S::Future: Send + 'static,
@@ -223,6 +274,7 @@ where
     P::Error: 'static,
     H: AuthorizationFailureHandler<P::Error>,
     E: AuthenticationEntryPoint + Clone,
+    C: AuthenticationSuccessHandler<A::Authentication> + Clone,
 {
     type Response = Response<ResBody>;
     type Error = S::Error;
@@ -253,13 +305,13 @@ where
 
             match decision {
                 Ok(AuthorizationDecision::Allow) => {
-                    let mut request = Request::from_parts(parts, body);
+                    let mut parts = parts;
                     if let Some(authentication) = authentication {
-                        request
-                            .extensions_mut()
-                            .insert(Authenticated(authentication));
+                        layer
+                            .authentication_success_handler
+                            .on_success(authentication, &mut parts);
                     }
-                    inner.call(request).await
+                    inner.call(Request::from_parts(parts, body)).await
                 }
                 Ok(AuthorizationDecision::Deny(AuthorizationDenial::AuthenticationRequired)) => {
                     Ok(layer
