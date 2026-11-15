@@ -45,8 +45,9 @@ use tower_layer::Layer;
 use tower_service::Service;
 
 type BoxService<B, R, E> = BoxCloneSyncService<Request<B>, Response<R>, E>;
+type ServiceChain<B, R, E> = (Arc<dyn RequestMatcher>, BoxService<B, R, E>);
 type Factory<S, B, R, E> = dyn Fn(S) -> BoxService<B, R, E> + Send + Sync;
-type Chain<S, B, R, E> = (Box<dyn RequestMatcher>, Box<Factory<S, B, R, E>>);
+type Chain<S, B, R, E> = (Arc<dyn RequestMatcher>, Box<Factory<S, B, R, E>>);
 
 /// An ordered collection of middleware stacks and an explicit fallback.
 /// Available with the `filter_chain` feature.
@@ -106,7 +107,7 @@ impl<S, B, R, E> SecurityChainBuilder<S, B, R, E> {
         <L::Service as Service<Request<B>>>::Future: Send + 'static,
     {
         self.chains
-            .push((Box::new(matcher), Box::new(factory(layer))));
+            .push((Arc::new(matcher), Box::new(factory(layer))));
         self
     }
 
@@ -158,15 +159,14 @@ impl<S, B, R, E> SecurityChainBuilder<S, B, R, E> {
 }
 
 impl<S: Clone, B, R, E> Layer<S> for SecurityChainLayer<S, B, R, E> {
-    type Service = SecurityChainService<S, B, R, E>;
+    type Service = SecurityChainService<B, R, E>;
 
     fn layer(&self, inner: S) -> Self::Service {
         SecurityChainService {
-            chains: Arc::clone(&self.chains),
-            services: self
+            chains: self
                 .chains
                 .iter()
-                .map(|(_, make)| make(inner.clone()))
+                .map(|(matcher, make)| (Arc::clone(matcher), make(inner.clone())))
                 .collect(),
             fallback: (self.fallback)(inner),
         }
@@ -180,23 +180,21 @@ impl<S: Clone, B, R, E> Layer<S> for SecurityChainLayer<S, B, R, E> {
 /// This does not reserve capacity before accepting a request: put a concurrency
 /// limit outside this layer when admission backpressure is required. Service clones
 /// must preserve shared resources such as queues and concurrency limits.
-pub struct SecurityChainService<S, B, R, E> {
-    chains: Arc<[Chain<S, B, R, E>]>,
-    services: Vec<BoxService<B, R, E>>,
+pub struct SecurityChainService<B, R, E> {
+    chains: Arc<[ServiceChain<B, R, E>]>,
     fallback: BoxService<B, R, E>,
 }
 
-impl<S, B, R, E> Clone for SecurityChainService<S, B, R, E> {
+impl<B, R, E> Clone for SecurityChainService<B, R, E> {
     fn clone(&self) -> Self {
         Self {
             chains: Arc::clone(&self.chains),
-            services: self.services.clone(),
             fallback: self.fallback.clone(),
         }
     }
 }
 
-impl<S, B, R, E> Service<Request<B>> for SecurityChainService<S, B, R, E>
+impl<B, R, E> Service<Request<B>> for SecurityChainService<B, R, E>
 where
     B: Send + 'static,
     R: 'static,
@@ -212,16 +210,14 @@ where
 
     fn call(&mut self, request: Request<B>) -> Self::Future {
         let (parts, body) = request.into_parts();
-        let selected = self
+        let service = self
             .chains
             .iter()
-            .position(|(matcher, _)| matcher.matches(&parts))
-            .map(|index| &mut self.services[index])
-            .unwrap_or(&mut self.fallback);
-        // Move the selected instance into the future so readiness and call operate
-        // on the same instance; retain a clone for subsequent requests.
-        let replacement = selected.clone();
-        let service = std::mem::replace(selected, replacement);
+            .find(|(matcher, _)| matcher.matches(&parts))
+            .map(|(_, service)| service)
+            .unwrap_or(&self.fallback)
+            .clone();
+        // Readiness and call operate on the same cloned instance.
         Box::pin(service.oneshot(Request::from_parts(parts, body)))
     }
 }
