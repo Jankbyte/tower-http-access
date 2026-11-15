@@ -6,3 +6,6 @@ publish = false
 
 [dependencies]
 tokio = { workspace = true, features = ["full"] }
+tracing.workspace = true
+tower-http-access-basic = { workspace = true, features = ["tracing"] }
+user-password-auth = { workspace = true, features = ["tracing", "user_details"] }

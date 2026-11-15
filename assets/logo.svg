@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1774" height="887" viewBox="0 0 1774 887" role="img" aria-labelledby="title description">
+  <title id="title">Tower HTTP Access</title>
+  <desc id="description">An orange crab holding a chain between an identity card with a key and an authorization shield, framed by a larger shield.</desc>
+  <defs>
+    <linearGradient id="orange" x1="0" y1="0" x2="0.25" y2="1">
+      <stop stop-color="#ff6508"/>
+      <stop offset="0.55" stop-color="#f44b00"/>
+      <stop offset="1" stop-color="#ed4900"/>
+    </linearGradient>
+    <linearGradient id="shell" x1="0" y1="0" x2="0.8" y2="1">
+      <stop stop-color="#ff6508"/>
+      <stop offset="1" stop-color="#ee4900"/>
+    </linearGradient>
+    <linearGradient id="white" x1="0" y1="0" x2="0.3" y2="1">
+      <stop stop-color="#fff"/>
+      <stop offset="1" stop-color="#f3f3f3"/>
+    </linearGradient>
+    <radialGradient id="eye" cx="0.35" cy="0.2" r="0.9">
+      <stop stop-color="#252221"/>
+      <stop offset="1" stop-color="#100e0d"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Shield behind the crab. Open regions retain the background's transparency. -->
+  <path fill="url(#orange)" fill-rule="evenodd" d="M887 21C789 108 661 160 494 183L492 302C491 375 500 434 519 479L574 405C565 356 564 297 565 239C698 212 804 170 887 112C971 170 1077 212 1209 239C1210 297 1208 356 1200 405L1254 479C1274 430 1282 373 1282 302L1280 183C1115 160 985 108 887 21Z"/>
+  <path fill="url(#orange)" d="M733 742C724 742 724 751 733 760C774 801 826 835 887 868C947 833 1001 797 1042 758C1050 750 1052 743 1041 743L970 748L887 803L804 748Z"/>
+
+  <!-- Legs emerge behind the links. -->
+  <g fill="url(#shell)">
+    <path d="M610 660C591 681 575 704 569 727C562 751 575 790 595 812C601 819 607 812 608 801L615 765C621 747 637 731 650 716L656 679Z"/>
+    <path d="M659 682C643 706 638 729 646 755C654 780 673 807 688 819C696 826 704 819 700 808C695 782 701 760 717 741L735 718Z"/>
+    <path d="M1164 660C1183 681 1199 704 1205 727C1212 751 1199 790 1179 812C1173 819 1167 812 1166 801L1159 765C1153 747 1137 731 1124 716L1118 679Z"/>
+    <path d="M1115 682C1131 706 1136 729 1128 755C1120 780 1101 807 1086 819C1078 826 1070 819 1074 808C1079 782 1073 760 1057 741L1039 718Z"/>
+  </g>
+
+  <!-- Shell, eye stalks, and the two eyes. -->
+  <path fill="url(#shell)" d="M591 596L539 518C523 495 532 479 546 480L574 480L562 445C554 417 567 412 588 422L610 428L606 393C604 366 616 359 636 371L668 386L677 350C683 325 694 325 714 339L742 359L763 350L749 310L792 293L820 340L840 336L864 299C881 277 892 279 909 301L932 336L954 340L984 293L1026 310L1012 350L1033 359L1061 339C1081 325 1092 325 1098 350L1106 386L1138 371C1158 359 1170 366 1168 393L1164 428L1186 422C1207 412 1220 417 1212 445L1200 480L1228 480C1242 479 1251 495 1235 518L1183 596L1110 591L1041 548L990 542L782 542L731 548L662 591Z"/>
+  <g>
+    <circle cx="759" cy="271" r="70" fill="url(#shell)"/>
+    <circle cx="1015" cy="271" r="70" fill="url(#shell)"/>
+    <circle cx="761" cy="276" r="49" fill="url(#white)"/>
+    <circle cx="1013" cy="276" r="49" fill="url(#white)"/>
+    <circle cx="768" cy="284" r="40" fill="url(#eye)"/>
+    <circle cx="1006" cy="284" r="40" fill="url(#eye)"/>
+    <circle cx="777" cy="265" r="13" fill="#fff"/>
+    <circle cx="997" cy="265" r="13" fill="#fff"/>
+  </g>
+  <path d="M838 405C861 442 910 442 933 405" fill="none" stroke="#171210" stroke-width="25" stroke-linecap="round"/>
+
+  <!-- End links: an outer ring and a separate inset face. -->
+  <path fill="url(#orange)" fill-rule="evenodd" d="M169 489H422A169 169 0 0 1 422 827H169A169 169 0 0 1 169 489ZM169 543A115 115 0 0 0 169 773H422A115 115 0 0 0 422 543Z"/>
+  <rect x="65" y="552" width="461" height="212" rx="106" fill="url(#orange)"/>
+  <path fill="url(#orange)" fill-rule="evenodd" d="M1352 489H1605A169 169 0 0 1 1605 827H1352A169 169 0 0 1 1352 489ZM1352 543A115 115 0 0 0 1352 773H1605A115 115 0 0 0 1605 543Z"/>
+  <rect x="1248" y="552" width="461" height="212" rx="106" fill="url(#orange)"/>
+
+  <!-- Central link and short connecting bars. -->
+  <rect x="680" y="538" width="410" height="173" rx="86.5" fill="none" stroke="url(#orange)" stroke-width="59"/>
+  <g fill="url(#orange)">
+    <rect x="490" y="604" width="220" height="65" rx="32.5"/>
+    <rect x="1064" y="604" width="220" height="65" rx="32.5"/>
+  </g>
+
+  <!-- Claws overlap the central link. The upper rim is a dark contour. -->
+  <path d="M616 558C620 510 657 465 705 464C747 461 780 488 801 526" fill="none" stroke="#171210" stroke-width="26" stroke-linecap="round"/>
+  <path d="M1152 558C1148 510 1111 465 1063 464C1021 461 988 488 967 526" fill="none" stroke="#171210" stroke-width="26" stroke-linecap="round"/>
+  <path fill="url(#shell)" d="M628 536C638 498 670 474 705 474C747 471 776 499 797 531C814 557 818 586 805 606C798 620 785 616 779 603L744 551L719 575C732 596 751 617 770 631C788 644 774 657 756 658C726 659 694 647 672 628C642 604 618 571 628 536Z"/>
+  <path fill="url(#shell)" d="M1140 536C1130 498 1098 474 1063 474C1021 471 992 499 971 531C954 557 950 586 963 606C970 620 983 616 989 603L1024 551L1049 575C1036 596 1017 617 998 631C980 644 994 657 1012 658C1042 659 1074 647 1096 628C1126 604 1150 571 1140 536Z"/>
+
+  <!-- Identity card and key. -->
+  <g fill="url(#white)">
+    <path d="M154 590H379C393 590 404 601 404 615V638L383 644V616C383 613 381 611 378 611H157C154 611 152 613 152 616V733C152 736 154 738 157 738H319V759H154C140 759 130 748 130 735V614C130 601 140 590 154 590Z"/>
+    <circle cx="209" cy="653" r="24"/>
+    <path d="M170 717C170 697 187 682 209 682C231 682 249 697 249 717V720C249 723 247 724 244 724H175C172 724 170 723 170 720Z"/>
+    <rect x="265" y="636" width="90" height="22" rx="11"/>
+    <rect x="265" y="674" width="90" height="22" rx="11"/>
+    <path fill-rule="evenodd" d="M408 650A40 40 0 0 1 408 730C401 730 394 728 388 725L374 739V748H360V759H342C336 759 332 755 332 749V737L374 696A40 40 0 0 1 408 650ZM419 672A12 12 0 1 0 419 696A12 12 0 0 0 419 672Z"/>
+  </g>
+
+  <!-- Authorization shield with a transparent check mark. -->
+  <path fill="url(#white)" fill-rule="evenodd" d="M1480 563C1483 561 1485 561 1488 563C1516 583 1545 593 1577 598C1581 598 1583 601 1583 605C1583 692 1556 746 1488 779C1485 781 1483 781 1480 779C1412 746 1385 692 1385 605C1385 601 1387 598 1391 598C1423 593 1452 583 1480 563ZM1439 663L1426 676C1422 680 1422 684 1426 688L1461 723C1466 728 1471 728 1476 723L1552 648C1556 644 1556 640 1552 636L1542 626C1538 622 1534 622 1530 626L1469 687L1451 663C1447 660 1443 660 1439 663Z"/>
+</svg>

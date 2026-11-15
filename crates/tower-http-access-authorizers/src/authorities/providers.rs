@@ -1,9 +1,9 @@
-use crate::default_auth::denied;
 use futures_util::future::BoxFuture;
 use http::request::Parts;
 use std::{convert::Infallible, marker::PhantomData};
 use tower_http_access_core::authorization::core::AuthorizationDecision;
 use tower_http_access_core::authorization::core::AuthorizationProvider;
+use tower_http_access_core::authorization::denied;
 
 /// An application identity whose authorities can be checked by authorization policies.
 ///

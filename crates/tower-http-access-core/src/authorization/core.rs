@@ -88,7 +88,7 @@ pub trait AuthorizationProviderExt: AuthorizationProvider + Sized {
     /// The underlying provider's decisions and errors are returned unchanged.
     ///
     /// ```
-    /// use tower_http_access_authorizers::default_auth::AuthenticatedAuthorizationProvider;
+    /// use tower_http_access_core::authorization::AuthenticatedAuthorizationProvider;
     /// use tower_http_access_core::authorization::core::AuthorizationProviderExt;
     ///
     /// struct AppUser { id: u64 }

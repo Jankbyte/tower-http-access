@@ -35,15 +35,15 @@
 //! [`RequestAuthorizationError`] with their original source preserved. Matched path parameters
 //! are not extracted automatically.
 
-use crate::default_auth::{
-    AuthenticatedAuthorizationProvider, DenyAllAuthorizationProvider,
-    PermitAllAuthorizationProvider,
-};
 use futures_util::future::BoxFuture;
 use http::{Method, request::Parts};
 use http_request_matcher::{InvalidRequestPattern, PathPatternRequestMatcher, RequestMatcher};
 use std::marker::PhantomData;
 use tower_http_access_core::authorization::core::{AuthorizationDecision, AuthorizationProvider};
+use tower_http_access_core::authorization::{
+    AuthenticatedAuthorizationProvider, DenyAllAuthorizationProvider,
+    PermitAllAuthorizationProvider, denied,
+};
 
 /// An error returned by a request authorization provider.
 ///
@@ -276,7 +276,7 @@ impl<A: Send + Sync> AuthorizationProvider for RequestAuthorizationProvider<A> {
                 .is_none_or(|matcher| matcher.matches(request))
         }) {
             Some(rule) => rule.provider.authorize(authentication, request),
-            None => Box::pin(async move { Ok(super::default_auth::denied(authentication)) }),
+            None => Box::pin(async move { Ok(denied(authentication)) }),
         }
     }
 }

@@ -12,7 +12,7 @@ use http::request::Parts;
 use std::{convert::Infallible, io, sync::Arc};
 use tokio::sync::Mutex;
 use tower_http_access_authorizers::all::*;
-use tower_http_access_authorizers::default_auth::AuthenticatedAuthorizationProvider;
+use tower_http_access_core::authorization::AuthenticatedAuthorizationProvider;
 use tower_layer::Layer;
 use tower_service::Service;
 

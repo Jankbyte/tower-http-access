@@ -18,7 +18,7 @@ use std::{
     task::{Context, Poll},
 };
 use std::{future::Future, pin::Pin, sync::Arc};
-use tower_http_access_authorizers::default_auth::AuthenticatedAuthorizationProvider;
+use tower_http_access_core::authorization::AuthenticatedAuthorizationProvider;
 use tower_layer::Layer;
 use tower_service::Service;
 

@@ -1,9 +1,11 @@
+//! Basic authorization policies and denial decisions based on authentication.
+
+use super::core::AuthorizationDecision;
+use super::core::AuthorizationDenial;
+use super::core::AuthorizationProvider;
 use futures_util::future::BoxFuture;
 use http::request::Parts;
 use std::{convert::Infallible, future::Future, marker::PhantomData, pin::Pin};
-use tower_http_access_core::authorization::core::AuthorizationDecision;
-use tower_http_access_core::authorization::core::AuthorizationDenial;
-use tower_http_access_core::authorization::core::AuthorizationProvider;
 
 /// Default implementation of [`AuthorizationProvider`], that checks only fact of authentication
 /// and does not inspect request metadata.
@@ -48,8 +50,30 @@ where
     }
 }
 
-// Keep the existing distinction between anonymous and authenticated denials.
-pub(super) fn denied<A>(authentication: Option<&A>) -> AuthorizationDecision {
+/// Deny access with a reason based on whether the caller is authenticated.
+///
+/// Returns [`AuthorizationDenial::AuthenticationRequired`] for `None`, or
+/// [`AuthorizationDenial::InsufficientPermissions`] for `Some`. Custom policies
+/// can use this helper to distinguish missing authentication from missing permissions.
+/// The configured entry point and failure handler determine the response; their
+/// defaults return HTTP 401 and 403 respectively.
+///
+/// ```
+/// use tower_http_access_core::authorization::{
+///     core::{AuthorizationDecision, AuthorizationDenial},
+///     denied,
+/// };
+///
+/// assert!(matches!(
+///     denied::<String>(None),
+///     AuthorizationDecision::Deny(AuthorizationDenial::AuthenticationRequired),
+/// ));
+/// assert!(matches!(
+///     denied(Some(&"alex")),
+///     AuthorizationDecision::Deny(AuthorizationDenial::InsufficientPermissions),
+/// ));
+/// ```
+pub fn denied<A>(authentication: Option<&A>) -> AuthorizationDecision {
     AuthorizationDecision::Deny(if authentication.is_none() {
         AuthorizationDenial::AuthenticationRequired
     } else {

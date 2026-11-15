@@ -3,7 +3,6 @@
 pub mod all;
 #[cfg(feature = "authorities")]
 pub mod authorities;
-pub mod default_auth;
 #[cfg(feature = "request_matcher")]
 pub mod request;
 

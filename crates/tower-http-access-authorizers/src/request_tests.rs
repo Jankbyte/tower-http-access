@@ -562,7 +562,7 @@ async fn custom_manager_borrows_original_parts_across_await() {
 
 #[tokio::test]
 async fn string_identities_support_rules_without_authorities() {
-    use crate::default_auth::AuthenticatedAuthorizationProvider;
+    use tower_http_access_core::authorization::AuthenticatedAuthorizationProvider;
     use tower_http_access_core::authorization::core::AuthorizationProviderExt;
     let provider = RequestAuthorizationProvider::<String>::builder()
         .request_matchers("/public")

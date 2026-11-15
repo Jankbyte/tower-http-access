@@ -25,7 +25,6 @@ bytes.workspace = true
 http-body-util.workspace = true
 tower-layer.workspace = true
 http-request-matcher = { workspace = true }
-tower-http-access-authorizers = { workspace = true, features = ["request_matcher", "authorities"] }
 tower-sessions = { workspace = true, features = ["memory-store", "axum-core"] }
 tower-http-access-core = { workspace = true, features = ["axum"] }
 axum.workspace = true

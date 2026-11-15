@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/Jankbyte/axum-auth-chained/HEAD/assets/logo.png" alt="Tower HTTP Access: a Rust-inspired crab holding a chain between an identity-and-key icon and an authorization shield" width="60%">
+  <img src="https://raw.githubusercontent.com/Jankbyte/axum-auth-chained/HEAD/assets/logo.svg" alt="Tower HTTP Access: a Rust-inspired crab holding a chain between an identity-and-key icon and an authorization shield" width="60%">
 </p>
 
 # Tower HTTP Access Core
@@ -31,18 +31,26 @@ This keeps credential handling, access policy, and application request handling 
 
 | Feature name | Adds |
 | --- | --- |
-| `default` | Enables `axum`. |
+| `default` | Enables `axum` and `authorizers`. |
+| `authorizers` | Built-in authentication and permit/deny policies in [`authorization`], the `denied` helper, and `SecurityLayer::authenticated`. |
 | `axum` | Axum extractors for [`Authenticated<T>`](authentication::Authenticated) and `Option<Authenticated<T>>`. |
 | `request_matcher` | Request-based authentication entry-point selection using `http-request-matcher`. |
 | `filter_chain` | Selects complete middleware stacks through [`SecurityChainLayer`](filter_chain::SecurityChainLayer). Also enables `request_matcher`. |
 
+With the default-enabled `authorizers` feature, use
+`SecurityLayer::authenticated(authenticator)` to require authentication without
+additional authorization checks, or `SecurityLayer::new(authenticator, policy)` for
+a custom policy. Both constructors support the same handler and response customization.
+
 Authentication and authorization traits and `SecurityLayer` are always available.
-Use `default-features = false` for Tower integration without Axum.
+Use `default-features = false, features = ["authorizers"]` for built-in policies
+without Axum, or disable all default features when supplying only custom policies.
 
 ```toml
 tower-http-access-core = { version = "0.0.1", features = ["filter_chain"] }
 ```
 
-Reusable policies, including request rules, authentication requirements, authority checks,
-and all-of composition, live in `tower-http-access-authorizers`. Authority support is
+Basic authentication requirements and permit/deny policies live in
+[`authorization`] with the `authorizers` feature. Request rules, authority checks, and all-of composition
+live in `tower-http-access-authorizers`. Authority support is
 opt-in through that crate's `authorities` feature and includes the `HasAuthorities` trait for application-defined identities.

@@ -2,8 +2,9 @@
 
 Reusable authorization policies for `tower-http-access-core`.
 
-Authentication requirements, permit/deny policies, and all-of composition are always
-available through `default_auth` and `all`.
+All-of composition is always available through `all`. Basic authentication requirements
+and permit/deny policies live in `tower_http_access_core::authorization` through its
+`authorizers` feature, which this crate enables.
 
 | Feature | Enables |
 | --- | --- |

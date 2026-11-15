@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/Jankbyte/axum-auth-chained/HEAD/assets/logo.png" alt="Tower HTTP Access: a Rust-inspired crab holding a chain between an identity-and-key icon and an authorization shield" width="60%">
+  <img src="https://raw.githubusercontent.com/Jankbyte/axum-auth-chained/HEAD/assets/logo.svg" alt="Tower HTTP Access: a Rust-inspired crab holding a chain between an identity-and-key icon and an authorization shield" width="60%">
 </p>
 
 # 🦀 Tower HTTP Access
@@ -181,7 +181,7 @@ use axum::{Router, routing::get};
 # use tower_http_access_core::SecurityLayer;
 # use tower_http_access_core::authentication::AuthenticationAttempt;
 # use tower_http_access_core::authentication::AuthenticatorError;
-# use tower_http_access_authorizers::default_auth::AuthenticatedAuthorizationProvider;
+# use tower_http_access_core::authorization::AuthenticatedAuthorizationProvider;
 # let authenticator = |_: &axum::http::request::Parts| async { Ok::<_, AuthenticatorError>(AuthenticationAttempt::<String>::NotApplicable) };
 # let security_layer = SecurityLayer::new(authenticator, AuthenticatedAuthorizationProvider::<String>::new());
 # let notes_api = Router::new().route("/{id}", get(async || "note"));
@@ -275,9 +275,10 @@ Built-in rules delegate to reusable authorization providers:
 `PermitAllAuthorizationProvider`, `DenyAllAuthorizationProvider`,
 `AuthenticatedAuthorizationProvider`, `AuthorityAuthorizationProvider`,
 `AnyAuthorityAuthorizationProvider`, and `AllAuthoritiesAuthorizationProvider`.
-These providers live in `tower-http-access-authorizers`. Authority providers require its
-`authorities` feature; the other providers are available without `request_matcher` and can be
-used directly, composed with `AllAuthorizationProvider`, or adapted with `.map(...)`.
+The first three live in `tower_http_access_core::authorization`, enabled by the default
+`authorizers` feature. Authority providers live in `tower-http-access-authorizers` and
+require its `authorities` feature. These providers can be used directly, composed with
+`AllAuthorizationProvider`, or adapted with `.map(...)`.
 
 ## 🔐 Custom authorization
 
@@ -301,7 +302,7 @@ not need to implement `Clone`; the layer shares them through `Arc`.
 # use tower_http_access_core::SecurityLayer;
 # use tower_http_access_core::authentication::AuthenticationAttempt;
 # use tower_http_access_core::authentication::AuthenticatorError;
-# use tower_http_access_authorizers::default_auth::AuthenticatedAuthorizationProvider;
+# use tower_http_access_core::authorization::AuthenticatedAuthorizationProvider;
 # use tower_http_access_core::authorization::core::AuthorizationFailure;
 # let my_authenticator = |_: &Parts| async { Ok::<_, AuthenticatorError>(AuthenticationAttempt::Authenticated("alex".to_owned())) };
 # let my_authorizer = AuthenticatedAuthorizationProvider::<String>::new();
@@ -319,7 +320,7 @@ For multiple authentication mechanisms, build an ordered chain separately:
 # use axum::http::request::Parts;
 # use tower_http_access_core::authentication::AuthenticationAttempt;
 # use tower_http_access_core::authentication::AuthenticatorError;
-# use tower_http_access_authorizers::default_auth::AuthenticatedAuthorizationProvider;
+# use tower_http_access_core::authorization::AuthenticatedAuthorizationProvider;
 # let session_authenticator = |_: &Parts| async { Ok::<_, AuthenticatorError>(AuthenticationAttempt::<String>::NotApplicable) };
 # let basic_authenticator = |_: &Parts| async { Ok::<_, AuthenticatorError>(AuthenticationAttempt::Authenticated("alex".to_owned())) };
 # let my_authorizer = AuthenticatedAuthorizationProvider::<String>::new();
@@ -405,11 +406,14 @@ HTTP/Tower middleware without depending on Axum. Authentication and authorizatio
 
 | Feature | Enables |
 | --- | --- |
+| `authorizers` (default) | Built-in authentication and permit/deny policies, `denied`, and `SecurityLayer::authenticated`. |
 | `axum` (default) | Axum extractors for `Authenticated<A>` and `Option<Authenticated<A>>`. |
 | `request_matcher` | Delegating entry points using `http-request-matcher`. Request authorization policies live in `tower-http-access-authorizers`. |
 
 
-The `tower-http-access-authorizers` crate provides reusable policies. Its optional
+The default-enabled `authorizers` feature provides basic authentication requirements and permit/deny policies through
+`authorization`. The `tower-http-access-authorizers` crate provides
+policy composition and additional policies. Its optional
 `request_matcher` feature enables request rules, and `authorities` enables the
 `HasAuthorities` trait and authority checks. Neither feature is enabled
 by default. Applications implement `HasAuthorities` on their own identity types.

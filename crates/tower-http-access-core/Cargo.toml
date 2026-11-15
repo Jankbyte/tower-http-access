@@ -31,7 +31,8 @@ tower = { workspace = true, features = ["util"] }
 tokio = { workspace = true, features = ["full"] }
 
 [features]
-default = ["axum"]
+default = ["axum", "authorizers"]
+authorizers = []
 axum = ["dep:axum"]
 request_matcher = ["dep:http-request-matcher"]
 filter_chain = ["request_matcher", "dep:tower"]

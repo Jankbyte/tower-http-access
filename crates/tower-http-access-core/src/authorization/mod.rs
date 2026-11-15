@@ -5,8 +5,17 @@
 //! Authentication requirements use [`core::AuthenticationEntryPoint`]; other denials
 //! and provider errors use [`core::AuthorizationFailureHandler`].
 //!
-//! Reusable policies are provided by the `tower-http-access-authorizers` crate.
+//! The default-enabled `authorizers` feature provides basic authentication and permit/deny
+//! policies. Request rules, authority checks,
+//! and all-of composition are provided by the `tower-http-access-authorizers` crate.
 
 pub mod core;
+#[cfg(feature = "authorizers")]
+mod default_auth;
+#[cfg(feature = "authorizers")]
+pub use default_auth::{
+    AuthenticatedAuthorizationProvider, DenyAllAuthorizationProvider,
+    PermitAllAuthorizationProvider, denied,
+};
 #[cfg(feature = "request_matcher")]
 pub mod entry_point;

@@ -9,7 +9,7 @@ readme = "README.md"
 description = "Composable request and authority authorization policies for Tower HTTP Access"
 
 [dependencies]
-tower-http-access-core = { workspace = true, default-features = false }
+tower-http-access-core = { workspace = true, default-features = false, features = ["authorizers"] }
 http-request-matcher = { workspace = true, optional = true }
 futures-util = { workspace = true, features = ["alloc"] }
 http.workspace = true

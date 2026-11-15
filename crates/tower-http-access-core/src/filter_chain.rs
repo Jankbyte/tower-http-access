@@ -14,7 +14,7 @@
 //! use tower_http_access_core::SecurityLayer;
 //! use tower_http_access_core::authentication::AuthenticationAttempt;
 //! use tower_http_access_core::authentication::AuthenticatorError;
-//! use tower_http_access_authorizers::default_auth::AuthenticatedAuthorizationProvider;
+//! use tower_http_access_core::authorization::AuthenticatedAuthorizationProvider;
 //! use http_request_matcher::PathPatternRequestMatcher;
 //!
 //! let authentication = |_: &http::request::Parts| async {

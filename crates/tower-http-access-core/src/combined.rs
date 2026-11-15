@@ -1,4 +1,6 @@
 //! Authentication and authorization in a single Tower service.
+#[cfg(feature = "authorizers")]
+use crate::authorization::AuthenticatedAuthorizationProvider;
 use crate::{
     DefaultSecurityResponseAdapter, SecurityResponseAdapter,
     authentication::{
@@ -54,7 +56,7 @@ use tower_service::Service;
 /// use http::request::Parts;
 /// use tower_http_access_core::authentication::AuthenticationAttempt;
 /// use tower_http_access_core::authentication::AuthenticatorError;
-/// use tower_http_access_authorizers::default_auth::AuthenticatedAuthorizationProvider;
+/// use tower_http_access_core::authorization::AuthenticatedAuthorizationProvider;
 /// use tower_http_access_core::SecurityLayer;
 ///
 /// let authenticator = |_: &Parts| async {
@@ -87,6 +89,31 @@ pub struct SecurityLayer<
     authentication_success_handler: C,
 }
 
+#[cfg(feature = "authorizers")]
+impl<A: RequestAuthenticator>
+    SecurityLayer<A, AuthenticatedAuthorizationProvider<A::Authentication>>
+{
+    /// Require successful authentication without additional authorization checks.
+    /// Available with the default-enabled `authorizers` feature.
+    ///
+    /// Uses [`AuthenticatedAuthorizationProvider`]. Anonymous requests invoke the
+    /// authentication entry point (HTTP 401 by default). Authentication failures
+    /// retain their usual error responses. Use [`Self::new`] for a custom policy.
+    ///
+    /// ```
+    /// use http::request::Parts;
+    /// use tower_http_access_core::{SecurityLayer, authentication::{AuthenticationAttempt, AuthenticatorError}};
+    ///
+    /// let security = SecurityLayer::authenticated(|_: &Parts| async {
+    ///     Ok::<_, AuthenticatorError>(AuthenticationAttempt::Authenticated("alex".to_owned()))
+    /// });
+    /// # let _: axum::Router = axum::Router::new().layer(security);
+    /// ```
+    pub fn authenticated(authenticator: A) -> Self {
+        Self::new(authenticator, AuthenticatedAuthorizationProvider::new())
+    }
+}
+
 impl<A, P> SecurityLayer<A, P>
 where
     A: RequestAuthenticator,
@@ -116,7 +143,7 @@ impl<A, P, H, E, R, C> SecurityLayer<A, P, H, E, R, C> {
     /// ```
     /// use http::request::Parts;
     /// use tower_http_access_core::{SecurityLayer, authentication::{AuthenticationAttempt, AuthenticatorError}};
-    /// use tower_http_access_authorizers::default_auth::AuthenticatedAuthorizationProvider;
+    /// use tower_http_access_core::authorization::AuthenticatedAuthorizationProvider;
     ///
     /// #[derive(Clone)]
     /// struct CurrentUser(String);
@@ -170,7 +197,7 @@ impl<A, P, H, E, R, C> SecurityLayer<A, P, H, E, R, C> {
     /// ```
     /// use tower_http_access_core::{SecurityLayer, SecurityResponseAdapter};
     /// use tower_http_access_core::authentication::{AuthenticationAttempt, AuthenticatorError};
-    /// use tower_http_access_authorizers::default_auth::AuthenticatedAuthorizationProvider;
+    /// use tower_http_access_core::authorization::AuthenticatedAuthorizationProvider;
     /// use http::request::Parts;
     ///
     /// fn configure<B, R: SecurityResponseAdapter<B>>(adapter: R) {

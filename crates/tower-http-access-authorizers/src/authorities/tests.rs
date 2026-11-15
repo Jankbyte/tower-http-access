@@ -1,7 +1,7 @@
 use super::*;
 use crate::all::AllAuthorizationProvider;
-use crate::default_auth::DenyAllAuthorizationProvider;
-use crate::default_auth::PermitAllAuthorizationProvider;
+use tower_http_access_core::authorization::DenyAllAuthorizationProvider;
+use tower_http_access_core::authorization::PermitAllAuthorizationProvider;
 use tower_http_access_core::authorization::core::AuthorizationDenial;
 use tower_http_access_core::authorization::core::AuthorizationProviderExt;
 

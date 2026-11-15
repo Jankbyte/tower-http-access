@@ -26,7 +26,7 @@ use std::{
     task::{Context, Poll},
 };
 use tower::{Layer, Service, ServiceExt, service_fn, util::BoxCloneService};
-use tower_http_access_authorizers::default_auth::AuthenticatedAuthorizationProvider;
+use tower_http_access_core::authorization::AuthenticatedAuthorizationProvider;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct ResponseMarker;

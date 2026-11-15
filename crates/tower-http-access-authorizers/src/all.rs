@@ -56,7 +56,7 @@ where
 ///
 /// ```
 /// use tower_http_access_authorizers::all::AllAuthorizationProvider;
-/// use tower_http_access_authorizers::default_auth::AuthenticatedAuthorizationProvider;
+/// use tower_http_access_core::authorization::AuthenticatedAuthorizationProvider;
 /// use tower_http_access_core::authorization::core::AuthorizationProviderExt;
 ///
 /// struct AppUser { id: u64 }

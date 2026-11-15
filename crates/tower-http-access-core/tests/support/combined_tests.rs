@@ -4,7 +4,7 @@ use crate::authentication::AuthenticatorError;
 use crate::authentication::DelegatingRequestAuthenticator;
 use tower_http_access_authorizers::all::AllAuthorizationProvider;
 use tower_http_access_core::authorization::core::AuthorizationProviderExt;
-use tower_http_access_authorizers::default_auth::AuthenticatedAuthorizationProvider;
+use tower_http_access_core::authorization::AuthenticatedAuthorizationProvider;
 use crate::response::test_response;
 use axum::{
     body::{Body, to_bytes},
