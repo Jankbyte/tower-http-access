@@ -7,7 +7,7 @@ use tower_http_access_core::{
     authentication::{
         AuthenticationAttempt, AuthenticationErrorReason, AuthenticatorError, RequestAuthenticator,
     },
-    authorization::core::AuthenticationEntryPoint,
+    authorization::AuthenticationEntryPoint,
 };
 use user_password_auth::UsernamePasswordAuthenticationProvider;
 

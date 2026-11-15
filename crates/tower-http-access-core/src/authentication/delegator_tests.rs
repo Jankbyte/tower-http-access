@@ -1,7 +1,7 @@
 use super::*;
 use crate::SecurityLayer;
 use crate::authentication::{Authenticated, AuthenticationErrorReason};
-use crate::authorization::core::{AuthorizationDecision, AuthorizationProvider};
+use crate::authorization::{AuthorizationDecision, AuthorizationProvider};
 use crate::response::test_response;
 use axum::response::{IntoResponse, Response};
 use axum::{body::Body, extract::Request, http::StatusCode};

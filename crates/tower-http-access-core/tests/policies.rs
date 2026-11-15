@@ -16,40 +16,30 @@ mod response {
 }
 
 mod authorization {
-    pub mod core {
-        pub use tower_http_access_core::authorization::core::*;
+    pub use tower_http_access_core::authorization::*;
 
-        pub(crate) fn assert_builtin_decision(
-            actual: AuthorizationDecision,
-            expected: AuthorizationDecision,
-        ) {
-            assert!(
-                matches!(
-                    (&actual, &expected),
-                    (AuthorizationDecision::Allow, AuthorizationDecision::Allow)
-                        | (
-                            AuthorizationDecision::Deny(
-                                AuthorizationDenial::AuthenticationRequired
-                            ),
-                            AuthorizationDecision::Deny(
-                                AuthorizationDenial::AuthenticationRequired
-                            )
-                        )
-                        | (
-                            AuthorizationDecision::Deny(
-                                AuthorizationDenial::InsufficientPermissions
-                            ),
-                            AuthorizationDecision::Deny(
-                                AuthorizationDenial::InsufficientPermissions
-                            )
-                        )
-                ),
-                "expected {expected:?}, got {actual:?}"
-            );
-        }
+    pub(crate) fn assert_builtin_decision(
+        actual: AuthorizationDecision,
+        expected: AuthorizationDecision,
+    ) {
+        assert!(
+            matches!(
+                (&actual, &expected),
+                (AuthorizationDecision::Allow, AuthorizationDecision::Allow)
+                    | (
+                        AuthorizationDecision::Deny(AuthorizationDenial::AuthenticationRequired),
+                        AuthorizationDecision::Deny(AuthorizationDenial::AuthenticationRequired)
+                    )
+                    | (
+                        AuthorizationDecision::Deny(AuthorizationDenial::InsufficientPermissions),
+                        AuthorizationDecision::Deny(AuthorizationDenial::InsufficientPermissions)
+                    )
+            ),
+            "expected {expected:?}, got {actual:?}"
+        );
     }
     pub mod provider_tests {
-        use tower_http_access_core::authorization::core::*;
+        use tower_http_access_core::authorization::*;
         pub mod tests {
             include!("support/authorization_tests.rs");
         }
@@ -65,7 +55,7 @@ mod combined {
     use tower_http_access_core::authentication::{
         Authenticated, AuthenticationAttempt, RequestAuthenticator,
     };
-    use tower_http_access_core::authorization::core::*;
+    use tower_http_access_core::authorization::*;
     use tower_http_access_core::*;
     use tower_layer::Layer;
     use tower_service::Service;

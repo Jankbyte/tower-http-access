@@ -1,6 +1,6 @@
 use futures_util::future::BoxFuture;
 use http::request::Parts;
-use tower_http_access_core::authorization::core::{AuthorizationDecision, AuthorizationProvider};
+use tower_http_access_core::authorization::{AuthorizationDecision, AuthorizationProvider};
 
 /// Error returned by a provider in an all-of authorization chain.
 ///
@@ -57,7 +57,7 @@ where
 /// ```
 /// use tower_http_access_authorizers::all::AllAuthorizationProvider;
 /// use tower_http_access_core::authorization::AuthenticatedAuthorizationProvider;
-/// use tower_http_access_core::authorization::core::AuthorizationProviderExt;
+/// use tower_http_access_core::authorization::AuthorizationProviderExt;
 ///
 /// struct AppUser { id: u64 }
 ///

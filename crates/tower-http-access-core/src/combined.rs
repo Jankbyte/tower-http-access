@@ -7,7 +7,7 @@ use crate::{
         AuthenticationAttempt, AuthenticationSuccessHandler, DefaultAuthenticationSuccessHandler,
         RequestAuthenticator,
     },
-    authorization::core::{
+    authorization::{
         AuthenticationEntryPoint, AuthorizationDecision, AuthorizationDenial, AuthorizationFailure,
         AuthorizationFailureHandler, AuthorizationProvider, DefaultAuthenticationEntryPoint,
         DefaultAuthorizationFailureHandler,

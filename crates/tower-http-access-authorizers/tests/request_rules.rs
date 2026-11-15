@@ -2,7 +2,7 @@
 
 use http::Request;
 use tower_http_access_authorizers::request::RequestAuthorizationProvider;
-use tower_http_access_core::authorization::core::{
+use tower_http_access_core::authorization::{
     AuthorizationDecision, AuthorizationDenial, AuthorizationProvider,
 };
 

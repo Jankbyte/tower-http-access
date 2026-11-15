@@ -1,8 +1,8 @@
 use crate::SecurityLayer;
 use crate::authentication::{AuthenticationAttempt, AuthenticatorError};
-use crate::authorization::core::AuthorizationDenial;
-use crate::authorization::core::AuthorizationProviderExt;
-use crate::authorization::core::{AuthorizationDecision, AuthorizationProvider};
+use crate::authorization::AuthorizationDenial;
+use crate::authorization::AuthorizationProviderExt;
+use crate::authorization::{AuthorizationDecision, AuthorizationProvider};
 use crate::authorization::provider_tests::tests::ErrorProvider;
 use crate::authorization::provider_tests::tests::Inner;
 use crate::authorization::provider_tests::tests::MappedIdentityProvider;
@@ -90,7 +90,7 @@ async fn all_authorization_runs_in_order_and_stops_at_first_denial() {
             .authorize(Some(&"alex".to_owned()), &parts)
             .await
             .unwrap();
-        crate::authorization::core::assert_builtin_decision(
+        crate::authorization::assert_builtin_decision(
             decision,
             denial
                 .map(|f| AuthorizationDecision::Deny(f()))

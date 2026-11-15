@@ -1,8 +1,8 @@
 use super::*;
 use crate::authorities::{AuthorityRuleExt, HasAuthorities};
 use std::{future::Future, pin::Pin};
-use tower_http_access_core::authorization::core::AuthorizationDecision;
-use tower_http_access_core::authorization::core::AuthorizationDenial;
+use tower_http_access_core::authorization::AuthorizationDecision;
+use tower_http_access_core::authorization::AuthorizationDenial;
 
 #[derive(Clone)]
 struct TestAuthority(String);
@@ -563,7 +563,7 @@ async fn custom_manager_borrows_original_parts_across_await() {
 #[tokio::test]
 async fn string_identities_support_rules_without_authorities() {
     use tower_http_access_core::authorization::AuthenticatedAuthorizationProvider;
-    use tower_http_access_core::authorization::core::AuthorizationProviderExt;
+    use tower_http_access_core::authorization::AuthorizationProviderExt;
     let provider = RequestAuthorizationProvider::<String>::builder()
         .request_matchers("/public")
         .permit_all()

@@ -1,8 +1,8 @@
 //! Basic authorization policies and denial decisions based on authentication.
 
-use super::core::AuthorizationDecision;
-use super::core::AuthorizationDenial;
-use super::core::AuthorizationProvider;
+use super::AuthorizationDecision;
+use super::AuthorizationDenial;
+use super::AuthorizationProvider;
 use futures_util::future::BoxFuture;
 use http::request::Parts;
 use std::{convert::Infallible, future::Future, marker::PhantomData, pin::Pin};
@@ -60,7 +60,7 @@ where
 ///
 /// ```
 /// use tower_http_access_core::authorization::{
-///     core::{AuthorizationDecision, AuthorizationDenial},
+///     AuthorizationDecision, AuthorizationDenial,
 ///     denied,
 /// };
 ///

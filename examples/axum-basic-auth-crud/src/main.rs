@@ -18,7 +18,7 @@ use tower_http_access_basic::BasicRequestAuthenticator;
 use tower_http_access_core::{
     SecurityLayer,
     authentication::{Authenticated, RequestAuthenticator, RequestAuthenticatorExt},
-    authorization::core::{AuthenticationEntryPoint, AuthorizationProvider},
+    authorization::{AuthenticationEntryPoint, AuthorizationProvider},
 };
 use user_password_auth::{
     AsyncPasswordHasher, AsyncPasswordVerifier, AsyncStringPasswordManager, Authority,

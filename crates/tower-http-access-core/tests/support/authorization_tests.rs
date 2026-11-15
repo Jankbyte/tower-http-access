@@ -3,7 +3,7 @@ use crate::SecurityLayer;
 #[cfg(feature = "axum")]
 use crate::authentication::Authenticated;
 use crate::authentication::{AuthenticationAttempt, AuthenticatorError};
-use crate::authorization::core::AuthorizationProviderExt;
+use crate::authorization::AuthorizationProviderExt;
 use crate::response::test_response;
 use axum::{
     body::Body,
@@ -251,7 +251,7 @@ async fn mapped_provider_preserves_decisions_errors_and_request_parts() {
             AuthorizationDecision::Deny(AuthorizationDenial::InsufficientPermissions),
         ),
     ] {
-        crate::authorization::core::assert_builtin_decision(
+        crate::authorization::assert_builtin_decision(
             provider
                 .authorize(Some(&identity.to_owned()), &parts)
                 .await

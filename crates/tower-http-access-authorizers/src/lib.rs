@@ -7,7 +7,7 @@ pub mod authorities;
 pub mod request;
 
 #[cfg(all(test, feature = "authorities"))]
-use tower_http_access_core::authorization::core::{AuthorizationDecision, AuthorizationDenial};
+use tower_http_access_core::authorization::{AuthorizationDecision, AuthorizationDenial};
 
 #[cfg(all(test, feature = "authorities"))]
 pub(crate) fn assert_builtin_decision(

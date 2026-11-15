@@ -3,7 +3,7 @@ use crate::authentication::AuthenticationErrorReason;
 use crate::authentication::AuthenticatorError;
 use crate::authentication::DelegatingRequestAuthenticator;
 use tower_http_access_authorizers::all::AllAuthorizationProvider;
-use tower_http_access_core::authorization::core::AuthorizationProviderExt;
+use tower_http_access_core::authorization::AuthorizationProviderExt;
 use tower_http_access_core::authorization::AuthenticatedAuthorizationProvider;
 use crate::response::test_response;
 use axum::{
@@ -420,7 +420,7 @@ fn providers_clone_without_requiring_clone_identities() {
 #[tokio::test]
 async fn success_handler_runs_after_authorization_and_replaces_default_identity_storage() {
     use crate::authentication::AuthenticationSuccessHandler;
-    use tower_http_access_core::{DefaultSecurityResponseAdapter, authorization::core::{DefaultAuthenticationEntryPoint, DefaultAuthorizationFailureHandler}};
+    use tower_http_access_core::{DefaultSecurityResponseAdapter, authorization::{DefaultAuthenticationEntryPoint, DefaultAuthorizationFailureHandler}};
 
     #[derive(Clone)]
     struct CurrentUser(String);

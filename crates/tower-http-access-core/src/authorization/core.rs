@@ -89,7 +89,7 @@ pub trait AuthorizationProviderExt: AuthorizationProvider + Sized {
     ///
     /// ```
     /// use tower_http_access_core::authorization::AuthenticatedAuthorizationProvider;
-    /// use tower_http_access_core::authorization::core::AuthorizationProviderExt;
+    /// use tower_http_access_core::authorization::AuthorizationProviderExt;
     ///
     /// struct AppUser { id: u64 }
     ///
@@ -101,8 +101,8 @@ pub trait AuthorizationProviderExt: AuthorizationProvider + Sized {
     /// the external crate's principal. Here `ExternalPrincipal` stands in for that crate's type:
     ///
     /// ```
-    /// use tower_http_access_core::authorization::core::AuthorizationProvider;
-    /// use tower_http_access_core::authorization::core::AuthorizationProviderExt;
+    /// use tower_http_access_core::authorization::AuthorizationProvider;
+    /// use tower_http_access_core::authorization::AuthorizationProviderExt;
     ///
     /// struct AppUser {
     ///     id: u64,
@@ -209,8 +209,8 @@ pub enum AuthorizationDenial {
     /// ```
     /// use bytes::Bytes;
     /// use http::{Response, StatusCode};
-    /// use tower_http_access_core::authorization::core::AuthorizationDecision;
-    /// use tower_http_access_core::authorization::core::AuthorizationDenial;
+    /// use tower_http_access_core::authorization::AuthorizationDecision;
+    /// use tower_http_access_core::authorization::AuthorizationDenial;
     ///
     /// let response = Response::builder()
     ///     .status(StatusCode::FORBIDDEN)

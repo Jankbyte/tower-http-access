@@ -1,9 +1,9 @@
 use super::*;
 use crate::all::AllAuthorizationProvider;
+use tower_http_access_core::authorization::AuthorizationDenial;
+use tower_http_access_core::authorization::AuthorizationProviderExt;
 use tower_http_access_core::authorization::DenyAllAuthorizationProvider;
 use tower_http_access_core::authorization::PermitAllAuthorizationProvider;
-use tower_http_access_core::authorization::core::AuthorizationDenial;
-use tower_http_access_core::authorization::core::AuthorizationProviderExt;
 
 struct Principal(Vec<&'static str>);
 impl HasAuthorities for Principal {

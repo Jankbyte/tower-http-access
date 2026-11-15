@@ -38,7 +38,7 @@ let rules = RequestAuthorizationProvider::<String>::builder()
 ```
 
 Pass policies to `SecurityLayer::new(authenticator, policy)` in core. Authorization
-contracts remain in `tower_http_access_core::authorization::core`.
+contracts remain in `tower_http_access_core::authorization`.
 
 ```rust
 # #[cfg(feature = "authorities")]

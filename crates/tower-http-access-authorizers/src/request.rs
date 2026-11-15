@@ -39,11 +39,11 @@ use futures_util::future::BoxFuture;
 use http::{Method, request::Parts};
 use http_request_matcher::{InvalidRequestPattern, PathPatternRequestMatcher, RequestMatcher};
 use std::marker::PhantomData;
-use tower_http_access_core::authorization::core::{AuthorizationDecision, AuthorizationProvider};
 use tower_http_access_core::authorization::{
     AuthenticatedAuthorizationProvider, DenyAllAuthorizationProvider,
     PermitAllAuthorizationProvider, denied,
 };
+use tower_http_access_core::authorization::{AuthorizationDecision, AuthorizationProvider};
 
 /// An error returned by a request authorization provider.
 ///

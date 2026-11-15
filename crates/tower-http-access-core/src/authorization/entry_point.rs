@@ -1,7 +1,7 @@
 //! Request-based selection of authentication entry points.
 
 use crate::SecurityResponse;
-use crate::authorization::core::AuthenticationEntryPoint;
+use crate::authorization::AuthenticationEntryPoint;
 use http::request::Parts;
 use http_request_matcher::RequestMatcher;
 use std::sync::Arc;
@@ -13,7 +13,7 @@ type Entry = (Arc<dyn RequestMatcher>, Arc<dyn AuthenticationEntryPoint>);
 /// Available with `request_matcher`. This selects only the response when
 /// authentication is required; it does not authenticate or select middleware.
 /// For example, match HTML requests to a login redirect and use
-/// [`DefaultAuthenticationEntryPoint`](super::core::DefaultAuthenticationEntryPoint)
+/// [`DefaultAuthenticationEntryPoint`](super::DefaultAuthenticationEntryPoint)
 /// as the fallback for REST requests.
 #[derive(Clone)]
 pub struct DelegatingAuthenticationEntryPoint {
@@ -70,7 +70,7 @@ impl AuthenticationEntryPoint for DelegatingAuthenticationEntryPoint {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::authorization::core::DefaultAuthenticationEntryPoint;
+    use crate::authorization::DefaultAuthenticationEntryPoint;
     use http::{Request, StatusCode};
     use http_request_matcher::PathPatternRequestMatcher;
 

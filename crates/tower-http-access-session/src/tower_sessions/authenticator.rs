@@ -7,7 +7,7 @@ use tower_http_access_core::SecurityResponse;
 use tower_http_access_core::authentication::{
     AuthenticationAttempt, AuthenticationErrorReason, AuthenticatorError, RequestAuthenticator,
 };
-use tower_http_access_core::authorization::core::AuthenticationEntryPoint;
+use tower_http_access_core::authorization::AuthenticationEntryPoint;
 
 type SessionIdExtractor<Id> = dyn Fn(Session) -> BoxFuture<'static, Result<Option<Id>, tower_sessions::session::Error>>
     + Send
