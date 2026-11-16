@@ -1,11 +1,18 @@
 mod note;
 
 use argon2::Argon2;
-use axum::{Router, body::Body, routing::method_routing::get, serve};
+use axum::{
+    Router,
+    body::Body,
+    response::Response,
+    routing::{Route, method_routing::get},
+    serve,
+};
 use http::{Method, Request};
 use note::{NOTES_API_BASE_PATH, Note, NoteRepository, create_notes_router};
-use std::{num::NonZeroUsize, sync::Arc};
+use std::{convert::Infallible, error::Error as StdError, num::NonZeroUsize, sync::Arc};
 use tokio::{net::TcpListener, runtime::Handle};
+use tower::{Layer, Service};
 use tower_http::{
     request_id::{MakeRequestUuid, PropagateRequestIdLayer, RequestId, SetRequestIdLayer},
     trace::TraceLayer,
@@ -29,12 +36,11 @@ use user_password_auth::{
 const BIND_ADDRESS: &str = "127.0.0.1:3000";
 
 #[tokio::main(flavor = "current_thread")]
-async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn main() -> Result<(), Box<dyn StdError + Send + Sync>> {
     let request_auth = create_basic_authenticator().await;
 
     let authorizer = Arc::new(create_authorizer());
-    let security = SecurityLayer::new(request_auth.clone(), authorizer)
-        .authentication_entry_point(request_auth);
+    let security = create_security_layer(request_auth, authorizer);
 
     let notes_repo = NoteRepository::new(vec![
         Note::new(
@@ -67,6 +73,32 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     Ok(())
 }
 
+fn create_security_layer<A, P>(
+    authenticator: A,
+    authorizer: P,
+) -> impl Layer<
+    Route,
+    Service: Service<
+        Request<Body>,
+        Response = Response,
+        Error = Infallible,
+        Future: Send + 'static,
+    > + Clone
+                 + Send
+                 + Sync
+                 + 'static,
+> + Clone
+where
+    A: RequestAuthenticator<Authentication = Auth<UserDetail>>
+        + AuthenticationEntryPoint
+        + Clone
+        + 'static,
+    P: AuthorizationProvider<Authentication = Auth<UserDetail>> + Clone + 'static,
+    P::Error: 'static,
+{
+    SecurityLayer::new(authenticator.clone(), authorizer).authentication_entry_point(authenticator)
+}
+
 fn apply_logging_layers(router: Router) -> Router {
     router
         .layer(PropagateRequestIdLayer::x_request_id())
@@ -89,8 +121,7 @@ fn apply_logging_layers(router: Router) -> Router {
         .layer(SetRequestIdLayer::x_request_id(MakeRequestUuid))
 }
 
-// The wrapper for authentication
-// for implement `HasAuthorities`
+// The wrapper for authentication for implement `HasAuthorities`.
 #[derive(Clone, Debug)]
 struct Auth<T>(Arc<T>);
 
@@ -132,9 +163,9 @@ fn create_authorizer() -> impl AuthorizationProvider<Authentication = Auth<UserD
 async fn get_authenticated(maybe_user_detail: Option<Authenticated<Auth<UserDetail>>>) -> String {
     tracing::debug!("authenticated as {:?}", maybe_user_detail);
     match maybe_user_detail {
-        Some(Authenticated(user_detail)) => {
-            let roles = &user_detail.0.authorities;
-            format!("Hello, {}! Roles: {:?}", user_detail.0.username, roles)
+        Some(Authenticated(Auth(ud))) => {
+            let roles = &ud.authorities;
+            format!("Hello, {}! Roles: {:?}", ud.username, roles)
         }
         None => "Hello, anonymous!".to_owned(),
     }

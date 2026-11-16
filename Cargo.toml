@@ -8,7 +8,7 @@ members = [
     "crates/tower-http-access-session",
     "crates/tower-http-access-form-login",
     "examples/axum-basic-auth-crud"
-]
+, "examples/axum-server-usage"]
 
 resolver = "3"
 
@@ -37,6 +37,7 @@ matchit = "0.8.4"
 mime = "0.3.17"
 argon2 = "0.6.0"
 axum = "0.8.9"
+axum-server = "0.9.2"
 base64 = "0.23.1"
 http = "1.5.0"
 password-hash = "0.6.1"
