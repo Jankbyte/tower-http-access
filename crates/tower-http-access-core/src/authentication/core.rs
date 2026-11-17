@@ -87,6 +87,24 @@ impl AuthenticatorError {
         }
     }
 
+    /// Create error with wrong credentials reason.
+    pub fn invalid_credentials() -> Self {
+        Self {
+            reason: AuthenticationErrorReason::WrongCredentials,
+            response: None,
+        }
+    }
+
+    pub fn internal<T>(error: T) -> Self
+    where
+        T: Error + Send + Sync + 'static,
+    {
+        Self {
+            reason: AuthenticationErrorReason::Internal(Box::new(error)),
+            response: None,
+        }
+    }
+
     /// Create an authentication error with a custom response.
     pub fn with_response(reason: AuthenticationErrorReason, response: SecurityResponse) -> Self {
         Self {
@@ -133,6 +151,7 @@ impl<A> AuthenticationAttempt<A> {
     }
 }
 
+/// The authentication result, produced by [`RequestAuthenticator`].
 pub type AuthenticationResult<A> = Result<AuthenticationAttempt<A>, AuthenticatorError>;
 
 /// Accept HTTP-request and tries to convert into authentication.

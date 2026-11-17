@@ -11,8 +11,8 @@
 
 mod core;
 pub use core::{
-    Authenticated, AuthenticationAttempt, AuthenticationErrorReason, AuthenticatorError, BoxError,
-    MapAuthentication, RequestAuthenticator, RequestAuthenticatorExt,
+    Authenticated, AuthenticationAttempt, AuthenticationErrorReason, AuthenticationResult,
+    AuthenticatorError, BoxError, MapAuthentication, RequestAuthenticator, RequestAuthenticatorExt,
 };
 
 #[cfg(feature = "axum")]
