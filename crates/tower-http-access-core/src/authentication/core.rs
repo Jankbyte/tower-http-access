@@ -133,6 +133,8 @@ impl<A> AuthenticationAttempt<A> {
     }
 }
 
+pub type AuthenticationResult<A> = Result<AuthenticationAttempt<A>, AuthenticatorError>;
+
 /// Accept HTTP-request and tries to convert into authentication.
 ///
 /// # Contract
@@ -162,7 +164,7 @@ pub trait RequestAuthenticator: Send + Sync {
     fn authenticate<'a>(
         &'a self,
         parts: &'a Parts,
-    ) -> BoxFuture<'a, Result<AuthenticationAttempt<Self::Authentication>, AuthenticatorError>>;
+    ) -> BoxFuture<'a, AuthenticationResult<Self::Authentication>>;
 }
 
 /// Forwards authentication to a shared authenticator, including trait objects.
