@@ -55,42 +55,50 @@ impl<A> Authenticated<A> {
 }
 
 /// The error, that present reason why authentication failed.
-#[derive(Debug, thiserror::Error)]
-pub enum AuthenticationErrorReason {
+#[derive(Debug)]
+pub enum Reason {
     /// The authentication credentials was wrong.
     ///
     /// For example, username or password was wrong.
-    #[error("wrong credentials")]
     WrongCredentials,
     /// Error occurred when internal server error happens.
     ///
     /// For example, it can thrown if database with users disconnected.
-    #[error("internal authenticator error: {0}")]
-    Internal(#[source] BoxError),
+    Internal(BoxError),
 }
 
 /// Authentication failure with an optional custom response.
 #[derive(Debug)]
 pub struct AuthenticatorError {
     /// The reason of occurred error.
-    pub reason: AuthenticationErrorReason,
+    pub reason: Reason,
     /// Custom response sent instead of the default response for [`Self::reason`].
     pub response: Option<SecurityResponse>,
 }
 
-impl AuthenticatorError {
-    /// Create an authentication error using the default response for the reason.
-    pub fn new(reason: AuthenticationErrorReason) -> Self {
-        Self {
-            reason,
-            response: None,
+impl std::fmt::Display for AuthenticatorError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.reason {
+            Reason::WrongCredentials => f.write_str("wrong credentials"),
+            Reason::Internal(error) => write!(f, "internal authenticator error: {error}"),
         }
     }
+}
 
+impl Error for AuthenticatorError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match &self.reason {
+            Reason::WrongCredentials => None,
+            Reason::Internal(error) => Some(error.as_ref()),
+        }
+    }
+}
+
+impl AuthenticatorError {
     /// Create error with wrong credentials reason.
     pub fn invalid_credentials() -> Self {
         Self {
-            reason: AuthenticationErrorReason::WrongCredentials,
+            reason: Reason::WrongCredentials,
             response: None,
         }
     }
@@ -100,13 +108,13 @@ impl AuthenticatorError {
         T: Error + Send + Sync + 'static,
     {
         Self {
-            reason: AuthenticationErrorReason::Internal(Box::new(error)),
+            reason: Reason::Internal(Box::new(error)),
             response: None,
         }
     }
 
     /// Create an authentication error with a custom response.
-    pub fn with_response(reason: AuthenticationErrorReason, response: SecurityResponse) -> Self {
+    pub fn with_response(reason: Reason, response: SecurityResponse) -> Self {
         Self {
             reason,
             response: Some(response),
@@ -118,8 +126,8 @@ impl AuthenticatorError {
     pub fn into_security_response(self) -> SecurityResponse {
         self.response.unwrap_or_else(|| {
             empty_response(match self.reason {
-                AuthenticationErrorReason::WrongCredentials => StatusCode::UNAUTHORIZED,
-                AuthenticationErrorReason::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
+                Reason::WrongCredentials => StatusCode::UNAUTHORIZED,
+                Reason::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
             })
         })
     }
@@ -161,9 +169,9 @@ pub type AuthenticationResult<A> = Result<AuthenticationAttempt<A>, Authenticato
 ///
 /// * If target authenticator does not support current request, it must return success [`Result::Ok`] with [`AuthenticationAttempt::NotApplicable`]
 /// * If target authenticator can authenticate this request, but credentials is wrong/invalid, so it must return [`Result::Err`], where reason is
-///   [`AuthenticationErrorReason::WrongCredentials`]. Usually, the response code of this sutuations is *401*.
+///   [`Reason::WrongCredentials`]. Usually, the response code of this sutuations is *401*.
 /// * If target authenticator can authenticate this request, but authentication failed by internal reasons, it must return [`Result::Err`] where reason
-///   is [`AuthenticationErrorReason::Internal`]. Usually, the response code is *500*.
+///   is [`Reason::Internal`]. Usually, the response code is *500*.
 ///
 /// # Restrictions
 ///

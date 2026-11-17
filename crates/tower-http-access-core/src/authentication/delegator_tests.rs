@@ -1,6 +1,6 @@
 use super::*;
 use crate::SecurityLayer;
-use crate::authentication::{Authenticated, AuthenticationErrorReason};
+use crate::authentication::{Authenticated, Reason};
 use crate::authorization::{AuthorizationDecision, AuthorizationProvider};
 use crate::response::test_response;
 use axum::response::{IntoResponse, Response};
@@ -121,7 +121,7 @@ async fn authentication_chain_without_applicable_authenticator_continues_anonymo
 async fn authenticator_error_response_stops_chain_and_becomes_service_response() {
     let reject = |_: &Parts| async {
         Err::<AuthenticationAttempt<String>, _>(AuthenticatorError::with_response(
-            AuthenticationErrorReason::WrongCredentials,
+            Reason::WrongCredentials,
             test_response(StatusCode::UNAUTHORIZED, "invalid token"),
         ))
     };

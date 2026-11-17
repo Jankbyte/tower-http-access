@@ -1,5 +1,5 @@
 use super::*;
-use crate::authentication::AuthenticationErrorReason;
+use crate::authentication::Reason;
 use crate::authentication::AuthenticatorError;
 use crate::authentication::DelegatingRequestAuthenticator;
 use tower_http_access_authorizers::all::AllAuthorizationProvider;
@@ -39,7 +39,7 @@ impl RequestAuthenticator for Authenticator {
                 0 => Ok(AuthenticationAttempt::NotApplicable),
                 1 => Ok(AuthenticationAttempt::Authenticated("alex".to_owned())),
                 _ => Err(AuthenticatorError::with_response(
-                    AuthenticationErrorReason::WrongCredentials,
+                    Reason::WrongCredentials,
                     test_response(StatusCode::UNAUTHORIZED, "invalid credentials"),
                 )),
             }

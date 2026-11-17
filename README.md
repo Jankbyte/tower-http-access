@@ -363,7 +363,7 @@ unchanged; custom handlers can inspect, modify, or replace it. The combined laye
 response adapter afterward. Composed providers stop at this denial and preserve the response.
 
 ```rust
-use tower_http_access_core::{SecurityResponse, authentication::{AuthenticatorError, AuthenticationErrorReason}};
+use tower_http_access_core::{SecurityResponse, authentication::{AuthenticatorError, Reason}};
 use bytes::Bytes;
 use http::StatusCode;
 
@@ -371,7 +371,7 @@ let challenge: SecurityResponse = http::Response::builder()
     .status(StatusCode::UNAUTHORIZED)
     .header("www-authenticate", "Basic realm=\"Notes\"")
     .body(Bytes::from_static(b"Authentication required"))?;
-let error = AuthenticatorError::with_response(AuthenticationErrorReason::WrongCredentials, challenge);
+let error = AuthenticatorError::with_response(Reason::WrongCredentials, challenge);
 assert_eq!(error.into_security_response().status(), StatusCode::UNAUTHORIZED);
 # Ok::<(), http::Error>(())
 ```

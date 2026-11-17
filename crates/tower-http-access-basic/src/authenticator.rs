@@ -4,9 +4,7 @@ use http::{StatusCode, header, request::Parts};
 use std::{error::Error, future::Future, pin::Pin};
 use tower_http_access_core::{
     SecurityResponse,
-    authentication::{
-        AuthenticationAttempt, AuthenticationErrorReason, AuthenticatorError, RequestAuthenticator,
-    },
+    authentication::{AuthenticationAttempt, AuthenticatorError, Reason, RequestAuthenticator},
     authorization::AuthenticationEntryPoint,
 };
 use user_password_auth::UsernamePasswordAuthenticationProvider;
@@ -151,10 +149,7 @@ where
 }
 
 fn wrong_credentials(realm: &str) -> AuthenticatorError {
-    AuthenticatorError::with_response(
-        AuthenticationErrorReason::WrongCredentials,
-        basic_challenge(realm),
-    )
+    AuthenticatorError::with_response(Reason::WrongCredentials, basic_challenge(realm))
 }
 
 fn basic_challenge(realm: &str) -> SecurityResponse {
@@ -174,7 +169,7 @@ fn basic_challenge(realm: &str) -> SecurityResponse {
 }
 
 fn internal_error(error: impl Error + Send + Sync + 'static) -> AuthenticatorError {
-    AuthenticatorError::new(AuthenticationErrorReason::Internal(Box::new(error)))
+    AuthenticatorError::internal(error)
 }
 
 #[cfg(test)]

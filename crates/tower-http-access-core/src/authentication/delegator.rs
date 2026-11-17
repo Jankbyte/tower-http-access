@@ -14,7 +14,7 @@ use std::sync::Arc;
 /// skipped after first failed.
 ///
 /// For example, you *can* add multiple authenticators, that process basic-authentication. But other authenticators
-/// in this chain will useless, except first, because first authenticator will return [`super::AuthenticationErrorReason::WrongCredentials`]
+/// in this chain will useless, except first, because first authenticator will return [`super::Reason::WrongCredentials`]
 /// and that out of the chain.
 ///
 /// Clones share the immutable chain without allocating or cloning individual
@@ -38,7 +38,7 @@ use std::sync::Arc;
 /// ```
 /// use http::request::Parts;
 /// use tower_http_access_core::authentication::{
-///     AuthenticationAttempt, AuthenticationErrorReason, AuthenticatorError,
+///     AuthenticationAttempt, AuthenticatorError,
 ///     DelegatingRequestAuthenticator, RequestAuthenticator,
 /// };
 /// # #[tokio::main(flavor = "current_thread")]
@@ -52,9 +52,7 @@ use std::sync::Arc;
 ///         Some(key) if key == "demo-key" => {
 ///             Ok(AuthenticationAttempt::Authenticated("alex".to_owned()))
 ///         }
-///         Some(_) => Err(AuthenticatorError::new(
-///             AuthenticationErrorReason::WrongCredentials,
-///         )),
+///         Some(_) => Err(AuthenticatorError::invalid_credentials()),
 ///     };
 ///     async move { result }
 /// };

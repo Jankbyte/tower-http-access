@@ -4,16 +4,29 @@ use axum::{body::Body, extract::Request, http::StatusCode};
 use std::io;
 
 #[test]
+fn authenticator_error_displays_reason_and_exposes_backend_source() {
+    let invalid = AuthenticatorError::invalid_credentials();
+    assert_eq!(invalid.to_string(), "wrong credentials");
+    assert!(invalid.source().is_none());
+
+    let internal = AuthenticatorError::internal(io::Error::other("database unavailable"));
+    assert_eq!(
+        internal.to_string(),
+        "internal authenticator error: database unavailable"
+    );
+    let source = internal.source().unwrap();
+    assert!(source.downcast_ref::<io::Error>().is_some());
+    assert_eq!(source.to_string(), "database unavailable");
+}
+
+#[test]
 fn authenticator_error_preserves_internal_reason_and_custom_response() {
     let error = AuthenticatorError::with_response(
-        AuthenticationErrorReason::Internal(Box::new(io::Error::other("database unavailable"))),
+        Reason::Internal(Box::new(io::Error::other("database unavailable"))),
         test_response(StatusCode::SERVICE_UNAVAILABLE, ""),
     );
 
-    assert!(matches!(
-        &error.reason,
-        AuthenticationErrorReason::Internal(_)
-    ));
+    assert!(matches!(&error.reason, Reason::Internal(_)));
     assert_eq!(
         error.into_security_response().status(),
         StatusCode::SERVICE_UNAVAILABLE
@@ -22,12 +35,9 @@ fn authenticator_error_preserves_internal_reason_and_custom_response() {
 
 #[test]
 fn authenticator_error_uses_default_response_for_reason() {
-    let wrong_credentials = AuthenticatorError::new(AuthenticationErrorReason::WrongCredentials)
+    let wrong_credentials = AuthenticatorError::invalid_credentials().into_security_response();
+    let internal = AuthenticatorError::internal(io::Error::other("database unavailable"))
         .into_security_response();
-    let internal = AuthenticatorError::new(AuthenticationErrorReason::Internal(Box::new(
-        io::Error::other("database unavailable"),
-    )))
-    .into_security_response();
 
     assert_eq!(wrong_credentials.status(), StatusCode::UNAUTHORIZED);
     assert_eq!(internal.status(), StatusCode::INTERNAL_SERVER_ERROR);
@@ -72,7 +82,7 @@ async fn arc_authenticators_forward_attempts_errors_and_request_metadata() {
                     0 => Ok(AuthenticationAttempt::NotApplicable),
                     1 => Ok(AuthenticationAttempt::Authenticated("alex".to_owned())),
                     _ => Err(AuthenticatorError::with_response(
-                        AuthenticationErrorReason::WrongCredentials,
+                        Reason::WrongCredentials,
                         test_response(StatusCode::IM_A_TEAPOT, ""),
                     )),
                 }
@@ -95,10 +105,7 @@ async fn arc_authenticators_forward_attempts_errors_and_request_metadata() {
             (0, Ok(AuthenticationAttempt::NotApplicable)) => (),
             (1, Ok(AuthenticationAttempt::Authenticated(user))) => assert_eq!(user, "alex"),
             (2, Err(error)) => {
-                assert!(matches!(
-                    error.reason,
-                    AuthenticationErrorReason::WrongCredentials
-                ));
+                assert!(matches!(error.reason, Reason::WrongCredentials));
                 assert_eq!(error.response.unwrap().status(), StatusCode::IM_A_TEAPOT);
             }
             _ => panic!("shared authenticator changed the result"),

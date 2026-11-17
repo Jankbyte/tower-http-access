@@ -2,7 +2,7 @@ use super::*;
 use crate::SecurityLayer;
 use crate::authentication::Authenticated;
 use crate::authentication::AuthenticationAttempt;
-use crate::authentication::AuthenticationErrorReason;
+use crate::authentication::Reason;
 use crate::authentication::AuthenticatorError;
 use crate::authentication::RequestAuthenticator;
 use crate::authorization::AuthorizationDecision;
@@ -61,7 +61,7 @@ impl RequestAuthenticator for TokenAuthenticator {
                     Ok(AuthenticationAttempt::Authenticated("alex".to_owned()))
                 }
                 Some(_) => Err(AuthenticatorError::with_response(
-                    AuthenticationErrorReason::WrongCredentials,
+                    Reason::WrongCredentials,
                     challenge(StatusCode::UNAUTHORIZED, "invalid token"),
                 )),
             }

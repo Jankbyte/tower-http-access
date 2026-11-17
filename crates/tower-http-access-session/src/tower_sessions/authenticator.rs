@@ -5,7 +5,7 @@ use serde::de::DeserializeOwned;
 use std::{error::Error, future::Future};
 use tower_http_access_core::SecurityResponse;
 use tower_http_access_core::authentication::{
-    AuthenticationAttempt, AuthenticationErrorReason, AuthenticatorError, RequestAuthenticator,
+    AuthenticationAttempt, AuthenticatorError, RequestAuthenticator,
 };
 use tower_http_access_core::authorization::AuthenticationEntryPoint;
 
@@ -166,7 +166,7 @@ impl<P: SessionIdentityProvider + 'static> AuthenticationEntryPoint
 }
 
 fn internal(error: impl Error + Send + Sync + 'static) -> AuthenticatorError {
-    AuthenticatorError::new(AuthenticationErrorReason::Internal(Box::new(error)))
+    AuthenticatorError::internal(error)
 }
 
 impl<P: SessionIdentityProvider> RequestAuthenticator for SessionRequestAuthenticator<P> {
