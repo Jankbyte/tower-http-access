@@ -118,3 +118,29 @@ The credentials above are for local demonstration. Use HTTPS when sending Basic 
 
 See the [project guide](https://github.com/Jankbyte/axum-auth-chained#readme)
 for more configuration and authorization examples.
+
+## Benchmarks
+
+Run the authenticator benchmarks from the workspace root:
+
+```sh
+cargo bench -p tower-http-access-basic --bench basic_authenticator
+```
+
+The suite covers missing headers, other authentication schemes, valid credentials,
+malformed Base64, missing credential separators, invalid UTF-8, rejected credentials,
+and provider errors. Each case validates its expected result before timing.
+
+Measurements report elapsed time per `authenticate` call, including result destruction.
+Request construction, Base64 encoding of fixtures, and runtime creation happen outside
+the timed loop. The provider performs fixed in-memory credential comparisons without
+password hashing or I/O. Allocation counts and memory usage are not measured. Tracing
+is disabled in the default benchmark run; run without `--all-features` for that baseline.
+
+Criterion stores results under `target/criterion/basic_authenticator/`. To save and
+compare a named baseline on the same machine:
+
+```sh
+cargo bench -p tower-http-access-basic --bench basic_authenticator -- --save-baseline before
+cargo bench -p tower-http-access-basic --bench basic_authenticator -- --baseline before
+```

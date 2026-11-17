@@ -7,8 +7,9 @@ members = [
     "crates/tower-http-access-basic",
     "crates/tower-http-access-session",
     "crates/tower-http-access-form-login",
-    "examples/axum-basic-auth-crud"
-, "examples/axum-server-usage"]
+    "examples/axum-basic-auth-crud",
+    "examples/axum-server-usage"
+]
 
 resolver = "3"
 
@@ -28,6 +29,7 @@ tower-http-access-form-login = { version = "0.0.1", path = "crates/tower-http-ac
 tower-http-access-session = { version = "0.0.1", path = "crates/tower-http-access-session" }
 user-password-auth = { version = "0.0.1", path = "crates/user-password-auth" }
 
+criterion = "0.7"
 tower-sessions = { version = "0.15", default-features = false }
 bytes = "1"
 http-body = "1"

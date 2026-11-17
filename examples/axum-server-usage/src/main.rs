@@ -2,6 +2,7 @@
 //! It's specially, for abstrogate from axum-abstractions.
 use argon2::Argon2;
 use axum::{Router, routing::method_routing::get};
+use axum_server::Server;
 use http::{Request, Response};
 use http_body::Body;
 use std::{error::Error as StdError, net::SocketAddr, num::NonZeroUsize, sync::Arc};
@@ -41,7 +42,7 @@ async fn main() -> Result<(), Box<dyn StdError + Send + Sync>> {
     tracing::info!(address = %BIND_ADDRESS, "hosting server at");
     let listener = TcpListener::bind(BIND_ADDRESS).await.unwrap();
 
-    axum_server::Server::<SocketAddr>::from_listener(listener)
+    Server::<SocketAddr>::from_listener(listener)
         .serve(Shared::new(app))
         .await?;
 
