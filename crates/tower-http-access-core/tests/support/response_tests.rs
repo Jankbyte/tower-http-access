@@ -167,7 +167,7 @@ async fn security_responses_convert_to_full_bodies_and_preserve_http_metadata() 
     );
     let entry_point = |parts: &Parts| {
         assert_eq!(parts.uri.path(), "/notes");
-        challenge(StatusCode::UNAUTHORIZED, "authentication required")
+        async { challenge(StatusCode::UNAUTHORIZED, "authentication required") }
     };
     let handler = |parts: &Parts, failure: AuthorizationFailure<io::Error>| {
         assert_eq!(parts.uri.path(), "/notes");
@@ -364,7 +364,7 @@ async fn custom_adapter_handles_every_combined_rejection_once_and_supports_non_f
                 )
                 .response_adapter(adapter())
                 .authentication_entry_point(|_: &Parts| {
-                    challenge(StatusCode::UNAUTHORIZED, "authentication required")
+                    async { challenge(StatusCode::UNAUTHORIZED, "authentication required") }
                 })
                 .layer(raw.clone()),
             ),
@@ -490,7 +490,7 @@ fn custom_denial_chain() -> impl AuthorizationProvider<
 async fn custom_denial_survives_composition_and_default_failure_handlers() {
     let inner_calls = Arc::new(AtomicUsize::new(0));
     let raw = inner(|| Full::new(Bytes::new()), Arc::clone(&inner_calls));
-    let entry_point = |_: &Parts| -> SecurityResponse {
+    let entry_point = |_: &Parts| async {
         panic!("custom denials must bypass the authentication entry point")
     };
     let service = SecurityLayer::new(TokenAuthenticator, Arc::new(custom_denial_chain()))

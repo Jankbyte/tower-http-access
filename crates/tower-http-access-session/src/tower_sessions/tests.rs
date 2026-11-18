@@ -174,8 +174,8 @@ async fn login_entry_point_redirects_only_when_authentication_is_required() {
     }
 }
 
-#[test]
-fn login_paths_reject_external_and_invalid_locations() {
+#[tokio::test]
+async fn login_paths_reject_external_and_invalid_locations() {
     for path in [
         "",
         "login",
@@ -193,7 +193,9 @@ fn login_paths_reject_external_and_invalid_locations() {
         );
     }
     let (parts, _) = Request::new(()).into_parts();
-    let response = SessionRequestAuthenticator::new(Users).commence(&parts);
+    let response = SessionRequestAuthenticator::new(Users)
+        .commence(&parts)
+        .await;
     assert_eq!(response.status(), StatusCode::FOUND);
     assert_eq!(response.headers()[header::LOCATION], "/login");
 }

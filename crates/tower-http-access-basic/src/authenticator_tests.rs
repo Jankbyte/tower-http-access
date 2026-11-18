@@ -71,8 +71,8 @@ async fn basic_authenticator_other_scheme_is_not_applicable() {
     assert_eq!(result, AuthenticationAttempt::NotApplicable);
 }
 
-#[test]
-fn basic_entry_point_uses_configured_realm() {
+#[tokio::test]
+async fn basic_entry_point_uses_configured_realm() {
     for (authenticator, expected) in [
         (
             BasicRequestAuthenticator::new(CustomProvider),
@@ -87,7 +87,9 @@ fn basic_entry_point_uses_configured_realm() {
             r#"Basic realm="\"private\"\\area""#,
         ),
     ] {
-        let response = authenticator.commence(&Request::new(Body::empty()).into_parts().0);
+        let response = authenticator
+            .commence(&Request::new(Body::empty()).into_parts().0)
+            .await;
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
         assert_eq!(response.headers()[header::WWW_AUTHENTICATE], expected);
     }

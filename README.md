@@ -306,7 +306,7 @@ not need to implement `Clone`; the layer shares them through `Arc`.
 # use tower_http_access_core::authorization::AuthorizationFailure;
 # let my_authenticator = |_: &Parts| async { Ok::<_, AuthenticatorError>(AuthenticationAttempt::Authenticated("alex".to_owned())) };
 # let my_authorizer = AuthenticatedAuthorizationProvider::<String>::new();
-# let my_entry_point = |_: &Parts| http::Response::builder().status(StatusCode::UNAUTHORIZED).body(bytes::Bytes::new()).unwrap();
+# let my_entry_point = |_: &Parts| async { http::Response::builder().status(StatusCode::UNAUTHORIZED).body(bytes::Bytes::new()).unwrap() };
 # let my_failure_handler = |_: &Parts, _: AuthorizationFailure<std::convert::Infallible>| http::Response::builder().status(StatusCode::FORBIDDEN).body(bytes::Bytes::new()).unwrap();
 let security = SecurityLayer::new(my_authenticator, my_authorizer)
     .authentication_entry_point(my_entry_point)

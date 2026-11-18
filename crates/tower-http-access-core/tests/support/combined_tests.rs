@@ -266,7 +266,7 @@ async fn custom_failure_handlers_receive_request_and_original_failure() {
         .authentication_entry_point(|request: &Parts| {
             assert_eq!(request.uri.path(), "/notes");
             assert_eq!(request.headers["x-auth"], "checked");
-            test_response(StatusCode::FOUND, "")
+            async { test_response(StatusCode::FOUND, "") }
         })
         .failure_handler(
             move |request: &Parts, failure: AuthorizationFailure<io::Error>| {

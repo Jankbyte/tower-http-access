@@ -255,7 +255,7 @@ where
     T: AuthenticationEntryPoint,
     F: Send + Sync + 'static,
 {
-    fn commence(&self, request: &Parts) -> SecurityResponse {
+    fn commence<'a>(&'a self, request: &'a Parts) -> BoxFuture<'a, SecurityResponse> {
         self.inner.commence(request)
     }
 }

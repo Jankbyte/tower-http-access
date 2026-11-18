@@ -9,21 +9,28 @@ use std::{future::Future, marker::PhantomData, pin::Pin, sync::Arc};
 /// to delegate unauthenticated requests. It borrows request metadata and returns buffered bytes.
 /// The middleware converts the response body to the type expected by the inner service.
 ///
+/// Implementations may await shared state, session operations, or challenge creation.
+/// They must not perform blocking I/O or hold blocking mutex guards across awaits.
+///
 /// This should be used for providing schema of authentication, when credentials is not set.
 ///
 /// For example, if endpoint requires `Basic` authentication, but credentials (header) is not provided,
 /// service will execute this endpoint, that returns response with `WWW-Authenticate` header.
 pub trait AuthenticationEntryPoint: Send + Sync + 'static {
-    fn commence(&self, request: &Parts) -> SecurityResponse;
+    fn commence<'a>(&'a self, request: &'a Parts) -> BoxFuture<'a, SecurityResponse>;
 }
 
-/// Create authentication entrypoint from closure.
-impl<F> AuthenticationEntryPoint for F
+/// Create an authentication entry point from an asynchronous closure.
+///
+/// The closure must return an owned future. Clone any needed request metadata
+/// before entering its async block; custom trait implementations may borrow it.
+impl<F, Fut> AuthenticationEntryPoint for F
 where
-    F: Fn(&Parts) -> SecurityResponse + Send + Sync + 'static,
+    F: Fn(&Parts) -> Fut + Send + Sync + 'static,
+    Fut: Future<Output = SecurityResponse> + Send + 'static,
 {
-    fn commence(&self, request: &Parts) -> SecurityResponse {
-        self(request)
+    fn commence<'a>(&'a self, request: &'a Parts) -> BoxFuture<'a, SecurityResponse> {
+        Box::pin(self(request))
     }
 }
 
@@ -32,8 +39,8 @@ where
 pub struct DefaultAuthenticationEntryPoint;
 
 impl AuthenticationEntryPoint for DefaultAuthenticationEntryPoint {
-    fn commence(&self, _: &Parts) -> SecurityResponse {
-        empty_response(StatusCode::UNAUTHORIZED)
+    fn commence<'a>(&'a self, _: &'a Parts) -> BoxFuture<'a, SecurityResponse> {
+        Box::pin(async { empty_response(StatusCode::UNAUTHORIZED) })
     }
 }
 
@@ -266,9 +273,9 @@ impl<E> AuthorizationFailureHandler<E> for DefaultAuthorizationFailureHandler {
 /// The implementation for situations, when *T* is not [`Clone`].
 impl<T> AuthenticationEntryPoint for Arc<T>
 where
-    T: AuthenticationEntryPoint,
+    T: AuthenticationEntryPoint + ?Sized,
 {
-    fn commence(&self, request: &Parts) -> SecurityResponse {
+    fn commence<'a>(&'a self, request: &'a Parts) -> BoxFuture<'a, SecurityResponse> {
         T::commence(self.as_ref(), request)
     }
 }

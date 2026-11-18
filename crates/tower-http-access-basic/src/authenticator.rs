@@ -143,8 +143,11 @@ impl<P> AuthenticationEntryPoint for BasicRequestAuthenticator<P>
 where
     P: Send + Sync + 'static,
 {
-    fn commence(&self, _: &Parts) -> SecurityResponse {
-        basic_challenge(&self.realm)
+    fn commence<'a>(
+        &'a self,
+        _: &'a Parts,
+    ) -> Pin<Box<dyn Future<Output = SecurityResponse> + Send + 'a>> {
+        Box::pin(async move { basic_challenge(&self.realm) })
     }
 }
 

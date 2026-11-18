@@ -2,6 +2,7 @@
 
 use crate::SecurityResponse;
 use crate::authorization::AuthenticationEntryPoint;
+use futures_util::future::BoxFuture;
 use http::request::Parts;
 use http_request_matcher::RequestMatcher;
 use std::sync::Arc;
@@ -58,7 +59,7 @@ impl DelegatingAuthenticationEntryPointBuilder {
 }
 
 impl AuthenticationEntryPoint for DelegatingAuthenticationEntryPoint {
-    fn commence(&self, request: &Parts) -> SecurityResponse {
+    fn commence<'a>(&'a self, request: &'a Parts) -> BoxFuture<'a, SecurityResponse> {
         self.entries
             .iter()
             .find(|(matcher, _)| matcher.matches(request))
@@ -74,8 +75,8 @@ mod tests {
     use http::{Request, StatusCode};
     use http_request_matcher::PathPatternRequestMatcher;
 
-    #[test]
-    fn first_match_is_final_and_preserves_the_selected_response() {
+    #[tokio::test]
+    async fn first_match_is_final_and_preserves_the_selected_response() {
         let entry_point = DelegatingAuthenticationEntryPoint::builder()
             .entry_point(
                 PathPatternRequestMatcher::new("/html/{*rest}").unwrap(),
@@ -86,12 +87,12 @@ mod tests {
                         .headers_mut()
                         .insert("location", "/login".parse().unwrap());
                     response.extensions_mut().insert(42_u32);
-                    response
+                    async move { response }
                 },
             )
             .entry_point(
                 PathPatternRequestMatcher::new("/html/private").unwrap(),
-                |_: &Parts| -> SecurityResponse { panic!("later entry point must not execute") },
+                |_: &Parts| async { panic!("later entry point must not execute") },
             )
             .fallback(DefaultAuthenticationEntryPoint);
         for (path, status) in [
@@ -99,7 +100,7 @@ mod tests {
             ("/api/private", StatusCode::UNAUTHORIZED),
         ] {
             let (parts, _) = Request::builder().uri(path).body(()).unwrap().into_parts();
-            let response = entry_point.clone().commence(&parts);
+            let response = entry_point.clone().commence(&parts).await;
             assert_eq!(response.status(), status);
             if status == StatusCode::FOUND {
                 assert_eq!(response.headers()["location"], "/login");
@@ -112,6 +113,7 @@ mod tests {
             DelegatingAuthenticationEntryPoint::builder()
                 .fallback(DefaultAuthenticationEntryPoint)
                 .commence(&parts)
+                .await
                 .status(),
             StatusCode::UNAUTHORIZED
         );

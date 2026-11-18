@@ -83,7 +83,7 @@ async fn authentication_required_uses_configured_entry_point() {
             response
                 .headers_mut()
                 .insert("x-request-path", request.uri.path().parse().unwrap());
-            response
+            async move { response }
         })
         .layer(Inner);
     let request = Request::builder()
@@ -311,4 +311,37 @@ async fn mapped_provider_preserves_handler_identity() {
             .unwrap(),
         "alex"
     );
+}
+
+#[tokio::test]
+async fn authentication_entry_point_awaits_shared_state_and_borrows_request() {
+    struct LockedEntryPoint(tokio::sync::Mutex<()>);
+
+    impl crate::authorization::AuthenticationEntryPoint for LockedEntryPoint {
+        fn commence<'a>(&'a self, request: &'a Parts) -> BoxFuture<'a, tower_http_access_core::SecurityResponse> {
+            Box::pin(async move {
+                let _guard = self.0.lock().await;
+                let mut response = test_response(StatusCode::UNAUTHORIZED, "");
+                response.headers_mut().insert(
+                    "x-request-path",
+                    request.uri.path().parse().unwrap(),
+                );
+                response
+            })
+        }
+    }
+
+    let entry_point = Arc::new(LockedEntryPoint(tokio::sync::Mutex::new(())));
+    let guard = entry_point.0.lock().await;
+    let mut service = security(AuthenticatedAuthorizationProvider::<String>::new())
+        .authentication_entry_point(Arc::clone(&entry_point))
+        .layer(Inner);
+    let request = Request::builder().uri("/private").body(Body::empty()).unwrap();
+    let response = service.call(request);
+    tokio::pin!(response);
+    assert!(futures_util::poll!(response.as_mut()).is_pending());
+    drop(guard);
+    let response = response.await.unwrap();
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(response.headers()["x-request-path"], "/private");
 }

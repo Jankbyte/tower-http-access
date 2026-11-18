@@ -355,7 +355,7 @@ where
                 Ok(AuthorizationDecision::Deny(AuthorizationDenial::AuthenticationRequired)) => {
                     Ok(components
                         .response_adapter
-                        .adapt(components.authentication_entry_point.commence(&parts)))
+                        .adapt(components.authentication_entry_point.commence(&parts).await))
                 }
                 Ok(AuthorizationDecision::Deny(denial)) => Ok(components.response_adapter.adapt(
                     components

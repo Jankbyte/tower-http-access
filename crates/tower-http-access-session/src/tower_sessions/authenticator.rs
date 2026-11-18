@@ -155,13 +155,15 @@ impl Error for InvalidLoginPagePath {}
 impl<P: SessionIdentityProvider + 'static> AuthenticationEntryPoint
     for SessionRequestAuthenticator<P>
 {
-    fn commence(&self, _: &Parts) -> SecurityResponse {
-        let mut response = SecurityResponse::new(Default::default());
-        *response.status_mut() = StatusCode::FOUND;
-        response
-            .headers_mut()
-            .insert(header::LOCATION, self.login_page.clone());
-        response
+    fn commence<'a>(&'a self, _: &'a Parts) -> BoxFuture<'a, SecurityResponse> {
+        Box::pin(async move {
+            let mut response = SecurityResponse::new(Default::default());
+            *response.status_mut() = StatusCode::FOUND;
+            response
+                .headers_mut()
+                .insert(header::LOCATION, self.login_page.clone());
+            response
+        })
     }
 }
 
