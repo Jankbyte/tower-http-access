@@ -48,9 +48,8 @@ use tower_service::Service;
 /// invokes the success handler only after authorization allows access. The default handler
 /// inserts the identity into extensions; the layer does not read existing authentication extensions.
 ///
-/// Use [`crate::authentication::DelegatingRequestAuthenticator`] to combine authentication
-/// mechanisms, or `tower_http_access_authorizers::all::AllAuthorizationProvider` to combine authorization
-/// checks.
+/// Use `tower_http_access_authorizers::all::AllAuthorizationProvider` to combine
+/// authorization checks.
 ///
 /// ```
 /// use http::request::Parts;

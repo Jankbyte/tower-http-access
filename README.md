@@ -6,7 +6,7 @@
 
 Composable HTTP authentication and authorization middleware for Tower, with optional Axum integration.
 
-Authenticate requests with an ordered chain of authenticators, carry a typed identity into handlers, and authorize access with explicit request rules or your own async policies.
+Authenticate requests, carry a typed identity into handlers, and authorize access with explicit request rules or your own async policies.
 
 - **Typed identities:** extract `Authenticated<User>` or `Option<Authenticated<User>>` in handlers.
 - **Ordered authentication:** combine mechanisms such as HTTP Basic and application-defined sessions.
@@ -313,29 +313,9 @@ let security = SecurityLayer::new(my_authenticator, my_authorizer)
 # let _: axum::Router = axum::Router::new().layer(security);
 ```
 
-For multiple authentication mechanisms, build an ordered chain separately:
-
-```rust,no_run
-# use axum::http::request::Parts;
-# use tower_http_access_core::authentication::AuthenticationAttempt;
-# use tower_http_access_core::authentication::AuthenticatorError;
-# use tower_http_access_core::authorization::AuthenticatedAuthorizationProvider;
-# let session_authenticator = |_: &Parts| async { Ok::<_, AuthenticatorError>(AuthenticationAttempt::<String>::NotApplicable) };
-# let basic_authenticator = |_: &Parts| async { Ok::<_, AuthenticatorError>(AuthenticationAttempt::Authenticated("alex".to_owned())) };
-# let my_authorizer = AuthenticatedAuthorizationProvider::<String>::new();
-use tower_http_access_core::{SecurityLayer, authentication::DelegatingRequestAuthenticator};
-
-let authenticators = DelegatingRequestAuthenticator::builder()
-    .authenticator(session_authenticator)
-    .authenticator(basic_authenticator)
-    .build();
-let security = SecurityLayer::new(authenticators, my_authorizer);
-# let _: axum::Router = axum::Router::new().layer(security);
-```
-
-The chain skips non-applicable authenticators and stops at the first authenticated
-identity or error. Use `.authenticator(...)` to add an authenticator already
-held in an `Arc`.
+To select different authentication mechanisms by request, use `SecurityChainLayer`
+with the `filter_chain` feature. It selects the first matching middleware stack
+before authentication; it does not retry another stack when authentication is not applicable.
 
 Clone a configured `SecurityLayer` to attach it to multiple routers. Wrap components
 in `Arc` when their state should be shared across clones.

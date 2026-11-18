@@ -1,7 +1,6 @@
 use super::*;
 use crate::authentication::Reason;
 use crate::authentication::AuthenticatorError;
-use crate::authentication::DelegatingRequestAuthenticator;
 use tower_http_access_authorizers::all::AllAuthorizationProvider;
 use tower_http_access_core::authorization::AuthorizationProviderExt;
 use tower_http_access_core::authorization::AuthenticatedAuthorizationProvider;
@@ -347,45 +346,6 @@ async fn accepts_shared_authenticator() {
     let calls = Arc::new(AtomicUsize::new(0));
     let mut service = SecurityLayer::new(
         Arc::clone(&authenticator),
-        Arc::new(Authorizer {
-            identity: Some("alex"),
-            outcome: 0,
-            calls: Arc::clone(&calls),
-        }),
-    )
-    .layer(Inner {
-        ready: false,
-        calls: Arc::clone(&calls),
-        fail: false,
-    });
-    let response = execute(&mut service, request()).await.unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(
-        to_bytes(response.into_body(), usize::MAX).await.unwrap(),
-        "alex:payload"
-    );
-    assert_eq!(calls.load(Ordering::SeqCst), 2);
-}
-
-#[tokio::test]
-async fn delegates_to_next_authenticator_with_request_metadata() {
-    let authenticators = DelegatingRequestAuthenticator::builder()
-        .authenticator(|parts: &Parts| {
-            assert_eq!(parts.headers["x-auth"], "checked");
-            ready(Ok::<_, AuthenticatorError>(
-                AuthenticationAttempt::<String>::NotApplicable,
-            ))
-        })
-        .authenticator(|parts: &Parts| {
-            assert_eq!(parts.headers["x-auth"], "checked");
-            ready(Ok::<_, AuthenticatorError>(
-                AuthenticationAttempt::Authenticated("alex".to_owned()),
-            ))
-        })
-        .build();
-    let calls = Arc::new(AtomicUsize::new(0));
-    let mut service = SecurityLayer::new(
-        authenticators,
         Arc::new(Authorizer {
             identity: Some("alex"),
             outcome: 0,

@@ -25,8 +25,8 @@ use user_password_auth::UsernamePasswordAuthenticationProvider;
 /// schema - skip this request with [`AuthenticationAttempt::NotApplicable`] as result.
 ///
 /// Otherwise, decode the credentials and pass them to the configured provider.
-/// A malformed Basic header, unknown user, or wrong password stops the authenticator chain and
-/// returns `401 Unauthorized` with a `WWW-Authenticate: Basic` challenge. This follows the
+/// A malformed Basic header, unknown user, or wrong password returns an authentication error
+/// with `401 Unauthorized` and a `WWW-Authenticate: Basic` challenge. This follows the
 /// [HTTP authentication requirements in RFC 9110](https://www.rfc-editor.org/rfc/rfc9110.html#section-11.4). A missing header or a different authentication
 /// scheme returns [`AuthenticationAttempt::NotApplicable`] so another authenticator can try the
 /// request.
