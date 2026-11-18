@@ -96,7 +96,7 @@ where
     P: AuthorizationProvider<Authentication = Auth<UserDetail>> + Clone + 'static,
     P::Error: 'static,
 {
-    SecurityLayer::new(authenticator.clone(), authorizer).authentication_entry_point(authenticator)
+    SecurityLayer::new_with_entry_point(authenticator, authorizer)
 }
 
 fn apply_logging_layers(router: Router) -> Router {

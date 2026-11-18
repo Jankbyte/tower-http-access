@@ -124,6 +124,35 @@ where
     A: RequestAuthenticator,
     P: AuthorizationProvider<Authentication = A::Authentication>,
 {
+    /// Use one value for both authentication and authentication-required responses.
+    ///
+    /// Clones the value once to configure the two roles. Pass an `Arc` to share an
+    /// authenticator that does not implement `Clone`, or whose state must be shared.
+    /// The entry point runs only when authorization requires authentication.
+    /// Use [`Self::new`] and [`Self::authentication_entry_point`] for separate values.
+    ///
+    /// ```
+    /// use tower_http_access_core::{SecurityLayer, authentication::RequestAuthenticator};
+    /// use tower_http_access_core::authorization::{AuthenticationEntryPoint, AuthorizationProvider};
+    ///
+    /// fn configure<A, P>(authenticator: A, authorizer: P)
+    /// where
+    ///     A: RequestAuthenticator + AuthenticationEntryPoint + Clone,
+    ///     P: AuthorizationProvider<Authentication = A::Authentication>,
+    /// {
+    ///     let layer = SecurityLayer::new_with_entry_point(authenticator, authorizer);
+    /// }
+    /// ```
+    pub fn new_with_entry_point(
+        authenticator: A,
+        authorizer: P,
+    ) -> SecurityLayer<A, P, DefaultAuthorizationFailureHandler, A>
+    where
+        A: AuthenticationEntryPoint + Clone,
+    {
+        Self::new(authenticator.clone(), authorizer).authentication_entry_point(authenticator)
+    }
+
     /// Combine an authenticator and a authorizer accepting the same identity type.
     pub fn new(authenticator: A, authorizer: P) -> Self {
         Self {
