@@ -2,10 +2,10 @@
 //!
 //! Authentication inspects a request and optionally produces a typed identity. Successful
 //! identities are passed directly to authorization. After access is allowed, the default
-//! [`AuthenticationSuccessHandler`] inserts them into request extensions for downstream handlers.
+//! [`crate::security_layer::AuthenticationSuccessHandler`] inserts them into request extensions for downstream handlers.
 //!
 //! Implement [`RequestAuthenticator`] for an authentication mechanism. Use
-//! [`crate::SecurityLayer`] to run authentication and authorization together.
+//! [`crate::security_layer::SecurityLayer`] to run authentication and authorization together.
 
 mod core;
 pub use core::{
@@ -15,9 +15,6 @@ pub use core::{
 
 #[cfg(feature = "axum")]
 mod axum;
-
-mod success;
-pub use success::{AuthenticationSuccessHandler, DefaultAuthenticationSuccessHandler};
 
 pub mod entry_point;
 pub use entry_point::{AuthenticationEntryPoint, DefaultAuthenticationEntryPoint};

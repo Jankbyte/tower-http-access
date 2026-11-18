@@ -1,6 +1,6 @@
 //! Request authorization and failure handling.
 //!
-//! [`crate::SecurityLayer`] passes the authenticated identity and request parts to
+//! [`crate::security_layer::SecurityLayer`] passes the authenticated identity and request parts to
 //! [`AuthorizationProvider`] to decide whether a request is allowed.
 //! Authentication requirements use [`crate::authentication::AuthenticationEntryPoint`]; other denials
 //! and provider errors use [`AuthorizationFailureHandler`].

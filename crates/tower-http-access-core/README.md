@@ -7,8 +7,8 @@
 Base abstractions for building HTTP authentication and authorization layers with Tower.
 
 [`RequestAuthenticator`](authentication::RequestAuthenticator) and [`AuthorizationProvider`](authorization::AuthorizationProvider) define your authentication mechanism and
-authorization policy. [`SecurityLayer`](SecurityLayer) connects them and wraps an inner Tower service in a
-[`SecurityService`](SecurityService), which coordinates each request:
+authorization policy. [`SecurityLayer`](security_layer::SecurityLayer) connects them and wraps an inner Tower service in a
+[`SecurityService`](security_layer::SecurityService), which coordinates each request:
 
 1. The service calls [`RequestAuthenticator`](authentication::RequestAuthenticator) with borrowed, immutable request parts (headers, URI, and
    extensions). The authenticator returns an identity, reports that authentication does not
@@ -17,9 +17,9 @@ authorization policy. [`SecurityLayer`](SecurityLayer) connects them and wraps a
    The provider decides whether to allow the request or deny access. Both components share
    the same `Authentication` type, so the identity flows directly between them.
 3. If allowed and authenticated, the service passes the identity to
-   [`AuthenticationSuccessHandler`](authentication::AuthenticationSuccessHandler). The default handler
+   [`AuthenticationSuccessHandler`](security_layer::AuthenticationSuccessHandler). The default handler
    stores it in request extensions as [`Authenticated<T>`](authentication::Authenticated). Configure
-   [`SecurityLayer::authentication_success_handler`] to use custom identity storage. The handler runs
+   [`security_layer::SecurityLayer::authentication_success_handler`] to use custom identity storage. The handler runs
    synchronously before forwarding the request to the inner service. Authentication errors, authorization denials,
    and provider errors produce a response without calling the inner service.
 

@@ -1,5 +1,5 @@
 use super::*;
-use crate::SecurityLayer;
+use tower_http_access_core::security_layer::SecurityLayer;
 use crate::authentication::Authenticated;
 use crate::authentication::AuthenticationAttempt;
 use crate::authentication::Reason;

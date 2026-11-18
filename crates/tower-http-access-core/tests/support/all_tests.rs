@@ -1,4 +1,4 @@
-use crate::SecurityLayer;
+use tower_http_access_core::security_layer::SecurityLayer;
 use crate::authentication::{AuthenticationAttempt, AuthenticatorError};
 use crate::authorization::AuthorizationDenial;
 use crate::authorization::AuthorizationProviderExt;

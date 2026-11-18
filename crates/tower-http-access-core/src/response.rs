@@ -6,7 +6,7 @@ use http::{Response, StatusCode};
 /// A buffered security response, independent of a web framework's body type.
 ///
 /// The default conversion maps this body's bytes into the inner service's body through
-/// `From<Bytes>`. [`crate::SecurityLayer::response_adapter`] can customize the entire response.
+/// `From<Bytes>`. [`crate::security_layer::SecurityLayer::response_adapter`] can customize the entire response.
 /// Successful inner responses are forwarded unchanged, including streaming bodies.
 ///
 /// ```
@@ -43,7 +43,7 @@ pub type SecurityResponse = Response<Bytes>;
 /// can construct that response. The adapter chooses how to handle custom statuses, messages,
 /// and metadata; arbitrary HTTP error bodies are not gRPC-encoded messages.
 ///
-/// Configure an adapter with [`crate::SecurityLayer::response_adapter`]. The combined layer invokes
+/// Configure an adapter with [`crate::security_layer::SecurityLayer::response_adapter`]. The combined layer invokes
 /// it for all security rejections; successful inner responses bypass it. The default
 /// [`DefaultSecurityResponseAdapter`] preserves HTTP metadata and converts only the body through
 /// `From<Bytes>`. No protocol-specific adapters are supplied.
@@ -63,7 +63,7 @@ pub trait SecurityResponseAdapter<B> {
     fn adapt(&self, response: SecurityResponse) -> Response<B>;
 }
 
-/// Default HTTP conversion for [`crate::SecurityLayer`].
+/// Default HTTP conversion for [`crate::security_layer::SecurityLayer`].
 ///
 /// Preserves the status, headers, and extensions, converting only the buffered response body.
 #[derive(Clone, Copy, Debug, Default)]

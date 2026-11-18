@@ -36,7 +36,7 @@ use std::{num::NonZeroUsize, sync::Arc};
 
 use argon2::Argon2;
 use axum::{Router, http::Method, routing::get};
-use tower_http_access_core::SecurityLayer;
+use tower_http_access_core::security_layer::SecurityLayer;
 use tower_http_access_core::authentication::{Authenticated, RequestAuthenticatorExt};
 use tower_http_access_authorizers::request::RequestAuthorizationProvider;
 use tower_http_access_authorizers::authorities::{AuthorityRuleExt, HasAuthorities};
@@ -177,7 +177,7 @@ a rule for `/v1/notes/1` will not match. Attach security after nesting to use fu
 
 ```rust,no_run
 use axum::{Router, routing::get};
-# use tower_http_access_core::SecurityLayer;
+# use tower_http_access_core::security_layer::SecurityLayer;
 # use tower_http_access_core::authentication::AuthenticationAttempt;
 # use tower_http_access_core::authentication::AuthenticatorError;
 # use tower_http_access_core::authorization::AuthenticatedAuthorizationProvider;
@@ -298,7 +298,7 @@ not need to implement `Clone`; the layer shares them through `Arc`.
 
 ```rust,no_run
 # use axum::{extract::Request, http::{StatusCode, request::Parts}};
-# use tower_http_access_core::SecurityLayer;
+# use tower_http_access_core::security_layer::SecurityLayer;
 # use tower_http_access_core::authentication::AuthenticationAttempt;
 # use tower_http_access_core::authentication::AuthenticatorError;
 # use tower_http_access_core::authorization::AuthenticatedAuthorizationProvider;

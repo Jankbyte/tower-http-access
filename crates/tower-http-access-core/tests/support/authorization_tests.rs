@@ -1,5 +1,5 @@
 use super::*;
-use crate::SecurityLayer;
+use tower_http_access_core::security_layer::SecurityLayer;
 #[cfg(feature = "axum")]
 use crate::authentication::Authenticated;
 use crate::authentication::{AuthenticationAttempt, AuthenticatorError};

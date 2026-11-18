@@ -5,7 +5,7 @@ use futures_util::future::BoxFuture;
 use http::{StatusCode, request::Parts};
 use std::{future::Future, sync::Arc};
 
-/// The authentication entrypoint, that uses by [`crate::SecurityService`]
+/// The authentication entrypoint, that uses by [`crate::security_layer::SecurityService`]
 /// to delegate unauthenticated requests. It borrows request metadata and returns buffered bytes.
 /// The middleware converts the response body to the type expected by the inner service.
 ///

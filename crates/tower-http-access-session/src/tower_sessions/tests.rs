@@ -9,9 +9,9 @@ use axum::{
 };
 use std::sync::Arc;
 use tower::ServiceExt;
-use tower_http_access_core::SecurityLayer;
 use tower_http_access_core::authentication::Authenticated;
 use tower_http_access_core::authorization::AuthenticatedAuthorizationProvider;
+use tower_http_access_core::security_layer::SecurityLayer;
 
 struct Users;
 impl SessionIdentityProvider for Users {

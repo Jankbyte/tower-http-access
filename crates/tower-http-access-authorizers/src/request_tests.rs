@@ -306,7 +306,7 @@ async fn custom_manager_errors_preserve_source_and_return_internal_server_error(
             axum::routing::get(|| async { StatusCode::OK }),
         )
         .layer(
-            tower_http_access_core::SecurityLayer::new(
+            tower_http_access_core::security_layer::SecurityLayer::new(
                 |_: &Parts| async {
                     Ok::<_, tower_http_access_core::authentication::AuthenticatorError>(
                         tower_http_access_core::authentication::AuthenticationAttempt::<TestIdentity>::NotApplicable,
@@ -472,7 +472,7 @@ async fn middleware_matchers_borrow_original_headers_and_extensions() {
             }),
         )
         .layer(
-            tower_http_access_core::SecurityLayer::new(
+            tower_http_access_core::security_layer::SecurityLayer::new(
                 |_: &Parts| async {
                     Ok::<_, tower_http_access_core::authentication::AuthenticatorError>(
                         tower_http_access_core::authentication::AuthenticationAttempt::<TestIdentity>::NotApplicable,
@@ -626,8 +626,8 @@ async fn string_request_rules_integrate_with_combined_layer_without_basic_authen
         extract::Request,
     };
     use tower_http_access_core::{
-        SecurityLayer,
         authentication::{Authenticated, AuthenticationAttempt, AuthenticatorError},
+        security_layer::SecurityLayer,
     };
     use tower_service::Service;
 

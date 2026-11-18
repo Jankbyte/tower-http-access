@@ -226,7 +226,7 @@ async fn explicit_fallbacks() {
 #[cfg(feature = "axum")]
 #[tokio::test]
 async fn different_identity_types_work_with_axum_and_service_builder() {
-    use crate::SecurityLayer;
+    use tower_http_access_core::security_layer::SecurityLayer;
     use crate::authentication::Authenticated;
     use crate::authentication::AuthenticationAttempt;
     use crate::authentication::AuthenticatorError;

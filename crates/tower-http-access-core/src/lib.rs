@@ -2,9 +2,8 @@
 
 pub mod authentication;
 pub mod authorization;
-mod combined;
 #[cfg(feature = "filter_chain")]
 pub mod filter_chain;
 mod response;
-pub use combined::{SecurityLayer, SecurityService};
+pub mod security_layer;
 pub use response::{DefaultSecurityResponseAdapter, SecurityResponse, SecurityResponseAdapter};

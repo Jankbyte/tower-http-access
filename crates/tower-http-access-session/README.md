@@ -48,7 +48,7 @@ futures-util = "0.3"
 use std::{convert::Infallible, sync::Arc};
 use axum::{Router, routing::get};
 use futures_util::future::BoxFuture;
-use tower_http_access_core::SecurityLayer;
+use tower_http_access_core::security_layer::SecurityLayer;
 use tower_http_access_core::authentication::Authenticated;
 use tower_http_access_core::authorization::AuthenticatedAuthorizationProvider;
 use tower_http_access_session::tower_sessions::{SessionIdentityProvider, SessionRequestAuthenticator};

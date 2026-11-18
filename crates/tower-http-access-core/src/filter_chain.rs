@@ -11,7 +11,7 @@
 //! ```
 //! use axum::{Router, routing::get};
 //! use tower_http_access_core::filter_chain::SecurityChainLayer;
-//! use tower_http_access_core::SecurityLayer;
+//! use tower_http_access_core::security_layer::SecurityLayer;
 //! use tower_http_access_core::authentication::AuthenticationAttempt;
 //! use tower_http_access_core::authentication::AuthenticatorError;
 //! use tower_http_access_core::authorization::AuthenticatedAuthorizationProvider;

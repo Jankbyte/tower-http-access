@@ -1,4 +1,4 @@
-pub use tower_http_access_core::{SecurityLayer, authentication};
+pub use tower_http_access_core::authentication;
 
 mod response {
     use bytes::Bytes;
@@ -56,7 +56,7 @@ mod combined {
         Authenticated, AuthenticationAttempt, RequestAuthenticator,
     };
     use tower_http_access_core::authorization::*;
-    use tower_http_access_core::*;
+    use tower_http_access_core::security_layer::SecurityLayer;
     use tower_layer::Layer;
     use tower_service::Service;
     mod tests {

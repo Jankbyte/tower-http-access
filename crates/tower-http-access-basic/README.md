@@ -42,7 +42,7 @@ use std::{num::NonZeroUsize, sync::Arc};
 
 use argon2::Argon2;
 use axum::{Router, http::Method, routing::get};
-use tower_http_access_core::SecurityLayer;
+use tower_http_access_core::security_layer::SecurityLayer;
 use tower_http_access_core::authentication::{Authenticated, RequestAuthenticatorExt};
 use tower_http_access_authorizers::request::RequestAuthorizationProvider;
 use tower_http_access_authorizers::authorities::{AuthorityRuleExt, HasAuthorities};

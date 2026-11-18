@@ -1,11 +1,12 @@
 //! Authentication and authorization in a single Tower service.
+use crate::authentication::Authenticated;
 #[cfg(feature = "authorizers")]
 use crate::authorization::AuthenticatedAuthorizationProvider;
 use crate::{
     DefaultSecurityResponseAdapter, SecurityResponseAdapter,
     authentication::{
-        AuthenticationAttempt, AuthenticationEntryPoint, AuthenticationSuccessHandler,
-        DefaultAuthenticationEntryPoint, DefaultAuthenticationSuccessHandler, RequestAuthenticator,
+        AuthenticationAttempt, AuthenticationEntryPoint, DefaultAuthenticationEntryPoint,
+        RequestAuthenticator,
     },
     authorization::{
         AuthorizationDecision, AuthorizationDenial, AuthorizationFailure,
@@ -13,7 +14,8 @@ use crate::{
     },
 };
 use futures_util::future::BoxFuture;
-use http::{Request, Response};
+use http::{Request, Response, request::Parts};
+use std::sync::Arc;
 use std::task::{Context, Poll};
 use tower_layer::Layer;
 use tower_service::Service;
@@ -36,7 +38,7 @@ use tower_service::Service;
 /// The authenticator's result is passed directly to the authorizer, without using
 /// request extensions to communicate between stages. After authorization allows the request,
 /// the success handler receives the identity. By default, it inserts
-/// [`Authenticated`](crate::authentication::Authenticated) for downstream handlers.
+/// [`Authenticated`] for downstream handlers.
 ///
 /// # Authentication contract
 ///
@@ -55,7 +57,7 @@ use tower_service::Service;
 /// use tower_http_access_core::authentication::AuthenticationAttempt;
 /// use tower_http_access_core::authentication::AuthenticatorError;
 /// use tower_http_access_core::authorization::AuthenticatedAuthorizationProvider;
-/// use tower_http_access_core::SecurityLayer;
+/// use tower_http_access_core::security_layer::SecurityLayer;
 ///
 /// let authenticator = |_: &Parts| async {
 ///     Ok::<_, AuthenticatorError>(AuthenticationAttempt::Authenticated("alex".to_owned()))
@@ -105,7 +107,7 @@ impl<A: RequestAuthenticator>
     ///
     /// ```
     /// use http::request::Parts;
-    /// use tower_http_access_core::{SecurityLayer, authentication::{AuthenticationAttempt, AuthenticatorError}};
+    /// use tower_http_access_core::{security_layer::SecurityLayer, authentication::{AuthenticationAttempt, AuthenticatorError}};
     ///
     /// let security = SecurityLayer::authenticated(|_: &Parts| async {
     ///     Ok::<_, AuthenticatorError>(AuthenticationAttempt::Authenticated("alex".to_owned()))
@@ -130,7 +132,7 @@ where
     /// Use [`Self::new`] and [`Self::authentication_entry_point`] for separate values.
     ///
     /// ```
-    /// use tower_http_access_core::{SecurityLayer, authentication::RequestAuthenticator};
+    /// use tower_http_access_core::{security_layer::SecurityLayer, authentication::RequestAuthenticator};
     /// use tower_http_access_core::{authentication::AuthenticationEntryPoint, authorization::AuthorizationProvider};
     ///
     /// fn configure<A, P>(authenticator: A, authorizer: P)
@@ -176,7 +178,7 @@ impl<A, P, H, E, R, C> SecurityLayer<A, P, H, E, R, C> {
     ///
     /// ```
     /// use http::request::Parts;
-    /// use tower_http_access_core::{SecurityLayer, authentication::{AuthenticationAttempt, AuthenticatorError}};
+    /// use tower_http_access_core::{security_layer::SecurityLayer, authentication::{AuthenticationAttempt, AuthenticatorError}};
     /// use tower_http_access_core::authorization::AuthenticatedAuthorizationProvider;
     ///
     /// #[derive(Clone)]
@@ -233,7 +235,7 @@ impl<A, P, H, E, R, C> SecurityLayer<A, P, H, E, R, C> {
     /// `Clone + Send + Sync + 'static`.
     ///
     /// ```
-    /// use tower_http_access_core::{SecurityLayer, SecurityResponseAdapter};
+    /// use tower_http_access_core::{security_layer::SecurityLayer, SecurityResponseAdapter};
     /// use tower_http_access_core::authentication::{AuthenticationAttempt, AuthenticatorError};
     /// use tower_http_access_core::authorization::AuthenticatedAuthorizationProvider;
     /// use http::request::Parts;
@@ -396,5 +398,47 @@ where
                 )),
             }
         })
+    }
+}
+
+/// Consumes an authenticated identity after authorization allows the request.
+///
+/// Called once for an allowed, authenticated request, before invoking the inner
+/// service. Anonymous requests, authentication failures, and authorization denials
+/// or errors skip this handler. Authorization receives the original identity before
+/// any changes made here. Implementations may update headers, extensions, or shared
+/// application state synchronously; they must not perform blocking I/O.
+///
+/// A custom handler replaces the default insertion of [`Authenticated<A>`]. It must
+/// insert that extension itself if downstream handlers still need the extractor.
+/// Configure it with [`crate::security_layer::SecurityLayer::authentication_success_handler`].
+pub trait AuthenticationSuccessHandler<A>: Send + Sync + 'static {
+    fn on_success(&self, authentication: A, parts: &mut Parts);
+}
+
+impl<A, F> AuthenticationSuccessHandler<A> for F
+where
+    F: Fn(A, &mut Parts) + Send + Sync + 'static,
+{
+    fn on_success(&self, authentication: A, parts: &mut Parts) {
+        self(authentication, parts);
+    }
+}
+
+impl<A, H: AuthenticationSuccessHandler<A> + ?Sized> AuthenticationSuccessHandler<A> for Arc<H> {
+    fn on_success(&self, authentication: A, parts: &mut Parts) {
+        self.as_ref().on_success(authentication, parts);
+    }
+}
+
+/// Stores the identity as [`Authenticated<A>`] in request extensions.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DefaultAuthenticationSuccessHandler;
+
+impl<A: Clone + Send + Sync + 'static> AuthenticationSuccessHandler<A>
+    for DefaultAuthenticationSuccessHandler
+{
+    fn on_success(&self, authentication: A, parts: &mut Parts) {
+        parts.extensions.insert(Authenticated(authentication));
     }
 }
