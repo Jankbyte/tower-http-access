@@ -11,7 +11,7 @@
 
 mod core;
 pub use core::{
-    Authenticated, AuthenticationAttempt, AuthenticationResult, AuthenticatorError, BoxError,
+    Authenticated, AuthenticationAttempt, AuthenticationResult, AuthenticatorError,
     MapAuthentication, Reason, RequestAuthenticator, RequestAuthenticatorExt,
 };
 
