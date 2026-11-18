@@ -4,10 +4,10 @@ use http::{HeaderValue, StatusCode, Uri, header, request::Parts};
 use serde::de::DeserializeOwned;
 use std::{error::Error, future::Future};
 use tower_http_access_core::SecurityResponse;
+use tower_http_access_core::authentication::AuthenticationEntryPoint;
 use tower_http_access_core::authentication::{
     AuthenticationAttempt, AuthenticatorError, RequestAuthenticator,
 };
-use tower_http_access_core::authorization::AuthenticationEntryPoint;
 
 type SessionIdExtractor<Id> = dyn Fn(Session) -> BoxFuture<'static, Result<Option<Id>, tower_sessions::session::Error>>
     + Send

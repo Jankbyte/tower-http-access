@@ -317,7 +317,7 @@ async fn mapped_provider_preserves_handler_identity() {
 async fn authentication_entry_point_awaits_shared_state_and_borrows_request() {
     struct LockedEntryPoint(tokio::sync::Mutex<()>);
 
-    impl crate::authorization::AuthenticationEntryPoint for LockedEntryPoint {
+    impl crate::authentication::AuthenticationEntryPoint for LockedEntryPoint {
         fn commence<'a>(&'a self, request: &'a Parts) -> BoxFuture<'a, tower_http_access_core::SecurityResponse> {
             Box::pin(async move {
                 let _guard = self.0.lock().await;

@@ -4,13 +4,12 @@ use crate::authorization::AuthenticatedAuthorizationProvider;
 use crate::{
     DefaultSecurityResponseAdapter, SecurityResponseAdapter,
     authentication::{
-        AuthenticationAttempt, AuthenticationSuccessHandler, DefaultAuthenticationSuccessHandler,
-        RequestAuthenticator,
+        AuthenticationAttempt, AuthenticationEntryPoint, AuthenticationSuccessHandler,
+        DefaultAuthenticationEntryPoint, DefaultAuthenticationSuccessHandler, RequestAuthenticator,
     },
     authorization::{
-        AuthenticationEntryPoint, AuthorizationDecision, AuthorizationDenial, AuthorizationFailure,
-        AuthorizationFailureHandler, AuthorizationProvider, DefaultAuthenticationEntryPoint,
-        DefaultAuthorizationFailureHandler,
+        AuthorizationDecision, AuthorizationDenial, AuthorizationFailure,
+        AuthorizationFailureHandler, AuthorizationProvider, DefaultAuthorizationFailureHandler,
     },
 };
 use futures_util::future::BoxFuture;
@@ -132,7 +131,7 @@ where
     ///
     /// ```
     /// use tower_http_access_core::{SecurityLayer, authentication::RequestAuthenticator};
-    /// use tower_http_access_core::authorization::{AuthenticationEntryPoint, AuthorizationProvider};
+    /// use tower_http_access_core::{authentication::AuthenticationEntryPoint, authorization::AuthorizationProvider};
     ///
     /// fn configure<A, P>(authenticator: A, authorizer: P)
     /// where

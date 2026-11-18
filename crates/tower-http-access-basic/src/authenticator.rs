@@ -4,8 +4,8 @@ use http::{StatusCode, header, request::Parts};
 use std::{error::Error, future::Future, pin::Pin};
 use tower_http_access_core::{
     SecurityResponse,
+    authentication::AuthenticationEntryPoint,
     authentication::{AuthenticationAttempt, AuthenticatorError, Reason, RequestAuthenticator},
-    authorization::AuthenticationEntryPoint,
 };
 use user_password_auth::UsernamePasswordAuthenticationProvider;
 

@@ -18,3 +18,13 @@ mod axum;
 
 mod success;
 pub use success::{AuthenticationSuccessHandler, DefaultAuthenticationSuccessHandler};
+
+pub mod entry_point;
+pub use entry_point::{AuthenticationEntryPoint, DefaultAuthenticationEntryPoint};
+
+#[cfg(feature = "request_matcher")]
+mod delegating;
+#[cfg(feature = "request_matcher")]
+pub use delegating::{
+    DelegatingAuthenticationEntryPoint, DelegatingAuthenticationEntryPointBuilder,
+};

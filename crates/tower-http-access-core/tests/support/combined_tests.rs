@@ -380,7 +380,7 @@ fn providers_clone_without_requiring_clone_identities() {
 #[tokio::test]
 async fn success_handler_runs_after_authorization_and_replaces_default_identity_storage() {
     use crate::authentication::AuthenticationSuccessHandler;
-    use tower_http_access_core::{DefaultSecurityResponseAdapter, authorization::{DefaultAuthenticationEntryPoint, DefaultAuthorizationFailureHandler}};
+    use tower_http_access_core::{DefaultSecurityResponseAdapter, authentication::DefaultAuthenticationEntryPoint, authorization::DefaultAuthorizationFailureHandler};
 
     #[derive(Clone)]
     struct CurrentUser(String);

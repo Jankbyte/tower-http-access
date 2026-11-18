@@ -5,7 +5,7 @@ use futures_util::future::BoxFuture;
 use http::{StatusCode, request::Parts};
 use std::{error::Error, future::Future, sync::Arc};
 
-use crate::authorization::AuthenticationEntryPoint;
+use super::AuthenticationEntryPoint;
 
 pub type BoxError = Box<dyn Error + Send + Sync>;
 

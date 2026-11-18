@@ -23,7 +23,7 @@ authorization policy. [`SecurityLayer`](SecurityLayer) connects them and wraps a
    synchronously before forwarding the request to the inner service. Authentication errors, authorization denials,
    and provider errors produce a response without calling the inner service.
 
-An authentication-required denial invokes the configured [`AuthenticationEntryPoint`](authorization::AuthenticationEntryPoint);
+An authentication-required denial invokes the configured [`AuthenticationEntryPoint`](authentication::AuthenticationEntryPoint);
 other denials and authorization errors go through [`AuthorizationFailureHandler`](authorization::AuthorizationFailureHandler).
 This keeps credential handling, access policy, and application request handling separate.
 

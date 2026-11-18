@@ -1,7 +1,7 @@
 //! Request-based selection of authentication entry points.
 
 use crate::SecurityResponse;
-use crate::authorization::AuthenticationEntryPoint;
+use crate::authentication::AuthenticationEntryPoint;
 use futures_util::future::BoxFuture;
 use http::request::Parts;
 use http_request_matcher::RequestMatcher;
@@ -71,7 +71,7 @@ impl AuthenticationEntryPoint for DelegatingAuthenticationEntryPoint {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::authorization::DefaultAuthenticationEntryPoint;
+    use crate::authentication::DefaultAuthenticationEntryPoint;
     use http::{Request, StatusCode};
     use http_request_matcher::PathPatternRequestMatcher;
 
