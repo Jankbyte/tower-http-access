@@ -3,7 +3,7 @@
 use crate::{SecurityResponse, response::empty_response};
 use futures_util::future::BoxFuture;
 use http::{StatusCode, request::Parts};
-use std::{future::Future, marker::PhantomData, pin::Pin, sync::Arc};
+use std::{future::Future, marker::PhantomData, sync::Arc};
 
 /// The authentication entrypoint, that uses by [`crate::SecurityService`]
 /// to delegate unauthenticated requests. It borrows request metadata and returns buffered bytes.
@@ -63,7 +63,7 @@ pub trait AuthorizationProvider: Send + Sync {
         &'a self,
         authentication: Option<&'a Self::Authentication>,
         request: &'a Parts,
-    ) -> Pin<Box<dyn Future<Output = Result<AuthorizationDecision, Self::Error>> + Send + 'a>>;
+    ) -> BoxFuture<'a, Result<AuthorizationDecision, Self::Error>>;
 }
 
 /// Forwards authorization to a shared provider, including trait objects.
