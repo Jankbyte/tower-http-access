@@ -3,11 +3,11 @@
 Synchronous HTTP request matching for routing, middleware selection, and policies.
 Matchers inspect `http::request::Parts` without consuming the request body.
 
-- `RequestMatcher`: shared matching interface, with support for `Arc`.
-- `PathPatternRequestMatcher`: compiled path patterns with optional method restrictions.
-- `MediaTypeRequestMatcher`: matching against the request's `Accept` headers.
-- `OrRequestMatcher`: combines two matchers with short-circuit evaluation.
-- `AnyRequestMatcher`: matches every request.
+- [`RequestMatcher`] - shared matching interface, with support for `Arc`.
+- [`PathPatternRequestMatcher`] - compiled path patterns with optional method restrictions.
+- [`MediaTypeRequestMatcher`] - matching against the request's `Accept` headers.
+- [`OrRequestMatcher`] - combines two matchers with short-circuit evaluation.
+- [`AnyRequestMatcher`] - matches every request.
 
 ```rust
 use http::{Method, Request};

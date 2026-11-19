@@ -1,0 +1,10 @@
+[package]
+name = "tower-http-access"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+tower-http-access-core.workspace = true

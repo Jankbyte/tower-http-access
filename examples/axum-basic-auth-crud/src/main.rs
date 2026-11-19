@@ -75,6 +75,65 @@ async fn main() -> Result<(), Box<dyn StdError + Send + Sync>> {
     Ok(())
 }
 
+async fn get_authenticated(maybe_user_detail: Option<Authenticated<Auth<UserDetail>>>) -> String {
+    tracing::debug!("authenticated as {:?}", maybe_user_detail);
+    match maybe_user_detail {
+        Some(Authenticated(Auth(ud))) => {
+            let roles = &ud.authorities;
+            format!("Hello, {}! Roles: {:?}", ud.username, roles)
+        }
+        None => "Hello, anonymous!".to_owned(),
+    }
+}
+
+fn create_authorizer() -> impl AuthorizationProvider<Authentication = Auth<UserDetail>> {
+    RequestAuthorizationProvider::builder()
+        .method_matchers(Method::GET, "/v1/notes/1")
+        .permit_all() // any user can read first note
+        .method_matchers(Method::GET, "/v1/notes/{id}")
+        .has_authority("ReadNote") // other notes can be read only with `ReadNote` rule
+        .method_matchers(Method::DELETE, "/v1/notes/{id}")
+        .has_authority("DeleteNote")
+        .method_matchers(Method::PUT, "/v1/notes/{id}")
+        .has_authority("ReplaceNote")
+        .method_matchers(Method::POST, "/v1/notes")
+        .has_authority("CreateNote")
+        .method_matchers(Method::GET, "/v1/auth/info")
+        .permit_all()
+        .any_request()
+        .deny_all()
+        .build()
+        .expect("build authorization provider")
+}
+
+async fn create_users_service<T: AsyncPasswordHasher>(
+    hasher: &T,
+) -> impl UserDetailService + use<T> {
+    let users = vec![
+        UserDetail::new("reader", "reader123", vec![Authority::new("ReadNote")]),
+        UserDetail::new("creator", "creator123", vec![Authority::new("CreateNote")]),
+        UserDetail::new("remover", "remover123", vec![Authority::new("DeleteNote")]),
+        UserDetail::new(
+            "replacer",
+            "replacer123",
+            vec![Authority::new("ReplaceNote")],
+        ),
+        UserDetail::new(
+            "admin",
+            "admin123",
+            vec![
+                Authority::new("ReadNote"),
+                Authority::new("DeleteNote"),
+                Authority::new("ReplaceNote"),
+                Authority::new("CreateNote"),
+            ],
+        ),
+    ];
+    InMemoryUserDetailService::new((hasher, users))
+        .await
+        .unwrap()
+}
+
 fn create_security_layer<A, P>(
     authenticator: A,
     authorizer: P,
@@ -142,37 +201,6 @@ impl HasAuthorities for Auth<UserDetail> {
     }
 }
 
-fn create_authorizer() -> impl AuthorizationProvider<Authentication = Auth<UserDetail>> {
-    RequestAuthorizationProvider::builder()
-        .method_matchers(Method::GET, "/v1/notes/1")
-        .permit_all() // any user can read first note
-        .method_matchers(Method::GET, "/v1/notes/{id}")
-        .has_authority("ReadNote") // other notes can be read only with `ReadNote` rule
-        .method_matchers(Method::DELETE, "/v1/notes/{id}")
-        .has_authority("DeleteNote")
-        .method_matchers(Method::PUT, "/v1/notes/{id}")
-        .has_authority("ReplaceNote")
-        .method_matchers(Method::POST, "/v1/notes")
-        .has_authority("CreateNote")
-        .method_matchers(Method::GET, "/v1/auth/info")
-        .permit_all()
-        .any_request()
-        .deny_all()
-        .build()
-        .expect("build authorization provider")
-}
-
-async fn get_authenticated(maybe_user_detail: Option<Authenticated<Auth<UserDetail>>>) -> String {
-    tracing::debug!("authenticated as {:?}", maybe_user_detail);
-    match maybe_user_detail {
-        Some(Authenticated(Auth(ud))) => {
-            let roles = &ud.authorities;
-            format!("Hello, {}! Roles: {:?}", ud.username, roles)
-        }
-        None => "Hello, anonymous!".to_owned(),
-    }
-}
-
 async fn create_basic_authenticator()
 -> impl RequestAuthenticator<Authentication = Auth<UserDetail>> + AuthenticationEntryPoint + Clone {
     let provider = create_up_provider().await;
@@ -192,32 +220,4 @@ fn create_password_hasher(concurrency: usize) -> impl AsyncPasswordVerifier + As
     let argon2 = Argon2::default();
     let handle = Handle::current();
     AsyncStringPasswordManager::new(handle, argon2, NonZeroUsize::new(concurrency).unwrap())
-}
-
-async fn create_users_service<T: AsyncPasswordHasher>(
-    hasher: &T,
-) -> impl UserDetailService + use<T> {
-    let users = vec![
-        UserDetail::new("reader", "reader123", vec![Authority::new("ReadNote")]),
-        UserDetail::new("creator", "creator123", vec![Authority::new("CreateNote")]),
-        UserDetail::new("remover", "remover123", vec![Authority::new("DeleteNote")]),
-        UserDetail::new(
-            "replacer",
-            "replacer123",
-            vec![Authority::new("ReplaceNote")],
-        ),
-        UserDetail::new(
-            "admin",
-            "admin123",
-            vec![
-                Authority::new("ReadNote"),
-                Authority::new("DeleteNote"),
-                Authority::new("ReplaceNote"),
-                Authority::new("CreateNote"),
-            ],
-        ),
-    ];
-    InMemoryUserDetailService::new((hasher, users))
-        .await
-        .unwrap()
 }

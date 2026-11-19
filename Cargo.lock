@@ -1353,6 +1353,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "tower-http-access"
+version = "0.0.1"
+dependencies = [
+ "tower-http-access-core",
+]
+
+[[package]]
 name = "tower-http-access-authorizers"
 version = "0.0.1"
 dependencies = [

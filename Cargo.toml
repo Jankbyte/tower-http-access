@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "crates/tower-http-access",
     "crates/tower-http-access-authorizers",
     "crates/http-request-matcher",
     "crates/user-password-auth",
@@ -8,7 +9,8 @@ members = [
     "crates/tower-http-access-session",
     "crates/tower-http-access-form-login",
     "examples/axum-basic-auth-crud",
-    "examples/axum-server-usage"
+    "examples/axum-server-usage",
+    #"examples/axum-session-form-login"
 ]
 
 resolver = "3"

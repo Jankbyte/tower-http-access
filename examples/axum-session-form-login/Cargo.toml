@@ -1,0 +1,14 @@
+[package]
+name = "axum-session-form-login"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[dependencies]
+tower-http-access-core = { workspace = true, features = ["authorizers", "axum"] }
+user-password-auth = { workspace = true, features = ["tracing", "user_details"] }
+tower-http-access-authorizers = { workspace = true, features = ["authorities", "request_matcher"] }
+tokio = { workspace = true, features = ["full"] }
+tower-http-access-session = {workspace = true, features = ["form_login","tower_sessions" ] }
+argon2.workspace = true
+axum.workspace = true
