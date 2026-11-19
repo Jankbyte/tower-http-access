@@ -1,4 +1,5 @@
 use super::*;
+use crate::entry_point::RedirectAuthenticationEntryPoint;
 use crate::tower_sessions::SessionStoredIdentity;
 use ::tower_sessions::{MemoryStore, SessionManagerLayer};
 use axum::{
@@ -7,6 +8,7 @@ use axum::{
     http::{Request, StatusCode},
     routing::get,
 };
+use http::header;
 use std::sync::Arc;
 use tower::ServiceExt;
 use tower_http_access_core::authentication::Authenticated;
@@ -140,17 +142,13 @@ async fn initialization_creates_anonymous_session_without_rewriting_existing_ses
 #[tokio::test]
 async fn login_entry_point_redirects_only_when_authentication_is_required() {
     for path in ["/login", "/account/login?next=%2Fprivate"] {
-        let auth = Arc::new(
-            SessionRequestAuthenticator::new(Users)
-                .login_page_path(path)
-                .unwrap(),
-        );
+        let auth = Arc::new(SessionRequestAuthenticator::new(Users));
         let app = Router::new().route("/", get(|| async { "allowed" })).layer(
             SecurityLayer::new(
                 Arc::clone(&auth),
                 AuthenticatedAuthorizationProvider::<String>::new(),
             )
-            .authentication_entry_point(auth),
+            .authentication_entry_point(RedirectAuthenticationEntryPoint::new(path).unwrap()),
         );
         for (user, status) in [
             (None, StatusCode::FOUND),
@@ -174,32 +172,6 @@ async fn login_entry_point_redirects_only_when_authentication_is_required() {
     }
 }
 
-#[tokio::test]
-async fn login_paths_reject_external_and_invalid_locations() {
-    for path in [
-        "",
-        "login",
-        "https://evil.example/login",
-        "//evil.example/login",
-        "/\\evil.example",
-        "/login\r\nInjected: true",
-        "/login#fragment",
-    ] {
-        assert!(
-            SessionRequestAuthenticator::new(Users)
-                .login_page_path(path)
-                .is_err(),
-            "{path:?}"
-        );
-    }
-    let (parts, _) = Request::new(()).into_parts();
-    let response = SessionRequestAuthenticator::new(Users)
-        .commence(&parts)
-        .await;
-    assert_eq!(response.status(), StatusCode::FOUND);
-    assert_eq!(response.headers()[header::LOCATION], "/login");
-}
-
 // Deliberately has no Deserialize implementation.
 struct ApplicationId(String);
 
@@ -219,19 +191,16 @@ impl SessionIdentityProvider for ApplicationUsers {
 
 #[tokio::test]
 async fn custom_extractor_supports_non_deserializable_ids_and_preserves_error_semantics() {
-    let authenticator = Arc::new(
-        SessionRequestAuthenticator::new_with_extractor(ApplicationUsers, |session| async move {
-            Ok(session.get::<String>("account").await?.map(ApplicationId))
-        })
-        .login_page_path("/sign-in")
-        .unwrap(),
-    );
+    let authenticator = Arc::new(SessionRequestAuthenticator::new_with_extractor(
+        ApplicationUsers,
+        |session| async move { Ok(session.get::<String>("account").await?.map(ApplicationId)) },
+    ));
     let app = Router::new().route("/", get(|| async { "allowed" })).layer(
         SecurityLayer::new(
             Arc::clone(&authenticator),
             AuthenticatedAuthorizationProvider::<String>::new(),
         )
-        .authentication_entry_point(authenticator),
+        .authentication_entry_point(RedirectAuthenticationEntryPoint::new("/sign-in").unwrap()),
     );
     for (value, expected) in [
         (None, StatusCode::FOUND),

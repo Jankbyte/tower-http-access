@@ -1,10 +1,8 @@
 use ::tower_sessions::Session;
 use futures_util::future::BoxFuture;
-use http::{HeaderValue, StatusCode, Uri, header, request::Parts};
+use http::request::Parts;
 use serde::de::DeserializeOwned;
 use std::{error::Error, future::Future};
-use tower_http_access_core::SecurityResponse;
-use tower_http_access_core::authentication::AuthenticationEntryPoint;
 use tower_http_access_core::authentication::{
     AuthenticationAttempt, AuthenticatorError, RequestAuthenticator,
 };
@@ -72,7 +70,6 @@ pub trait SessionIdentityProvider: Send + Sync {
 pub struct SessionRequestAuthenticator<P: SessionIdentityProvider> {
     provider: P,
     extract_id: Box<SessionIdExtractor<P::Id>>,
-    login_page: HeaderValue,
 }
 
 impl<P: SessionIdentityProvider> SessionRequestAuthenticator<P> {
@@ -100,31 +97,7 @@ impl<P: SessionIdentityProvider> SessionRequestAuthenticator<P> {
         Self {
             provider,
             extract_id: Box::new(move |session| Box::pin(extract_id(session))),
-            login_page: HeaderValue::from_static("/login"),
         }
-    }
-
-    /// Configure a same-origin absolute login path, such as `/account/login`.
-    /// Defaults to `/login`. Relative paths, external URLs, and network-path URLs
-    /// are rejected. Query strings are allowed.
-    ///
-    /// Share this authenticator with `SecurityLayer::authentication_entry_point`
-    /// to issue a 302 redirect when authorization requires authentication. Keep
-    /// the login endpoint accessible to anonymous users to avoid redirect loops.
-    pub fn login_page_path(mut self, path: impl AsRef<str>) -> Result<Self, InvalidLoginPagePath> {
-        let path = path.as_ref();
-        let uri = path.parse::<Uri>().map_err(|_| InvalidLoginPagePath)?;
-        if !path.starts_with('/')
-            || path.starts_with("//")
-            || path.contains('\\')
-            || path.contains('#')
-            || uri.scheme().is_some()
-            || uri.authority().is_some()
-        {
-            return Err(InvalidLoginPagePath);
-        }
-        self.login_page = HeaderValue::from_str(path).map_err(|_| InvalidLoginPagePath)?;
-        Ok(self)
     }
 
     /// Replace the extractor with `Session::get` using the specified key.
@@ -138,32 +111,6 @@ impl<P: SessionIdentityProvider> SessionRequestAuthenticator<P> {
             Box::pin(async move { session.get::<P::Id>(&key).await })
         });
         self
-    }
-}
-
-/// The configured login location must be a valid same-origin absolute path.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct InvalidLoginPagePath;
-
-impl std::fmt::Display for InvalidLoginPagePath {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("login page must be a same-origin absolute path")
-    }
-}
-impl Error for InvalidLoginPagePath {}
-
-impl<P: SessionIdentityProvider + 'static> AuthenticationEntryPoint
-    for SessionRequestAuthenticator<P>
-{
-    fn commence<'a>(&'a self, _: &'a Parts) -> BoxFuture<'a, SecurityResponse> {
-        Box::pin(async move {
-            let mut response = SecurityResponse::new(Default::default());
-            *response.status_mut() = StatusCode::FOUND;
-            response
-                .headers_mut()
-                .insert(header::LOCATION, self.login_page.clone());
-            response
-        })
     }
 }
 

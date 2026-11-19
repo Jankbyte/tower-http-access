@@ -50,6 +50,7 @@ use axum::{Router, routing::get};
 use futures_util::future::BoxFuture;
 use tower_http_access_core::security_layer::SecurityLayer;
 use tower_http_access_core::authentication::Authenticated;
+use tower_http_access_session::entry_point::RedirectAuthenticationEntryPoint;
 use tower_http_access_core::authorization::AuthenticatedAuthorizationProvider;
 use tower_http_access_session::tower_sessions::{SessionIdentityProvider, SessionRequestAuthenticator};
 use tower_sessions::{MemoryStore, SessionManagerLayer};
@@ -68,13 +69,11 @@ impl SessionIdentityProvider for Users {
     }
 }
 
-let authenticator = Arc::new(
-    SessionRequestAuthenticator::new(Users).login_page_path("/login")?,
-);
+let authenticator = Arc::new(SessionRequestAuthenticator::new(Users));
 let security = SecurityLayer::new(
     Arc::clone(&authenticator),
     AuthenticatedAuthorizationProvider::<String>::new(),
-).authentication_entry_point(authenticator);
+).authentication_entry_point(RedirectAuthenticationEntryPoint::new("/login")?);
 let app: Router = Router::new()
     .route("/private", get(|Authenticated(user): Authenticated<String>| async move { user }))
     .route_layer(security)
@@ -207,12 +206,12 @@ Accept headers do not match the HTML branch, but cookies can still select the ch
 This is a routing heuristic; each stack must enforce authentication and authorization.
 See `examples/examples/form-login-session.rs` for the complete composition.
 
-`SessionRequestAuthenticator` also implements `AuthenticationEntryPoint`: share it
-through `Arc` and pass it to `.authentication_entry_point(...)` to redirect anonymous
-users when authentication is required. The default location is `/login`; configure
-a same-origin absolute path with `.login_page_path("/account/login")?`. The response
-is HTTP 302. Make the login endpoint public to prevent redirect loops. Omitting
-the entry-point configuration retains the layer's default HTTP 401 behavior.
+Configure this crate's
+`entry_point::RedirectAuthenticationEntryPoint::new("/account/login")?`
+with `.authentication_entry_point(...)` to redirect anonymous users when authentication
+is required. It accepts a same-origin absolute path and returns HTTP 302, independently
+of the session authenticator. Make the login endpoint public to prevent redirect loops.
+Omitting the entry-point configuration retains the layer's default HTTP 401 behavior.
 
 `browser_matcher` also enables `session_matcher`. Use
 `BrowserRequestMatcher::default()` for cookie name `id`, or
