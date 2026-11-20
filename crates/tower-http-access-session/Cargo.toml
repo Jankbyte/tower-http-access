@@ -29,6 +29,7 @@ serde_urlencoded = { version = "0.7", optional = true }
 subtle = { version = "2.6", optional = true }
 rand = { version = "0.9", optional = true }
 hex = { version = "0.4", optional = true }
+thiserror = { workspace = true, optional = true }
 tower-cookies = { version = "0.11", default-features = false, optional = true }
 
 [dev-dependencies]
@@ -52,7 +53,7 @@ session_matcher = ["dep:http-request-matcher"]
 csrf = [
     "dep:bytes", "dep:http-body", "dep:http-body-util",
     "dep:tower-layer", "dep:tower-service", "dep:http-request-matcher",
-    "dep:serde_urlencoded", "dep:subtle", "dep:rand", "dep:hex", "dep:tower-cookies",
+    "dep:serde_urlencoded", "dep:subtle", "dep:rand", "dep:hex", "dep:tower-cookies", "dep:thiserror",
 ]
 
 [package.metadata.docs.rs]

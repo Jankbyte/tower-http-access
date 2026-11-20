@@ -300,6 +300,13 @@ not accept query-string or multipart tokens. A valid header avoids buffering;
 form inspection preserves the original bytes and trailers and defaults to a
 16 KiB limit, configurable with `.body_limit(...)`.
 
+If the token header is absent, URL-encoded form validation reads the **entire form
+body into RAM** before extracting the token. It does not stop reading when it finds
+the token field. Exceeding the configured limit returns 413 with the default
+failure handler. Other content types, including multipart file uploads, are
+rejected without reading their bodies when the header is absent. Supply the token
+in the configured header to keep large request bodies streaming through this layer.
+
 Validation failures return 403. Repository failures return 500, oversized forms
 413, and invalid or unreadable forms 400. Customize matching and responses with
 `.request_matcher(...)` and `.failure_handler(...)`.

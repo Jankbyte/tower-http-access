@@ -13,7 +13,7 @@ use axum::{
     serve,
 };
 use login::{LOGIN_PAGE_PATH, create_form_login_layer, login_page};
-use public::main_page;
+use public::{MAIN_PAGE_PATH, main_page};
 use std::{error::Error as StdError, sync::Arc};
 use tokio::net::TcpListener;
 use tower_http_access_authorizers::request::RequestAuthorizationProvider;
@@ -25,8 +25,8 @@ use tower_http_access_session::{
         SessionRequestAuthenticator, SessionStoredIdentity, csrf::HttpSessionCsrfTokenRepository,
     },
 };
-use tower_sessions::{MemoryStore, SessionManagerLayer};
-use user_password_auth::{Authority, UserDetail};
+use tower_sessions::{Expiry, MemoryStore, SessionManagerLayer, cookie::time::Duration};
+use user_password_auth::UserDetail;
 use users::create_up_provider;
 
 const BIND_ADDRESS: &str = "127.0.0.1:3000";
@@ -46,29 +46,28 @@ async fn create_app() -> Result<Router, Box<dyn StdError + Send + Sync>> {
         |session| async move { session.get(SESSION_COOKIE_ID).await },
     ));
 
-    let redirect_entry_point = RedirectAuthenticationEntryPoint::new(LOGIN_PAGE_PATH)?;
     let security_layer = SecurityLayer::new(session_authenticator, Arc::new(create_authorizer()))
-        .authentication_entry_point(redirect_entry_point)
+        .authentication_entry_point(RedirectAuthenticationEntryPoint::new(LOGIN_PAGE_PATH)?)
         .failure_handler(HtmlAuthorizationFailureHandler);
 
     let session_store = MemoryStore::default();
-    let session_layer = SessionManagerLayer::new(session_store).with_secure(false);
+    let session_layer = SessionManagerLayer::new(session_store)
+        .with_secure(false)
+        .with_name("BROWSERSESSION")
+        .with_expiry(Expiry::OnInactivity(Duration::minutes(1)))
+        .with_always_save(true);
 
-    let users = vec![UserDetail::new(
-        "crab",
-        "crab123",
-        vec![Authority::new("demo")],
-    )];
+    let users = vec![UserDetail::new("crab", "crab123", vec![])];
     let concurrency = 5; // process hashing in max 5 threads
     let provider = create_up_provider(concurrency, users).await;
     let form_login_layer = create_form_login_layer(provider)?;
 
-    // Request -> SessionLayer -> CSRF -> FormLogin -> SecurityLayer -> route
     let app = Router::new()
         .route(LOGIN_PAGE_PATH, get(login_page))
         .route(ME_PAGE_PATH, get(get_authenticated))
-        .route("/", get(main_page))
+        .route(MAIN_PAGE_PATH, get(main_page))
         .route(LOGOUT_PAGE_PATH, post(logout))
+        // Request -> SessionLayer -> CSRF -> FormLogin -> SecurityLayer -> route
         .layer(security_layer)
         .layer(form_login_layer)
         .layer(CsrfLayer::new(HttpSessionCsrfTokenRepository::new()))
@@ -80,7 +79,7 @@ fn create_authorizer() -> impl AuthorizationProvider<Authentication = SessionIde
     RequestAuthorizationProvider::builder()
         .method_matchers(Method::GET, LOGIN_PAGE_PATH)
         .permit_all()
-        .method_matchers(Method::GET, "/")
+        .method_matchers(Method::GET, MAIN_PAGE_PATH)
         .permit_all()
         .any_request()
         .authenticated()

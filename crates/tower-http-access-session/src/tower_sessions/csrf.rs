@@ -13,46 +13,29 @@ use tower_cookies::{Cookie, Cookies, cookie::SameSite};
 use tower_sessions::Session;
 
 /// An operational or configuration failure in a built-in CSRF repository.
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum CsrfRepositoryError {
     /// SessionManagerLayer did not install the request's session.
+    #[error("session middleware must run before the CSRF repository")]
     MissingSession,
     /// CookieManagerLayer (or SessionManagerLayer) did not install a cookie jar.
+    #[error("cookie middleware must run before the CSRF repository")]
     MissingCookies,
     /// Secure random token generation failed.
-    Random(rand::rand_core::OsError),
+    #[error("secure CSRF token generation failed")]
+    Random(#[source] rand::rand_core::OsError),
     /// Session access, storage, or decoding failed.
-    Session(tower_sessions::session::Error),
+    #[error("CSRF session operation failed")]
+    Session(#[source] tower_sessions::session::Error),
     /// A stored or supplied token is invalid for this repository.
+    #[error("invalid CSRF repository token")]
     InvalidToken,
     /// A cookie name contains characters that are not allowed in HTTP cookie names.
+    #[error("invalid CSRF cookie name")]
     InvalidCookieName,
     /// A __Host- or __Secure- cookie was configured without Secure.
+    #[error("__Host- and __Secure- cookies require Secure")]
     InsecureCookiePrefix,
-}
-
-impl std::fmt::Display for CsrfRepositoryError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(match self {
-            Self::MissingSession => "session middleware must run before the CSRF repository",
-            Self::MissingCookies => "cookie middleware must run before the CSRF repository",
-            Self::Random(_) => "secure CSRF token generation failed",
-            Self::Session(_) => "CSRF session operation failed",
-            Self::InvalidToken => "invalid CSRF repository token",
-            Self::InvalidCookieName => "invalid CSRF cookie name",
-            Self::InsecureCookiePrefix => "__Host- and __Secure- cookies require Secure",
-        })
-    }
-}
-
-impl std::error::Error for CsrfRepositoryError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            Self::Random(error) => Some(error),
-            Self::Session(error) => Some(error),
-            _ => None,
-        }
-    }
 }
 
 fn generate_token(
@@ -74,9 +57,14 @@ fn generate_token(
 ///
 /// Recommended for server-rendered HTML: use the CsrfToken request extension to
 /// render a hidden `_csrf` field. Also works for AJAX if an endpoint exposes the
-/// token explicitly. Requires SessionManagerLayer outside CsrfLayer. Storage
+/// token explicitly. Requires [`SessionManagerLayer`] outside [`CsrfLayer`]. Storage
 /// lifetime and invalidation follow the session; flushing a session removes its
 /// token. Changing only the session ID does not remove the token.
+///
+/// This implementation also will initialize session when call `save_token`.
+///
+/// [`CsrfLayer`]: crate::csrf::CsrfLayer
+/// [`SessionManagerLayer`]: https://docs.rs/tower-sessions/latest/tower_sessions/service/struct.SessionManager.html
 #[derive(Clone, Debug)]
 pub struct HttpSessionCsrfTokenRepository {
     session_key: String,

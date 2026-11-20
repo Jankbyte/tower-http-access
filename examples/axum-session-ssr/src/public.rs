@@ -4,6 +4,8 @@ use crate::SessionIdentity;
 use axum::response::Html;
 use tower_http_access_core::authentication::Authenticated;
 
+pub(crate) const MAIN_PAGE_PATH: &str = "/";
+
 pub(crate) async fn main_page(auth: Option<Authenticated<SessionIdentity>>) -> Html<String> {
     let authenticated_text = if let Some(Authenticated(user)) = auth {
         user.username

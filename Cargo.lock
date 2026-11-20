@@ -1482,6 +1482,7 @@ dependencies = [
  "serde",
  "serde_urlencoded",
  "subtle",
+ "thiserror",
  "tokio",
  "tower",
  "tower-cookies",

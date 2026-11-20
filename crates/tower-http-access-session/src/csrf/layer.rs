@@ -153,6 +153,13 @@ impl RequestMatcher for UnsafeCsrfMethods {
 /// and multipart tokens are not accepted; those clients must use the header.
 /// Successful header checks and safe requests do not buffer the body.
 ///
+/// When the header is absent and the content type is URL-encoded form data, the
+/// *entire form body is collected into RAM before extracting the token*. Reading
+/// does not stop when the token field is found. Buffering is bounded by
+/// [`Self::body_limit`] (16 KiB by default); exceeding it returns 413 with the
+/// default failure handler. Other content types, including multipart uploads,
+/// are rejected without reading the body when the token header is absent.
+///
 /// By default, exposed tokens are hex-encoded random-pad/XOR pairs for BREACH
 /// protection. Submit the exposed value unchanged; raw repository values are not
 /// accepted. This is not Spring's wire encoding. Disable masking only when the
@@ -306,7 +313,7 @@ where
                     return Err(CsrfFailure::MissingToken);
                 }
                 let (submitted, body) =
-                    resolve_submitted_token(&parts, body, &expected, limit).await?;
+                    extract_submitted_token(&parts, body, &expected, limit).await?;
                 validate_token(&submitted, &expected.token, mask_tokens)?;
                 Ok(body)
             }
@@ -361,7 +368,7 @@ fn expose_token<E>(
     Ok(())
 }
 
-async fn resolve_submitted_token<E>(
+async fn extract_submitted_token<E>(
     parts: &Parts,
     body: CsrfBody,
     expected: &CsrfToken,
