@@ -16,11 +16,11 @@ use tower_http_access_form_login::SuccessHandler;
 /// ```
 /// struct User { username: String }
 /// use tower_http_access_session::tower_sessions::SessionSetSuccessHandler;
-/// use tower_http_access_form_login::RedirectSuccessHandler;
+/// use tower_http_access_form_login::RedirectFormLoginHandler;
 ///
 /// let handler = SessionSetSuccessHandler::new(
 ///     |user: &User| user.username.clone(),
-///     RedirectSuccessHandler::new("/private").unwrap(),
+///     RedirectFormLoginHandler::new("/private").unwrap(),
 /// );
 /// // FormLoginLayer::new(provider).on_success(handler)
 /// ```

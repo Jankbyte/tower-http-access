@@ -1,5 +1,5 @@
 use super::*;
-use crate::RedirectSuccessHandler;
+use crate::RedirectFormLoginHandler;
 use http::request::Parts;
 use http_body_util::Full;
 use std::convert::Infallible;
@@ -284,9 +284,10 @@ fn redirect_handler_validates_configured_path() {
         "/private#fragment",
         "/private\r\nlocation: evil",
     ] {
-        assert!(RedirectSuccessHandler::new(path).is_err(), "{path:?}");
+        assert!(RedirectFormLoginHandler::new(path).is_err(), "{path:?}");
     }
-    assert!(RedirectSuccessHandler::new("/").is_ok());
+    assert!(RedirectFormLoginHandler::new("/").is_ok());
+    assert!(RedirectFormLoginHandler::new("/login?error=true").is_ok());
 }
 
 #[tokio::test]
@@ -382,11 +383,49 @@ async fn builtin_success_handlers_return_ok_or_redirect() {
 
     let result = run(
         FormLoginLayer::new(Provider)
-            .on_success(RedirectSuccessHandler::new("/private?welcome=true").unwrap()),
+            .on_success(RedirectFormLoginHandler::new("/private?welcome=true").unwrap()),
         request(Method::POST, "/login", body),
     )
     .await;
     assert_eq!(result.status(), StatusCode::SEE_OTHER);
     assert_eq!(result.headers()[header::LOCATION], "/private?welcome=true");
     assert!(result.body().is_empty());
+}
+
+#[tokio::test]
+async fn redirect_failure_and_combined_handlers_work_with_form_login() {
+    for body in [
+        "username=alice&password=wrong",
+        "username=backend&password=anything",
+        "username=alice",
+    ] {
+        let result = run(
+            FormLoginLayer::new(Provider)
+                .on_failure(RedirectFormLoginHandler::new("/login?error=true").unwrap()),
+            request(Method::POST, "/login", body),
+        )
+        .await;
+        assert_eq!(result.status(), StatusCode::SEE_OTHER);
+        assert_eq!(result.headers()[header::LOCATION], "/login?error=true");
+        assert!(result.body().is_empty());
+    }
+
+    let handler = RedirectFormLoginHandler::new("/result?source=login").unwrap();
+    for body in [
+        "username=alice&password=p%2Bss+word",
+        "username=alice&password=wrong",
+        "username=backend&password=anything",
+        "username=alice",
+    ] {
+        let result = run(
+            FormLoginLayer::new(Provider)
+                .on_success(handler.clone())
+                .on_failure(handler.clone()),
+            request(Method::POST, "/login", body),
+        )
+        .await;
+        assert_eq!(result.status(), StatusCode::SEE_OTHER);
+        assert_eq!(result.headers()[header::LOCATION], "/result?source=login");
+        assert!(result.body().is_empty());
+    }
 }

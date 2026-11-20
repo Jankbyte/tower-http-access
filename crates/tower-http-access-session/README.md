@@ -234,12 +234,12 @@ and failure handlers. Enable this crate's `form_login` feature to use
 ```rust
 # #[cfg(all(feature = "tower_sessions", feature = "form_login"))]
 # fn main() -> Result<(), Box<dyn std::error::Error>> {
-use tower_http_access_form_login::RedirectSuccessHandler;
+use tower_http_access_form_login::RedirectFormLoginHandler;
 use tower_http_access_session::tower_sessions::SessionSetSuccessHandler;
 
 let handler = SessionSetSuccessHandler::new(
     |user: &String| user.clone(),
-    RedirectSuccessHandler::new("/private").unwrap(),
+    RedirectFormLoginHandler::new("/private").unwrap(),
 );
 // FormLoginLayer::new(provider).on_success(handler)
 # Ok(())
@@ -252,3 +252,165 @@ The session handler rotates the session ID and stores the mapped identity before
 calling the next success handler. Its default key is `user_id`; configure the same
 key on the handler and `SessionRequestAuthenticator`. Place `SessionManagerLayer`
 outside the form-login layer so the session is available in request extensions.
+
+## CSRF protection
+
+Enable `csrf` to use `csrf::{CsrfLayer, CsrfTokenRepository, CsrfToken}`.
+With `tower_sessions` also enabled, built-in repositories are available in
+`tower_sessions::csrf`. Implement `CsrfTokenRepository` for other storage backends;
+the layer stores repositories directly and clones them per service/request. Pass
+`Arc<R>` for shared or non-Clone repositories.
+
+`CsrfLayer` loads or creates and saves a token, then exposes a `CsrfToken` through
+request extensions. A login page can render it without JavaScript:
+
+```rust
+# #[cfg(feature = "csrf")]
+fn login_app<R>(repository: R) -> axum::Router
+where
+    R: tower_http_access_session::csrf::CsrfTokenRepository + Clone + 'static,
+{
+    use axum::{extract::Extension, response::Html, routing::get, Router};
+    use tower_http_access_session::csrf::{CsrfLayer, CsrfToken};
+
+    Router::new()
+        .route("/login", get(|Extension(csrf): Extension<CsrfToken>| async move {
+            // Default masking makes the exposed token a hex string. HTML-escape
+            // configured field names when they are not trusted static values.
+            Html(format!(
+                r#"<form method="post" action="/login">
+                    <input type="hidden" name="{}" value="{}">
+                    <input name="username" autocomplete="username" required>
+                    <input name="password" type="password" autocomplete="current-password" required>
+                    <button type="submit">Login</button>
+                </form>"#,
+                csrf.parameter_name, csrf.token,
+            ))
+        }))
+        // Add FormLoginLayer before this call so CSRF runs before form login.
+        .layer(CsrfLayer::new(repository))
+        // Add session middleware last when the repository needs sessions.
+}
+```
+
+The default matcher protects every method except GET, HEAD, OPTIONS, and TRACE.
+The layer checks the token's named header first, then its URL-encoded form field
+when that header is absent. It rejects duplicate token fields/headers and does
+not accept query-string or multipart tokens. A valid header avoids buffering;
+form inspection preserves the original bytes and trailers and defaults to a
+16 KiB limit, configurable with `.body_limit(...)`.
+
+Validation failures return 403. Repository failures return 500, oversized forms
+413, and invalid or unreadable forms 400. Customize matching and responses with
+`.request_matcher(...)` and `.failure_handler(...)`.
+
+Like Spring's default request handler, token exposure applies fresh XOR masking
+for BREACH protection, and validation uses constant-time comparison. Submit the
+exposed token unchanged; its hex encoding is specific to this library. Use
+`.mask_tokens(false)` only to explicitly opt into raw-token handling. Unlike
+Spring's deferred tokens, repository loading is eager on every request. Revoke
+the stored token on login/logout as part of the application's session lifecycle.
+
+
+### Choosing a CSRF repository
+
+Both implementations are available with `csrf` and `tower_sessions` and generate
+32 random bytes using the operating system's secure random source. Their types
+are in `tower_http_access_session::tower_sessions::csrf`.
+
+| Repository | Expected-token storage | Typical use | Token delivery |
+| --- | --- | --- | --- |
+| `HttpSessionCsrfTokenRepository` | Server-side session | Server-rendered HTML and ordinary form POSTs | Render the masked `CsrfToken` extension as a hidden input |
+| `CookieCsrfTokenRepository` | Separate browser cookie | AJAX/SPA clients that copy a cookie into a request header | Readable CSRF cookie with raw-token validation, or masked extension for HTML forms |
+
+These are usage choices, not restrictions. A session repository can support AJAX
+by serving a token endpoint; a cookie repository can support HTML forms using the
+masked extension. Neither repository authenticates the user. Keep the authentication
+session cookie HttpOnly even when JavaScript can read the separate CSRF cookie.
+
+**Server-rendered HTML:** use `HttpSessionCsrfTokenRepository` and leave masking
+on. Defaults are session key `tower_http_access_session.csrf_token`, request header
+`x-csrf-token`, and form field `_csrf`. Customize them with `.with_session_key(...)`,
+`.with_header_name(...)`, and `.with_parameter_name(...)`. Tokens live as long as
+the session unless explicitly removed. Shared session storage supports multiple
+application instances without sticky routing.
+
+```rust
+# #[cfg(all(feature = "csrf", feature = "tower_sessions"))]
+# fn main() {
+use axum::Router;
+use tower_http_access_session::csrf::CsrfLayer;
+use tower_http_access_session::tower_sessions::csrf::HttpSessionCsrfTokenRepository;
+use tower_sessions::{MemoryStore, SessionManagerLayer};
+
+let csrf = CsrfLayer::new(HttpSessionCsrfTokenRepository::new());
+let app: Router = Router::new()
+    // Register the login page and FormLoginLayer here.
+    .layer(csrf)
+    .layer(SessionManagerLayer::new(MemoryStore::default()));
+# }
+# #[cfg(not(all(feature = "csrf", feature = "tower_sessions")))]
+# fn main() {}
+```
+
+**AJAX/SPA:** use `CookieCsrfTokenRepository::new().with_http_only(false)` when
+JavaScript needs to read the token. The default cookie is `__Host-XSRF-TOKEN`,
+with Secure, Path=/, no Domain, and SameSite=Lax. Send its value in the
+`x-xsrf-token` header, together with the browser's cookies. Because the cookie
+contains the raw value, this workflow requires `.mask_tokens(false)`; the default
+masked mode expects the value exposed through request extensions instead.
+Disabling masking opts out of BREACH token masking, so avoid reflecting the raw
+cookie value into compressed HTML. The repository defaults to HttpOnly=true
+unless explicitly configured otherwise.
+
+```rust
+# #[cfg(all(feature = "csrf", feature = "tower_sessions"))]
+# fn main() {
+use axum::Router;
+use tower_cookies::CookieManagerLayer;
+use tower_http_access_session::csrf::CsrfLayer;
+use tower_http_access_session::tower_sessions::csrf::CookieCsrfTokenRepository;
+
+let repository = CookieCsrfTokenRepository::new().with_http_only(false);
+let csrf = CsrfLayer::new(repository).mask_tokens(false);
+let app: Router = Router::new()
+    // Register routes and authentication middleware here.
+    .layer(csrf)
+    .layer(CookieManagerLayer::new());
+# }
+# #[cfg(not(all(feature = "csrf", feature = "tower_sessions")))]
+# fn main() {}
+```
+
+Add `tower-cookies = "0.11"` as a direct application dependency for the standalone
+cookie-manager example. When using `SessionManagerLayer`, it already installs the
+cookie manager: use that outer layer instead of adding another one.
+
+The cookie repository does not use server-side token storage. It implements
+cookie/header (or cookie/form) double submission, without signatures or session
+binding. Its default `__Host-` prefix prevents sibling subdomains from setting
+that cookie. Changing to a conventional name such as `XSRF-TOKEN` removes that
+browser protection; only do so when sibling subdomains are trusted. For local HTTP,
+explicitly choose a name without a secure prefix before disabling Secure:
+
+```rust
+# #[cfg(all(feature = "csrf", feature = "tower_sessions"))]
+# fn main() -> Result<(), Box<dyn std::error::Error>> {
+use tower_http_access_session::tower_sessions::csrf::CookieCsrfTokenRepository;
+
+let repository = CookieCsrfTokenRepository::new()
+    .with_cookie_name("XSRF-TOKEN")?
+    .with_secure(false)?
+    .with_http_only(false);
+# Ok(())
+# }
+# #[cfg(not(all(feature = "csrf", feature = "tower_sessions")))]
+# fn main() {}
+```
+
+Both repositories support `save_token(request, None)` for removal. Session removal
+invalidates the server-side value; cookie removal expires the browser cookie but
+cannot revoke copied token values on the server. Cookie tokens have browser-session
+lifetime. Clear or replace tokens on authentication changes; flushing a server
+session does not clear a separate CSRF cookie, and merely cycling the session ID
+does not remove its stored CSRF token.

@@ -196,7 +196,7 @@ async fn builtin_success_handlers_return_ok_or_redirect() {
         tower_sessions::Session::new(None, Arc::new(tower_sessions::MemoryStore::default()), None);
     let handler = SessionSetSuccessHandler::new(
         |user: &String| user.clone(),
-        RedirectSuccessHandler::new("/private?welcome=true").unwrap(),
+        RedirectFormLoginHandler::new("/private?welcome=true").unwrap(),
     );
     let mut req = request(Method::POST, "/login", body);
     req.extensions_mut().insert(session.clone());

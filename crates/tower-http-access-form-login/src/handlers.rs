@@ -48,14 +48,15 @@ impl<A> SuccessHandler<A> for DefaultSuccessHandler {
     }
 }
 
-/// Redirects successful authentication to a configured same-origin absolute path.
+/// Redirects successful or failed form authentication to a configured same-origin absolute path.
+/// All failures, including backend errors, use the configured location.
 /// Uses HTTP 303 so a form submission is followed by a GET request.
 #[derive(Clone, Debug)]
-pub struct RedirectSuccessHandler {
+pub struct RedirectFormLoginHandler {
     location: http::HeaderValue,
 }
 
-impl RedirectSuccessHandler {
+impl RedirectFormLoginHandler {
     /// Configure a path such as `/private` or `/account?welcome=true`.
     /// External URLs, network-path URLs, and relative paths are rejected.
     pub fn new(path: impl AsRef<str>) -> Result<Self, crate::InvalidRedirectPath> {
@@ -77,13 +78,19 @@ impl RedirectSuccessHandler {
     }
 }
 
-impl<A> SuccessHandler<A> for RedirectSuccessHandler {
+impl<A> SuccessHandler<A> for RedirectFormLoginHandler {
     fn on_success(&self, _: Parts, _: A) -> BoxFuture<'_, SecurityResponse> {
         let mut response = super::tower_layer::response(http::StatusCode::SEE_OTHER);
         response
             .headers_mut()
             .insert(http::header::LOCATION, self.location.clone());
         Box::pin(async move { response })
+    }
+}
+
+impl FailureHandler for RedirectFormLoginHandler {
+    fn on_failure(&self, parts: Parts, _: FormLoginError) -> BoxFuture<'_, SecurityResponse> {
+        self.on_success(parts, ())
     }
 }
 

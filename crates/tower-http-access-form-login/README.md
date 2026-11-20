@@ -18,18 +18,18 @@ matchers, and both handler traits support `Arc`, including trait objects. The de
 handlers are `DefaultSuccessHandler` (200) and `DefaultFailureHandler` (a status based
 on the failure). Builder methods infer replacement matcher and handler types.
 
-`RedirectSuccessHandler` returns a 303 redirect to a validated same-origin path.
+`RedirectFormLoginHandler` returns a 303 redirect to a validated same-origin path.
 The layer is independent of session storage. To persist login with `tower-sessions`,
 use `tower_http_access_session::tower_sessions::SessionSetSuccessHandler` with the session crate's
 `form_login` feature.
 
 ```rust
-use tower_http_access_form_login::{FormLoginLayer, RedirectSuccessHandler};
+use tower_http_access_form_login::{FormLoginLayer, RedirectFormLoginHandler};
 use user_password_auth::UsernamePasswordAuthenticationProvider;
 
 fn login_layer<P: UsernamePasswordAuthenticationProvider>(provider: P) {
     let layer = FormLoginLayer::new(provider)
-        .on_success(RedirectSuccessHandler::new("/private").unwrap());
+        .on_success(RedirectFormLoginHandler::new("/private").unwrap());
     // Apply the layer to a Tower service. Add persistence in a custom success
     // handler, or use SessionSetSuccessHandler for tower-sessions.
 }
@@ -38,3 +38,24 @@ fn login_layer<P: UsernamePasswordAuthenticationProvider>(provider: P) {
 By default, the layer handles `POST /login`, reads `username` and `password`, and
 limits the form body to 16 KiB. Nonmatching requests pass through unchanged.
 Configure CSRF protection before this layer when using browser credentials.
+
+
+`RedirectFormLoginHandler` redirects all failures, including backend errors, to a
+validated same-origin path. It implements both handler traits and can be
+configured for either outcome, returning HTTP 303.
+
+```rust
+use tower_http_access_form_login::{FormLoginLayer, RedirectFormLoginHandler};
+use user_password_auth::UsernamePasswordAuthenticationProvider;
+
+fn login_layer<P: UsernamePasswordAuthenticationProvider>(provider: P) {
+    let redirect = RedirectFormLoginHandler::new("/login/result").unwrap();
+    let layer = FormLoginLayer::new(provider)
+        .on_success(redirect.clone())
+        .on_failure(redirect);
+}
+```
+
+For different destinations, configure
+`.on_success(RedirectFormLoginHandler::new("/private")?)` and
+`.on_failure(RedirectFormLoginHandler::new("/login?error=true")?)`.

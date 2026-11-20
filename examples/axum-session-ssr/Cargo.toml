@@ -1,0 +1,21 @@
+[package]
+name = "axum-session-ssr"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[dependencies]
+http-request-matcher.workspace = true
+tower-http-access-form-login.workspace = true
+tower-http-access-core = { workspace = true, features = ["authorizers", "axum"] }
+tower-http-access-authorizers = { workspace = true, features = ["authorities", "request_matcher"] }
+tower-http-access-session = {workspace = true, features = ["form_login", "tower_sessions", "csrf" ] }
+user-password-auth = { workspace = true, features = ["tracing", "user_details"] }
+tokio = { workspace = true, features = ["full"] }
+argon2.workspace = true
+axum.workspace = true
+serde = { workspace = true, features = ["derive"] }
+tower-sessions = { workspace = true, features = ["memory-store"] }
+
+[dev-dependencies]
+tower = { workspace = true, features = ["util"] }

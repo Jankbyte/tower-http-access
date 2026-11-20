@@ -19,6 +19,18 @@ http.workspace = true
 serde.workspace = true
 futures-util = { workspace = true, features = ["alloc"] }
 
+# Dependencies used only by the framework-independent CSRF middleware.
+bytes = { workspace = true, optional = true }
+http-body = { workspace = true, optional = true }
+http-body-util = { workspace = true, optional = true }
+tower-layer = { workspace = true, optional = true }
+tower-service = { workspace = true, optional = true }
+serde_urlencoded = { version = "0.7", optional = true }
+subtle = { version = "2.6", optional = true }
+rand = { version = "0.9", optional = true }
+hex = { version = "0.4", optional = true }
+tower-cookies = { version = "0.11", default-features = false, optional = true }
+
 [dev-dependencies]
 user-password-auth.workspace = true
 bytes.workspace = true
@@ -37,6 +49,11 @@ tower_sessions = ["dep:tower-sessions"]
 form_login = ["dep:tower-http-access-form-login"]
 browser_matcher = ["dep:http-request-matcher", "session_matcher"]
 session_matcher = ["dep:http-request-matcher"]
+csrf = [
+    "dep:bytes", "dep:http-body", "dep:http-body-util",
+    "dep:tower-layer", "dep:tower-service", "dep:http-request-matcher",
+    "dep:serde_urlencoded", "dep:subtle", "dep:rand", "dep:hex", "dep:tower-cookies",
+]
 
 [package.metadata.docs.rs]
 all-features = true

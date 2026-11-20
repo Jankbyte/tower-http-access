@@ -5,7 +5,7 @@ pub use error::{FormLoginError, InvalidRedirectPath};
 
 mod handlers;
 pub use handlers::{
-    DefaultFailureHandler, DefaultSuccessHandler, FailureHandler, RedirectSuccessHandler,
+    DefaultFailureHandler, DefaultSuccessHandler, FailureHandler, RedirectFormLoginHandler,
     SuccessHandler,
 };
 

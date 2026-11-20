@@ -169,6 +169,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "axum-session-ssr"
+version = "0.0.1"
+dependencies = [
+ "argon2",
+ "axum",
+ "http-request-matcher",
+ "serde",
+ "tokio",
+ "tower",
+ "tower-http-access-authorizers",
+ "tower-http-access-core",
+ "tower-http-access-form-login",
+ "tower-http-access-session",
+ "tower-sessions",
+ "user-password-auth",
+]
+
+[[package]]
 name = "base64"
 version = "0.22.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -584,6 +602,12 @@ name = "hashbrown"
 version = "0.17.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
+
+[[package]]
+name = "hex"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
 name = "http"
@@ -1164,6 +1188,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "subtle"
+version = "2.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
+
+[[package]]
 name = "syn"
 version = "2.0.119"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1443,15 +1473,22 @@ dependencies = [
  "axum",
  "bytes",
  "futures-util",
+ "hex",
  "http",
+ "http-body",
  "http-body-util",
  "http-request-matcher",
+ "rand",
  "serde",
+ "serde_urlencoded",
+ "subtle",
  "tokio",
  "tower",
+ "tower-cookies",
  "tower-http-access-core",
  "tower-http-access-form-login",
  "tower-layer",
+ "tower-service",
  "tower-sessions",
  "user-password-auth",
 ]
