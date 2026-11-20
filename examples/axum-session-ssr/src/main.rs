@@ -28,6 +28,7 @@ use tower_http_access_session::{
 use tower_sessions::{Expiry, MemoryStore, SessionManagerLayer, cookie::time::Duration};
 use user_password_auth::UserDetail;
 use users::create_up_provider;
+use tower::ServiceBuilder;
 
 const BIND_ADDRESS: &str = "127.0.0.1:3000";
 const SESSION_COOKIE_ID: &str = "identity";
@@ -41,6 +42,10 @@ async fn main() -> Result<(), Box<dyn StdError + Send + Sync>> {
 }
 
 async fn create_app() -> Result<Router, Box<dyn StdError + Send + Sync>> {
+    tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::TRACE)
+        .init();
+
     let session_authenticator = Arc::new(
         SessionRequestAuthenticator::new(SessionStoredIdentity::<SessionIdentity>::default())
             .with_session_key(SESSION_COOKIE_ID),
@@ -62,16 +67,19 @@ async fn create_app() -> Result<Router, Box<dyn StdError + Send + Sync>> {
     let provider = create_up_provider(concurrency, users).await;
     let form_login_layer = create_form_login_layer(provider)?;
 
+    let browser_security_stack = ServiceBuilder::new()
+        .layer(session_layer)
+        .layer(CsrfLayer::new(HttpSessionCsrfTokenRepository::new()))
+        .layer(security_layer)
+        .layer(form_login_layer);
+
+
     let app = Router::new()
         .route(LOGIN_PAGE_PATH, get(login_page))
         .route(ME_PAGE_PATH, get(get_authenticated))
         .route(MAIN_PAGE_PATH, get(main_page))
         .route(LOGOUT_PAGE_PATH, post(logout))
-        // Request -> SessionLayer -> CSRF -> FormLogin -> SecurityLayer -> route
-        .layer(security_layer)
-        .layer(form_login_layer)
-        .layer(CsrfLayer::new(HttpSessionCsrfTokenRepository::new()))
-        .layer(session_layer);
+        .layer(browser_security_stack);
 
     Ok(app)
 }
@@ -79,6 +87,8 @@ async fn create_app() -> Result<Router, Box<dyn StdError + Send + Sync>> {
 fn create_authorizer() -> impl AuthorizationProvider<Authentication = SessionIdentity> {
     RequestAuthorizationProvider::builder()
         .method_matchers(Method::GET, LOGIN_PAGE_PATH)
+        .permit_all()
+        .method_matchers(Method::POST, LOGIN_PAGE_PATH)
         .permit_all()
         .method_matchers(Method::GET, MAIN_PAGE_PATH)
         .permit_all()

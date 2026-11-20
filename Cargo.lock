@@ -183,6 +183,8 @@ dependencies = [
  "tower-http-access-form-login",
  "tower-http-access-session",
  "tower-sessions",
+ "tracing",
+ "tracing-subscriber",
  "user-password-auth",
 ]
 
@@ -1463,6 +1465,7 @@ dependencies = [
  "tower-http-access-core",
  "tower-layer",
  "tower-service",
+ "tracing",
  "user-password-auth",
 ]
 
@@ -1491,6 +1494,7 @@ dependencies = [
  "tower-layer",
  "tower-service",
  "tower-sessions",
+ "tracing",
  "user-password-auth",
 ]
 

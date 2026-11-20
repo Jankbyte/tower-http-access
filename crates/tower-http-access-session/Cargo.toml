@@ -29,6 +29,7 @@ rand = { version = "0.9", optional = true }
 hex = { version = "0.4", optional = true }
 thiserror = { workspace = true, optional = true }
 tower-cookies = { version = "0.11", default-features = false, optional = true }
+tracing = { workspace = true, optional = true }
 
 [dev-dependencies]
 user-password-auth.workspace = true
@@ -43,6 +44,7 @@ tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tower = { workspace = true, features = ["util"] }
 
 [features]
+tracing = ["dep:tracing", "user-password-auth/tracing"]
 default = ["tower_sessions"]
 tower_sessions = ["dep:tower-sessions"]
 form_login = ["dep:tower-http-access-form-login"]

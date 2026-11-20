@@ -128,17 +128,30 @@ impl<P: SessionIdentityProvider> RequestAuthenticator for SessionRequestAuthenti
     {
         Box::pin(async move {
             let session = parts.extensions.get::<Session>().ok_or_else(|| {
+                #[cfg(feature = "tracing")]
+                tracing::error!("session middleware is not found");
+
                 internal(std::io::Error::other(
                     "session middleware must run before authentication",
                 ))
             })?;
             let Some(id) = (self.extract_id)(session.clone()).await.map_err(internal)? else {
+                #[cfg(feature = "tracing")]
+                tracing::trace!("session key is empty, skip authentication");
                 return Ok(AuthenticationAttempt::NotApplicable);
             };
             Ok(
                 match self.provider.load_identity(id).await.map_err(internal)? {
-                    Some(identity) => AuthenticationAttempt::Authenticated(identity),
-                    None => AuthenticationAttempt::NotApplicable,
+                    Some(identity) => {
+                        #[cfg(feature = "tracing")]
+                        tracing::trace!("session authenticated");
+                        AuthenticationAttempt::Authenticated(identity)
+                    }
+                    None => {
+                        #[cfg(feature = "tracing")]
+                        tracing::trace!("session is not authenticated");
+                        AuthenticationAttempt::NotApplicable
+                    }
                 },
             )
         })

@@ -251,6 +251,9 @@ where
                     username: field(&username_field)?,
                     password: field(&password_field)?,
                 };
+                #[cfg(feature = "tracing")]
+                tracing::trace!(username = %credentials.username, "trying authenticate user");
+
                 provider
                     .authenticate(&credentials)
                     .await
@@ -259,8 +262,18 @@ where
             }
             .await;
             let response = match result {
-                Ok(identity) => success.on_success(parts, identity).await,
-                Err(error) => failure.on_failure(parts, error).await,
+                Ok(identity) => {
+                    #[cfg(feature = "tracing")]
+                    tracing::trace!("success authenticated");
+
+                    success.on_success(parts, identity).await
+                },
+                Err(error) => {
+                    #[cfg(feature = "tracing")]
+                    tracing::error!(error = %error, "authentication failed");
+
+                    failure.on_failure(parts, error).await
+                }
             };
             Ok(response.map(R::from))
         })
