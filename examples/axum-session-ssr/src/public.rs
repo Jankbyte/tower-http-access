@@ -22,6 +22,7 @@ pub(crate) async fn main_page(auth: Option<Authenticated<SessionIdentity>>) -> H
     <ul>
         <li><a href="{LOGIN_PAGE_PATH}">Login page</a></li>
         <li><a href="{ME_PAGE_PATH}">User space</a></li>
+        <li><a href="/deny">Deny all (401 or 403)</a></li>
     </ul>
 </body>
 </html>"#,

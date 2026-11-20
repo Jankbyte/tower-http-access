@@ -4,7 +4,7 @@ The simple implementation of create/read/update/delete (CRUD) with `axum` and `t
 
 Run application:
 ```bash
-cargo run axum-basic-auth-crud
+cargo run --bin axum-basic-auth-crud
 ```
 
 Test requests:

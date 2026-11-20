@@ -41,10 +41,10 @@ async fn main() -> Result<(), Box<dyn StdError + Send + Sync>> {
 }
 
 async fn create_app() -> Result<Router, Box<dyn StdError + Send + Sync>> {
-    let session_authenticator = Arc::new(SessionRequestAuthenticator::new_with_extractor(
-        SessionStoredIdentity::<SessionIdentity>::default(),
-        |session| async move { session.get(SESSION_COOKIE_ID).await },
-    ));
+    let session_authenticator = Arc::new(
+        SessionRequestAuthenticator::new(SessionStoredIdentity::<SessionIdentity>::default())
+            .with_session_key(SESSION_COOKIE_ID),
+    );
 
     let security_layer = SecurityLayer::new(session_authenticator, Arc::new(create_authorizer()))
         .authentication_entry_point(RedirectAuthenticationEntryPoint::new(LOGIN_PAGE_PATH)?)
@@ -72,6 +72,7 @@ async fn create_app() -> Result<Router, Box<dyn StdError + Send + Sync>> {
         .layer(form_login_layer)
         .layer(CsrfLayer::new(HttpSessionCsrfTokenRepository::new()))
         .layer(session_layer);
+
     Ok(app)
 }
 
@@ -81,6 +82,8 @@ fn create_authorizer() -> impl AuthorizationProvider<Authentication = SessionIde
         .permit_all()
         .method_matchers(Method::GET, MAIN_PAGE_PATH)
         .permit_all()
+        .method_matchers(Method::GET, "/deny") // just for test "403 Forbidden"
+        .deny_all()
         .any_request()
         .authenticated()
         .build()

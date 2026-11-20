@@ -18,8 +18,6 @@ tower-sessions = { workspace = true, optional = true }
 http.workspace = true
 serde.workspace = true
 futures-util = { workspace = true, features = ["alloc"] }
-
-# Dependencies used only by the framework-independent CSRF middleware.
 bytes = { workspace = true, optional = true }
 http-body = { workspace = true, optional = true }
 http-body-util = { workspace = true, optional = true }

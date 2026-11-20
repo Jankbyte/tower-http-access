@@ -1,6 +1,6 @@
 # axum-server usage
 
-This example demonstrate usage `tower-http-access` abstractions with `tower/hyper`-based `axum-server`.
+This example demonstrate usage `tower-http-access` abstractions with [hyper](https://docs.rs/hyper/latest/hyper/) and [tower](https://docs.rs/tower/latest/tower/index.html), where wrapper is [axum-server](https://docs.rs/axum-server/latest/axum_server/).
 
 Usage:
 ```bash
