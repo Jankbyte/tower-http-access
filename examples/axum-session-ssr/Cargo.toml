@@ -7,7 +7,7 @@ publish = false
 [dependencies]
 http-request-matcher.workspace = true
 tower-http-access-form-login = { workspace = true, features = ["tracing"] }
-tower-http-access-core = { workspace = true, features = ["authorizers", "axum"] }
+tower-http-access-core = { workspace = true, features = ["authorizers", "axum", "tracing"] }
 tower-http-access-authorizers = { workspace = true, features = ["authorities", "request_matcher"] }
 tower-http-access-session = {workspace = true, features = ["form_login", "tower_sessions", "csrf", "tracing" ] }
 user-password-auth = { workspace = true, features = ["tracing", "user_details"] }

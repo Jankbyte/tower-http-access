@@ -26,7 +26,7 @@ thiserror.workspace = true
 tracing = { workspace = true, optional = true }
 
 [features]
-tracing = ["dep:tracing"]
+tracing = ["dep:tracing", "tower-http-access-core/tracing"]
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

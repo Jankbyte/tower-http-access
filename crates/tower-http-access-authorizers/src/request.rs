@@ -40,8 +40,8 @@ use http::{Method, request::Parts};
 use http_request_matcher::{InvalidRequestPattern, PathPatternRequestMatcher, RequestMatcher};
 use std::marker::PhantomData;
 use tower_http_access_core::authorization::{
-    AuthenticatedAuthorizationProvider, DenyAllAuthorizationProvider,
-    PermitAllAuthorizationProvider, denied,
+    AnonymousAuthorizationProvider, AuthenticatedAuthorizationProvider,
+    DenyAllAuthorizationProvider, PermitAllAuthorizationProvider, denied,
 };
 use tower_http_access_core::authorization::{AuthorizationDecision, AuthorizationProvider};
 
@@ -258,6 +258,13 @@ impl<A: Send + Sync + 'static> PendingRuleBuilder<A> {
 
     pub fn authenticated(self) -> RequestAuthorizationBuilder<A> {
         self.access(AuthenticatedAuthorizationProvider::<A>::new())
+    }
+
+    /// Allows only anonymous requests. Authenticated callers are denied with
+    /// insufficient permissions (HTTP 403 with the default failure handler).
+    /// Authentication errors are handled before this policy runs.
+    pub fn anonymous(self) -> RequestAuthorizationBuilder<A> {
+        self.access(AnonymousAuthorizationProvider::<A>::new())
     }
 }
 

@@ -16,6 +16,7 @@ use login::{LOGIN_PAGE_PATH, create_form_login_layer, login_page};
 use public::{MAIN_PAGE_PATH, main_page};
 use std::{error::Error as StdError, sync::Arc};
 use tokio::net::TcpListener;
+use tower::ServiceBuilder;
 use tower_http_access_authorizers::request::RequestAuthorizationProvider;
 use tower_http_access_core::{authorization::AuthorizationProvider, security_layer::SecurityLayer};
 use tower_http_access_session::{
@@ -28,7 +29,6 @@ use tower_http_access_session::{
 use tower_sessions::{Expiry, MemoryStore, SessionManagerLayer, cookie::time::Duration};
 use user_password_auth::UserDetail;
 use users::create_up_provider;
-use tower::ServiceBuilder;
 
 const BIND_ADDRESS: &str = "127.0.0.1:3000";
 const SESSION_COOKIE_ID: &str = "identity";
@@ -73,7 +73,6 @@ async fn create_app() -> Result<Router, Box<dyn StdError + Send + Sync>> {
         .layer(security_layer)
         .layer(form_login_layer);
 
-
     let app = Router::new()
         .route(LOGIN_PAGE_PATH, get(login_page))
         .route(ME_PAGE_PATH, get(get_authenticated))
@@ -86,9 +85,9 @@ async fn create_app() -> Result<Router, Box<dyn StdError + Send + Sync>> {
 
 fn create_authorizer() -> impl AuthorizationProvider<Authentication = SessionIdentity> {
     RequestAuthorizationProvider::builder()
-        .method_matchers(Method::GET, LOGIN_PAGE_PATH)
-        .permit_all()
         .method_matchers(Method::POST, LOGIN_PAGE_PATH)
+        .anonymous() // do not allow authentication while authenticated
+        .method_matchers(Method::GET, LOGIN_PAGE_PATH)
         .permit_all()
         .method_matchers(Method::GET, MAIN_PAGE_PATH)
         .permit_all()

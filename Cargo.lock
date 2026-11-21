@@ -1446,6 +1446,7 @@ dependencies = [
  "tower-http-access-authorizers",
  "tower-layer",
  "tower-service",
+ "tracing",
 ]
 
 [[package]]

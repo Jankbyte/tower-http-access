@@ -19,6 +19,6 @@ pub use core::{
 mod default_auth;
 #[cfg(feature = "authorizers")]
 pub use default_auth::{
-    AuthenticatedAuthorizationProvider, DenyAllAuthorizationProvider,
-    PermitAllAuthorizationProvider, denied,
+    AnonymousAuthorizationProvider, AuthenticatedAuthorizationProvider,
+    DenyAllAuthorizationProvider, PermitAllAuthorizationProvider, denied,
 };

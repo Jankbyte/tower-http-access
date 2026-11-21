@@ -1,3 +1,4 @@
+use super::public::MAIN_PAGE_PATH;
 use crate::SESSION_COOKIE_ID;
 use crate::SessionIdentity;
 use axum::http::Method;
@@ -25,8 +26,10 @@ pub(crate) async fn login_page(
     auth: Option<Authenticated<SessionIdentity>>,
 ) -> Result<Html<String>, Redirect> {
     if auth.is_some() {
-        return Err(Redirect::permanent("/"));
+        tracing::trace!("still authenticated, redirect");
+        return Err(Redirect::to(MAIN_PAGE_PATH));
     }
+
     let error = if query.error.as_deref() == Some("true") {
         "<p role=\"alert\">Invalid username or password.</p>"
     } else {

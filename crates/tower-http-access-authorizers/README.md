@@ -31,6 +31,7 @@ use tower_http_access_authorizers::request::RequestAuthorizationProvider;
 
 let rules = RequestAuthorizationProvider::<String>::builder()
     .request_matchers("/health").permit_all()
+    .request_matchers("/register").anonymous()
     .any_request().authenticated()
     .build()?;
 # Ok(())
@@ -39,6 +40,10 @@ let rules = RequestAuthorizationProvider::<String>::builder()
 
 Pass policies to `SecurityLayer::new(authenticator, policy)` in core. Authorization
 contracts remain in `tower_http_access_core::authorization`.
+
+`.anonymous()` allows requests without an authenticated identity and denies authenticated
+callers with HTTP 403 by default. Authentication errors still fail before authorization.
+Use `.permit_all()` for routes that accept both anonymous and authenticated callers.
 
 ```rust
 # #[cfg(feature = "authorities")]

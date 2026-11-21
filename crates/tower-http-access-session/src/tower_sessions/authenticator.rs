@@ -127,14 +127,13 @@ impl<P: SessionIdentityProvider> RequestAuthenticator for SessionRequestAuthenti
     ) -> BoxFuture<'a, Result<AuthenticationAttempt<Self::Authentication>, AuthenticatorError>>
     {
         Box::pin(async move {
-            let session = parts.extensions.get::<Session>().ok_or_else(|| {
-                #[cfg(feature = "tracing")]
-                tracing::error!("session middleware is not found");
-
-                internal(std::io::Error::other(
-                    "session middleware must run before authentication",
-                ))
-            })?;
+            let session =
+                parts
+                    .extensions
+                    .get::<Session>()
+                    .ok_or(internal(std::io::Error::other(
+                        "session middleware must run before authentication",
+                    )))?;
             let Some(id) = (self.extract_id)(session.clone()).await.map_err(internal)? else {
                 #[cfg(feature = "tracing")]
                 tracing::trace!("session key is empty, skip authentication");

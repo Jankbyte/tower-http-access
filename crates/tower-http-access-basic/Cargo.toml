@@ -33,7 +33,7 @@ axum.workspace = true
 tokio = { workspace = true, features = ["full"] }
 
 [features]
-tracing = ["dep:tracing", "user-password-auth/tracing"]
+tracing = ["dep:tracing", "user-password-auth/tracing", "tower-http-access-core/tracing"]
 
 [[bench]]
 name = "basic_authenticator"

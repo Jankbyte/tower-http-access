@@ -378,6 +378,8 @@ async fn extract_submitted_token<E>(
         return Ok((token, body));
     }
     if !is_urlencoded_form(parts) {
+        #[cfg(feature = "tracing")]
+        tracing::warn!("can't decode body as form-data");
         return Err(CsrfFailure::InvalidToken);
     }
     token_from_body(body, &expected.parameter_name, limit).await
@@ -437,8 +439,18 @@ fn token_from_form<E>(bytes: &[u8], parameter_name: &str) -> Result<String, Csrf
     let fields: Vec<(String, String)> =
         serde_urlencoded::from_bytes(bytes).map_err(|_| CsrfFailure::InvalidForm)?;
     let mut tokens = fields.iter().filter(|(key, _)| key == parameter_name);
-    let token = tokens.next().ok_or(CsrfFailure::InvalidToken)?.1.clone();
+    let token = tokens
+        .next()
+        .ok_or_else(|| {
+            #[cfg(feature = "tracing")]
+            tracing::warn!("form-data does not contain csrf-token");
+            CsrfFailure::InvalidToken
+        })?
+        .1
+        .clone();
     if tokens.next().is_some() {
+        #[cfg(feature = "tracing")]
+        tracing::warn!("multiple csrf-token's in form-data");
         return Err(CsrfFailure::InvalidToken);
     }
     Ok(token)
@@ -450,11 +462,18 @@ fn validate_token<E>(
     mask_tokens: bool,
 ) -> Result<(), CsrfFailure<E>> {
     let actual = if mask_tokens {
-        unmask(submitted, expected.len()).ok_or(CsrfFailure::InvalidToken)?
+        unmask(submitted, expected.len()).ok_or_else(|| {
+            #[cfg(feature = "tracing")]
+            tracing::warn!("cant unmask csrf-token, invalid");
+
+            CsrfFailure::InvalidToken
+        })?
     } else {
         submitted.as_bytes().to_vec()
     };
     if !bool::from(expected.as_bytes().ct_eq(&actual)) {
+        #[cfg(feature = "tracing")]
+        tracing::warn!("csrf-token are invalid");
         return Err(CsrfFailure::InvalidToken);
     }
     Ok(())

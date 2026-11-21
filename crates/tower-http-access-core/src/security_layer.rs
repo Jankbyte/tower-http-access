@@ -361,15 +361,35 @@ where
                 Ok(AuthenticationAttempt::Authenticated(authentication)) => Some(authentication),
                 Ok(AuthenticationAttempt::NotApplicable) => None,
                 Err(error) => {
+                    #[cfg(feature = "tracing")]
+                    tracing::warn!(error = %error, "unexpected error while authentication");
+
                     return Ok(components
                         .response_adapter
                         .adapt(error.into_security_response()));
                 }
             };
+
+            #[cfg(feature = "tracing")]
+            {
+                let authenticator = std::any::type_name_of_val(&components.authenticator);
+                if authentication.is_some() {
+                    tracing::debug!(?authenticator, "authenticated");
+                } else {
+                    tracing::debug!(?authenticator, "not applicable");
+                }
+            }
+
             let decision = components
                 .authorizer
                 .authorize(authentication.as_ref(), &parts)
                 .await;
+
+            #[cfg(feature = "tracing")]
+            {
+                let authorizer = std::any::type_name_of_val(&components.authorizer);
+                tracing::debug!(?decision, ?authorizer, "authorization evaluated");
+            }
 
             match decision {
                 Ok(AuthorizationDecision::Allow) => {
@@ -391,11 +411,16 @@ where
                         .failure_handler
                         .handle(&parts, AuthorizationFailure::Denied(denial)),
                 )),
-                Err(error) => Ok(components.response_adapter.adapt(
-                    components
-                        .failure_handler
-                        .handle(&parts, AuthorizationFailure::Provider(error)),
-                )),
+                Err(error) => {
+                    #[cfg(feature = "tracing")]
+                    tracing::warn!(error = %error, "unexpected error while authorize");
+
+                    Ok(components.response_adapter.adapt(
+                        components
+                            .failure_handler
+                            .handle(&parts, AuthorizationFailure::Provider(error)),
+                    ))
+                }
             }
         })
     }

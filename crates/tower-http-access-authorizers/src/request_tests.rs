@@ -569,6 +569,8 @@ async fn string_identities_support_rules_without_authorities() {
         .permit_all()
         .request_matchers("/private")
         .authenticated()
+        .request_matchers("/guest")
+        .anonymous()
         .request_matchers("/custom")
         .access(
             AuthenticatedAuthorizationProvider::<usize>::new()
@@ -589,6 +591,11 @@ async fn string_identities_support_rules_without_authorities() {
             "/private",
             AuthorizationDecision::Deny(AuthorizationDenial::AuthenticationRequired),
             AuthorizationDecision::Allow,
+        ),
+        (
+            "/guest",
+            AuthorizationDecision::Allow,
+            AuthorizationDecision::Deny(AuthorizationDenial::InsufficientPermissions),
         ),
         (
             "/custom",

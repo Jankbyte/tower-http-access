@@ -267,10 +267,10 @@ where
                     tracing::trace!("success authenticated");
 
                     success.on_success(parts, identity).await
-                },
+                }
                 Err(error) => {
                     #[cfg(feature = "tracing")]
-                    tracing::error!(error = %error, "authentication failed");
+                    tracing::warn!(error = %error, "authentication failed");
 
                     failure.on_failure(parts, error).await
                 }

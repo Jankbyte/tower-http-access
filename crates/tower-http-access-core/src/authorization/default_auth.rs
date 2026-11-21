@@ -50,6 +50,51 @@ where
     }
 }
 
+/// Allows only anonymous requests, denying authenticated callers with
+/// [`AuthorizationDenial::InsufficientPermissions`] (HTTP 403 with the default handler).
+///
+/// Authentication runs before authorization: invalid credentials still fail authentication.
+pub struct AnonymousAuthorizationProvider<A>(PhantomData<fn() -> A>);
+
+impl<A> AnonymousAuthorizationProvider<A> {
+    /// Create the provider.
+    pub fn new() -> Self {
+        Self(PhantomData)
+    }
+}
+
+impl<A> Default for AnonymousAuthorizationProvider<A> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<A> Clone for AnonymousAuthorizationProvider<A> {
+    fn clone(&self) -> Self {
+        Self::new()
+    }
+}
+
+impl<A: Send + Sync> AuthorizationProvider for AnonymousAuthorizationProvider<A> {
+    type Authentication = A;
+    type Error = Infallible;
+
+    fn authorize<'a>(
+        &'a self,
+        authentication: Option<&'a A>,
+        _: &'a Parts,
+    ) -> BoxFuture<'a, Result<AuthorizationDecision, Infallible>> {
+        Box::pin(async move {
+            Ok(match authentication {
+                None => AuthorizationDecision::Allow,
+                Some(_) => {
+                    AuthorizationDecision::Deny(AuthorizationDenial::InsufficientPermissions)
+                }
+            })
+        })
+    }
+}
+
 /// Deny access with a reason based on whether the caller is authenticated.
 ///
 /// Returns [`AuthorizationDenial::AuthenticationRequired`] for `None`, or

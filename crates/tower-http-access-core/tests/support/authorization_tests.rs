@@ -66,6 +66,37 @@ fn authenticated_service() -> impl Service<Request, Response = Response, Error =
 }
 
 #[tokio::test]
+async fn anonymous_provider_allows_guests_and_forbids_authenticated_callers() {
+    let provider = AnonymousAuthorizationProvider::<String>::default().clone();
+    let mut service = security(provider)
+        .authentication_entry_point(|_: &Parts| async {
+            panic!("anonymous policy must not require authentication")
+        })
+        .layer(Inner);
+
+    for (identity, status) in [(None, StatusCode::OK), (Some("alex"), StatusCode::FORBIDDEN)] {
+        let mut request = Request::new(Body::empty());
+        if let Some(identity) = identity {
+            request.headers_mut().insert("x-test-identity", identity.parse().unwrap());
+        }
+        let response = service.call(request).await.unwrap();
+        assert_eq!(response.status(), status);
+    }
+}
+
+#[tokio::test]
+async fn anonymous_provider_preserves_authentication_failures() {
+    let mut service = SecurityLayer::new(
+        |_: &Parts| async { Err::<AuthenticationAttempt<String>, _>(AuthenticatorError::invalid_credentials()) },
+        AnonymousAuthorizationProvider::<String>::new(),
+    )
+    .layer(Inner);
+
+    let response = service.call(Request::new(Body::empty())).await.unwrap();
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
 async fn authenticated_provider_without_identity_returns_unauthorized() {
     let response = authenticated_service()
         .call(Request::new(Body::empty()))
