@@ -10,6 +10,7 @@ use std::sync::Arc;
 
 /// A named role, permission, or other authority granted to a user.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Authority(pub String);
 
 impl Authority {
@@ -20,7 +21,11 @@ impl Authority {
 }
 
 /// An authenticated user with a password hash and granted authorities.
+///
+/// With the `serde` feature enabled, serialization includes all fields, including
+/// the password hash.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct UserDetail {
     /// Unique name of user.
     pub username: String,

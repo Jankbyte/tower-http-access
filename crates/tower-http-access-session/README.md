@@ -253,6 +253,11 @@ calling the next success handler. Its default key is `user_id`; configure the sa
 key on the handler and `SessionRequestAuthenticator`. Place `SessionManagerLayer`
 outside the form-login layer so the session is available in request extensions.
 
+Use `SessionSetSuccessHandler::identity(next)` to store a clone of the authenticated
+entity without supplying a mapper. The entity must implement `Clone` and
+`Serialize`. Pair it with `SessionStoredIdentity<T>` when reading the same entity
+back from the session.
+
 ## CSRF protection
 
 Enable `csrf` to use `csrf::{CsrfLayer, CsrfTokenRepository, CsrfToken}`.
@@ -334,6 +339,43 @@ These are usage choices, not restrictions. A session repository can support AJAX
 by serving a token endpoint; a cookie repository can support HTML forms using the
 masked extension. Neither repository authenticates the user. Keep the authentication
 session cookie HttpOnly even when JavaScript can read the separate CSRF cookie.
+
+#### HttpOnly and token storage are separate choices
+
+`CookieCsrfTokenRepository::with_http_only(...)` controls whether JavaScript can
+read the CSRF cookie through `document.cookie`. It does not change where the
+expected token is stored or bind it to an authenticated session. The browser
+still sends an HttpOnly cookie automatically with eligible requests.
+
+| | Cookie repository with `HttpOnly=true` | Session repository |
+| --- | --- | --- |
+| Expected token | Stored in a separate browser cookie | Stored in the server-side session |
+| Browser submits | CSRF cookie and a token in a header or form field | Session cookie and a token in a header or form field |
+| Server compares submitted token against | CSRF cookie value | Token loaded from the session |
+| Requires a server-side session | No | Yes |
+| Token bound to the session | No | Yes |
+| Server-side revocation | Expiring the cookie does not invalidate previously copied values | Remove the stored token or invalidate the session |
+
+Use `.with_http_only(false)` when JavaScript copies the CSRF cookie into the
+`x-xsrf-token` header, as in the React example. This raw-cookie flow also requires
+`CsrfLayer::mask_tokens(false)`.
+
+Keep the default `.with_http_only(true)` when the application supplies the token
+through a hidden form field, an HTML meta tag, or a JSON endpoint instead.
+Render or return the `CsrfToken` request extension, and keep the default masking
+enabled. JavaScript can read the HTML or JSON token without reading the cookie.
+The cookie alone is not sufficient: unsafe requests must also submit the token.
+
+For server-rendered applications already using sessions, start with
+`HttpSessionCsrfTokenRepository`. Choose the cookie repository when CSRF protection
+should not require server-side session storage, even if its cookie stays HttpOnly.
+Session tokens survive application restarts only if the session store retains them;
+cookie tokens can remain usable across restarts while the browser retains the cookie.
+
+`Secure` is independent of `HttpOnly`: it restricts cookie transmission to HTTPS.
+Keep it enabled for both cookies when using HTTPS. Only the CSRF cookie needs
+`HttpOnly=false` in the cookie-to-header flow; the authentication/session cookie
+should remain HttpOnly.
 
 **Server-rendered HTML:** use `HttpSessionCsrfTokenRepository` and leave masking
 on. Defaults are session key `tower_http_access_session.csrf_token`, request header

@@ -89,22 +89,19 @@ async fn session_success_rotates_stores_and_then_delegates() {
     session.insert("existing", true).await.unwrap();
     session.save().await.unwrap();
     let old_id = session.id();
-    let handler = SessionSetSuccessHandler::new(
-        |identity: &String| identity.clone(),
-        |parts: Parts, identity: String| async move {
-            let session = parts.extensions.get::<Session>().unwrap();
-            assert_eq!(
-                session.get::<String>("user_id").await.unwrap(),
-                Some(identity)
-            );
-            assert_eq!(session.get::<bool>("existing").await.unwrap(), Some(true));
-            Response::builder()
-                .status(StatusCode::SEE_OTHER)
-                .header(header::LOCATION, "/private")
-                .body(Bytes::new())
-                .unwrap()
-        },
-    );
+    let handler = SessionSetSuccessHandler::identity(|parts: Parts, identity: String| async move {
+        let session = parts.extensions.get::<Session>().unwrap();
+        assert_eq!(
+            session.get::<String>("user_id").await.unwrap(),
+            Some(identity)
+        );
+        assert_eq!(session.get::<bool>("existing").await.unwrap(), Some(true));
+        Response::builder()
+            .status(StatusCode::SEE_OTHER)
+            .header(header::LOCATION, "/private")
+            .body(Bytes::new())
+            .unwrap()
+    });
     let mut req = request(
         Method::POST,
         "/login",

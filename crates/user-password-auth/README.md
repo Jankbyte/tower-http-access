@@ -18,6 +18,10 @@ Enable `user_details` to use `UserDetail`, `Authority`, `UserDetailService`,
 user-password-auth = { version = "0.0.1", features = ["user_details"] }
 ```
 
+Also enable `serde` to derive `serde::Serialize` and `serde::Deserialize` for
+`UserDetail` and `Authority`. Serialization includes all `UserDetail` fields,
+including `hashed_password`.
+
 `UserDetailAuthenticationProvider` loads users through a `UserDetailService` and
 verifies their passwords. Applications implementing their own identity types and
 providers can leave `user_details` disabled. No features are enabled by default.

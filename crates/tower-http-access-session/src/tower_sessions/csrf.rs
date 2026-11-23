@@ -55,7 +55,7 @@ fn generate_token(
 
 /// Stores a CSRF token in the server-side tower-sessions session.
 ///
-/// Recommended for server-rendered HTML: use the CsrfToken request extension to
+/// Recommended for server-rendered HTML: use the [`CsrfToken`] request extension to
 /// render a hidden `_csrf` field. Also works for AJAX if an endpoint exposes the
 /// token explicitly. Requires [`SessionManagerLayer`] outside [`CsrfLayer`]. Storage
 /// lifetime and invalidation follow the session; flushing a session removes its
@@ -236,8 +236,8 @@ impl CookieCsrfTokenRepository {
         Ok(self)
     }
 
-    /// Secure defaults to true. For local HTTP, first choose a name without a
-    /// __Host- or __Secure- prefix, then explicitly disable Secure.
+    /// Secure defaults to *true*. For local HTTP, first choose a name without a
+    /// `__Host-` or `__Secure-` prefix, then explicitly disable Secure.
     pub fn with_secure(mut self, secure: bool) -> Result<Self, CsrfRepositoryError> {
         if !secure && requires_secure(&self.cookie_name) {
             return Err(CsrfRepositoryError::InsecureCookiePrefix);
@@ -247,6 +247,21 @@ impl CookieCsrfTokenRepository {
     }
 
     /// Disable HttpOnly only when JavaScript must read the CSRF cookie.
+    ///
+    /// Defaults to `true`, which blocks access through `document.cookie` but does
+    /// not prevent the browser from sending the cookie. Keep this default when
+    /// rendering the [`CsrfToken`] request extension into a hidden form field or
+    /// meta tag, or returning it from a JSON endpoint. These workflows can keep
+    /// the CSRF layer's default token masking enabled.
+    ///
+    /// Set to `false` for a SPA (Sigle page applications, like Angular/React/Vue and e.g.) that copies the cookie into `x-xsrf-token`.
+    /// Configure `CsrfLayer::mask_tokens(false)` for this raw-cookie workflow.
+    ///
+    /// This setting does not move the token into a server-side session. Unlike
+    /// `HttpSessionCsrfTokenRepository`, this repository always validates against
+    /// the separate CSRF cookie and does not require a session. `Secure` remains
+    /// independent: a Secure cookie can be JavaScript-readable on an HTTPS page.
+    ///
     /// This does not alter the authentication/session cookie's HttpOnly setting.
     pub fn with_http_only(mut self, http_only: bool) -> Self {
         self.http_only = http_only;

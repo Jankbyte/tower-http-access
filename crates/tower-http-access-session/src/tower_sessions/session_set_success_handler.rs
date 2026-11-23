@@ -9,6 +9,7 @@ use tower_http_access_form_login::SuccessHandler;
 ///
 /// The default key is `user_id`, matching [`crate::tower_sessions::SessionRequestAuthenticator`].
 /// Use the mapper to store a user identifier or a complete serializable identity.
+/// Use [`Self::identity`] to store a clone of the authenticated entity itself.
 /// Session middleware must run before form login. Missing sessions and session
 /// operation failures return 500 without invoking the next handler. The surrounding
 /// session manager saves the updated session and sets the cookie.
@@ -29,6 +30,26 @@ pub struct SessionSetSuccessHandler<F, H> {
     map_identity: F,
     next: H,
     session_key: String,
+}
+
+impl<H> SessionSetSuccessHandler<(), H> {
+    /// Store a clone of the authenticated entity, then delegate the response.
+    ///
+    /// The entity must implement `Serialize` to use this handler. Configure the
+    /// session authenticator with `SessionStoredIdentity<A>` to read it back.
+    ///
+    /// ```
+    /// use tower_http_access_form_login::DefaultSuccessHandler;
+    /// use tower_http_access_session::tower_sessions::SessionSetSuccessHandler;
+    ///
+    /// let handler = SessionSetSuccessHandler::identity::<String>(DefaultSuccessHandler)
+    ///     .with_session_key("principal");
+    /// ```
+    pub fn identity<A: Clone>(
+        next: H,
+    ) -> SessionSetSuccessHandler<impl Fn(&A) -> A + Clone + Send + Sync, H> {
+        SessionSetSuccessHandler::new(|identity: &A| identity.clone(), next)
+    }
 }
 
 impl<F, H> SessionSetSuccessHandler<F, H> {
@@ -58,6 +79,10 @@ where
     fn on_success(&self, parts: Parts, authentication: A) -> BoxFuture<'_, SecurityResponse> {
         Box::pin(async move {
             let Some(session) = parts.extensions.get::<Session>().cloned() else {
+                #[cfg(feature = "tracing")]
+                tracing::warn!(
+                    "session extension not found. are you sure you have SessionManagerLayer in chain before FormLoginLayer?"
+                );
                 return internal_error();
             };
             let identity = (self.map_identity)(&authentication);

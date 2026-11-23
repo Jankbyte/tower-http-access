@@ -1,0 +1,23 @@
+[package]
+name = "axum-react-session-backend"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[dependencies]
+http-request-matcher.workspace = true
+tower-http-access-form-login = { workspace = true, features = ["tracing"] }
+tower-http-access-core = { workspace = true, features = ["authorizers", "axum", "tracing"] }
+tower-http-access-authorizers = { workspace = true, features = ["authorities", "request_matcher"] }
+tower-http-access-session = {workspace = true, features = ["form_login", "tower_sessions", "csrf", "tracing" ] }
+user-password-auth = { workspace = true, features = ["tracing", "user_details", "serde"] }
+tokio = { workspace = true, features = ["full"] }
+argon2.workspace = true
+axum.workspace = true
+serde = { workspace = true, features = ["derive"] }
+tower-sessions = { workspace = true, features = ["memory-store"] }
+tower.workspace = true
+tracing-subscriber.workspace = true
+tracing.workspace = true
+include_dir = "0.7"
+mime_guess = "2"

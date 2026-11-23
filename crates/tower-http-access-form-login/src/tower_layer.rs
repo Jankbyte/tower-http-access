@@ -11,6 +11,7 @@ use http_body_util::{BodyExt, Limited};
 use http_request_matcher::PathPatternRequestMatcher;
 use http_request_matcher::RequestMatcher;
 use std::{
+    str::FromStr,
     sync::Arc,
     task::{Context, Poll},
 };
@@ -71,6 +72,7 @@ pub struct FormLoginLayer<
     request_matcher: M,
     username_field: Arc<str>,
     password_field: Arc<str>,
+    remember_field: Arc<str>,
     body_limit: usize,
     success: H,
     failure: F,
@@ -85,6 +87,7 @@ impl<P: UsernamePasswordAuthenticationProvider> FormLoginLayer<P> {
                 .with_method(Method::POST),
             username_field: "username".into(),
             password_field: "password".into(),
+            remember_field: "rememberme".into(),
             body_limit: 16 * 1024,
             success: DefaultSuccessHandler,
             failure: DefaultFailureHandler,
@@ -100,6 +103,7 @@ impl<P, M, H, F> FormLoginLayer<P, M, H, F> {
             request_matcher: matcher,
             username_field: self.username_field,
             password_field: self.password_field,
+            remember_field: self.remember_field,
             body_limit: self.body_limit,
             success: self.success,
             failure: self.failure,
@@ -108,6 +112,11 @@ impl<P, M, H, F> FormLoginLayer<P, M, H, F> {
 
     pub fn username_parameter(mut self, name: impl Into<Arc<str>>) -> Self {
         self.username_field = name.into();
+        self
+    }
+
+    pub fn remember_parameter(mut self, name: impl Into<Arc<str>>) -> Self {
+        self.remember_field = name.into();
         self
     }
 
@@ -132,6 +141,7 @@ impl<P, M, H, F> FormLoginLayer<P, M, H, F> {
             request_matcher: self.request_matcher,
             username_field: self.username_field,
             password_field: self.password_field,
+            remember_field: self.remember_field,
             body_limit: self.body_limit,
             success: handler,
             failure: self.failure,
@@ -149,6 +159,7 @@ impl<P, M, H, F> FormLoginLayer<P, M, H, F> {
             request_matcher: self.request_matcher,
             username_field: self.username_field,
             password_field: self.password_field,
+            remember_field: self.remember_field,
             body_limit: self.body_limit,
             success: self.success,
             failure: handler,
@@ -210,6 +221,7 @@ where
         let failure = self.config.failure.clone();
         let username_field = Arc::clone(&self.config.username_field);
         let password_field = Arc::clone(&self.config.password_field);
+        let remember_field = Arc::clone(&self.config.remember_field);
         let body_limit = self.config.body_limit;
         Box::pin(async move {
             let result = async {
@@ -239,7 +251,7 @@ where
                 let fields: Vec<(String, String)> =
                     serde_urlencoded::from_bytes(&collected.to_bytes())
                         .map_err(|_| FormLoginError::InvalidForm)?;
-                let field = |name: &str| {
+                let extract_field = |name: &str| {
                     let mut values = fields.iter().filter(|(key, _)| key == name);
                     let value = values.next().ok_or(FormLoginError::InvalidForm)?.1.clone();
                     if values.next().is_some() {
@@ -248,24 +260,32 @@ where
                     Ok(value)
                 };
                 let credentials = Credentials {
-                    username: field(&username_field)?,
-                    password: field(&password_field)?,
+                    username: extract_field(&username_field)?,
+                    password: extract_field(&password_field)?,
                 };
                 #[cfg(feature = "tracing")]
                 tracing::trace!(username = %credentials.username, "trying authenticate user");
+
+                let remember = bool::from_str(
+                    extract_field(&remember_field)
+                        .unwrap_or("false".to_owned())
+                        .as_str(),
+                )
+                .map_err(|_| FormLoginError::InvalidForm)?;
 
                 provider
                     .authenticate(&credentials)
                     .await
                     .map_err(|error| FormLoginError::Backend(Box::new(error)))?
+                    .map(|auth| (remember, auth))
                     .ok_or(FormLoginError::InvalidCredentials)
             }
             .await;
             let response = match result {
-                Ok(identity) => {
+                Ok((_, identity)) => {
+                    // TODO: use rememberme
                     #[cfg(feature = "tracing")]
                     tracing::trace!("success authenticated");
-
                     success.on_success(parts, identity).await
                 }
                 Err(error) => {

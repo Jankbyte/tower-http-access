@@ -15,6 +15,7 @@ futures-util = { workspace = true, features = ["alloc"] }
 password-hash = { workspace = true, features = ["getrandom", "phc"] }
 tokio = { workspace = true, features = ["rt", "sync"] }
 thiserror.workspace = true
+serde = { workspace = true, optional = true, features = ["derive"] }
 tracing = { workspace = true, optional = true }
 
 [dev-dependencies]
@@ -24,6 +25,7 @@ tokio = { workspace = true, features = ["full"] }
 [features]
 default = []
 user_details = []
+serde = ["dep:serde"]
 tracing = ["dep:tracing"]
 
 [package.metadata.docs.rs]

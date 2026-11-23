@@ -1,0 +1,13 @@
+.login-page {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  padding: 24px;
+  background: #f4f6fa;
+}
+
+body:has(.login-page) {
+  margin: 0;
+}

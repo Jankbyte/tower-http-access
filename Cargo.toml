@@ -10,7 +10,8 @@ members = [
     "crates/tower-http-access-form-login",
     "examples/axum-basic-auth-crud",
     "examples/axum-server-usage",
-    "examples/axum-session-ssr"
+    "examples/axum-session-ssr",
+    "examples/session-react-axum/axum-react-session-backend"
 ]
 
 resolver = "3"
