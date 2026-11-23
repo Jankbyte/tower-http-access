@@ -87,7 +87,7 @@ fn create_session_layer() -> Result<SessionLayer, Box<dyn StdError + Send + Sync
         .with_secure(false)?
         .with_http_only(false);
 
-    let session_store = MemoryStore::default();
+    let session_store = MemoryStore::default(); // for scalable & stateless production use Redis/any other distributed storage
     let session_layer = SessionManagerLayer::new(session_store)
         .with_secure(true)
         .with_name("BROWSERSESSION")

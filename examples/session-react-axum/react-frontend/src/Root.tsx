@@ -1,10 +1,10 @@
-import './App.css'
+import './Root.css'
 import { Outlet } from "react-router";
 
-function App() {
+function Root() {
   return (
     <Outlet />
   )
 }
 
-export default App
+export default Root

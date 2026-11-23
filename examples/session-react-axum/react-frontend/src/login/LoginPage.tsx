@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import type AuthService from '../auth/AuthService';
-import type { LoginCredentials } from '../auth/AuthService';
-import LoginForm from './LoginForm';
+import LoginForm, { type LoginCredentials } from './LoginForm';
 import './LoginPage.css';
 
 type LoginPageProps = {

@@ -1,10 +1,5 @@
 import type ApiClient from '../api/ApiClient';
-
-export type LoginCredentials = {
-  username: string;
-  password: string;
-  rememberme: boolean;
-};
+import type { LoginCredentials } from '../login/LoginForm';
 
 export type CurrentUser = {
   username: string;

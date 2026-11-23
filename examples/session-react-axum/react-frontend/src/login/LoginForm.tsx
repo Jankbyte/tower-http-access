@@ -1,6 +1,11 @@
 import { useId, type SubmitEvent } from 'react';
-import type { LoginCredentials } from '../auth/AuthService';
 import styles from './LoginForm.module.css';
+
+export type LoginCredentials = {
+  username: string;
+  password: string;
+  rememberme: boolean;
+};
 
 type LoginFormProps = {
   onLogin: (credentials: LoginCredentials) => void | Promise<void>;

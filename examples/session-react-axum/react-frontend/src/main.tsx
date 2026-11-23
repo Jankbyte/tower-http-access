@@ -2,10 +2,19 @@ import { RouterProvider } from "react-router";
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
-import router from './router'
+import ApiClient from './api/ApiClient'
+import AuthService from './auth/AuthService'
+import { createRouter } from './router'
 
-createRoot(document.getElementById('root')!).render(
+const apiClient = new ApiClient();
+const authService = new AuthService(apiClient);
+const router = createRouter(authService);
+
+const container = document.getElementById('root');
+const root = createRoot(container!)
+
+root.render(
   <StrictMode>
     <RouterProvider router={router} />
   </StrictMode>,
-)
+);
