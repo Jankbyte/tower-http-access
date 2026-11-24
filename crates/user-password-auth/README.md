@@ -31,6 +31,7 @@ Available features:
 
 [`UserDetail`]: crate::UserDetail
 [`Credentials`]: crate::Credentials
+[`UserDetailAuthenticationProvider`]: crate::UserDetailAuthenticationProvider
 [`UsernamePasswordAuthenticationProvider`]: crate::UsernamePasswordAuthenticationProvider
 [`AsyncPasswordHasher`]: crate::AsyncPasswordHasher
 [`AsyncPasswordVerifier`]: crate::AsyncPasswordVerifier
