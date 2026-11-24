@@ -9,6 +9,24 @@ pub struct Credentials {
     pub password: String,
 }
 
+impl Credentials {
+    /// Create new credentials.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use user_password_auth::Credentials;
+    /// let _ = Credentials::new("username", "password");
+    /// ```
+    ///
+    pub fn new(username: impl Into<String>, password: impl Into<String>) -> Self {
+        Self {
+            username: username.into(),
+            password: password.into(),
+        }
+    }
+}
+
 impl fmt::Debug for Credentials {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter

@@ -1,31 +1,37 @@
-# user-password-auth
+# Username/password auth abstractions
 
 Abstractions for implementing username/password authentication in HTTP-based
 applications, including HTTP Basic authentication and form login.
 
-HTTP integrations extract credentials from requests and pass them to a
-`UsernamePasswordAuthenticationProvider` for verification. The same provider can
-serve multiple authentication mechanisms.
+# Base abstractions
 
-`Credentials`, `UsernamePasswordAuthenticationProvider`, and password hashing and
-verification helpers are always available. `Credentials` redacts the password in
-its `Debug` output.
+## Authentication provider
 
-Enable `user_details` to use `UserDetail`, `Authority`, `UserDetailService`,
-`UserDetailAuthenticationProvider`, `InMemoryUserDetailService`, and their errors:
+It's add [`UsernamePasswordAuthenticationProvider`] trait that should authenticate by [`Credentials`].
+The default/demo implementation [`UserDetailAuthenticationProvider`] can be enabled by `user_details` feature.
 
-```toml
-user-password-auth = { version = "0.0.1", features = ["user_details"] }
-```
+## Password
 
-Also enable `serde` to derive `serde::Serialize` and `serde::Deserialize` for
-`UserDetail` and `Authority`. Serialization includes all `UserDetail` fields,
-including `hashed_password`.
+The feature `password` will enable [`AsyncPasswordHasher`]/[`AsyncPasswordVerifier`] - abstractions for hashing and
+verifing passwords.
 
-`UserDetailAuthenticationProvider` loads users through a `UserDetailService` and
-verifies their passwords. Applications implementing their own identity types and
-providers can leave `user_details` disabled. No features are enabled by default.
+It has base implementation [`AsyncStringPasswordManager`] that wraps *[password-hash](https://docs.rs/password-hash/latest/password_hash/)* implementations (like *[argon2](https://docs.rs/argon2/latest/argon2/)*).
 
-`AsyncStringPasswordManager` runs password operations on Tokio's blocking pool
-with a configurable concurrency limit. Password helpers remain available without
-`user_details`, including their Tokio and password-hashing dependencies.
+# Features
+
+Available features:
+
+| Name           | Description                                                            |
+|----------------|------------------------------------------------------------------------|
+| `user_details` | Enable [`UserDetail`] abstractions.                                    |
+| `serde`        | Enable serialization for `UserDetail` (also enable this feature).      |
+| `tracing`      | Enable [tracing](https://docs.rs/tracing/latest/tracing/) for logging. |
+| `password`     | Enable [`AsyncPasswordHasher`] abstractions.                           |
+
+
+[`UserDetail`]: crate::UserDetail
+[`Credentials`]: crate::Credentials
+[`UsernamePasswordAuthenticationProvider`]: crate::UsernamePasswordAuthenticationProvider
+[`AsyncPasswordHasher`]: crate::AsyncPasswordHasher
+[`AsyncPasswordVerifier`]: crate::AsyncPasswordVerifier
+[`AsyncStringPasswordManager`]: crate::AsyncStringPasswordManager

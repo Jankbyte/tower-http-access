@@ -1,0 +1,7 @@
+.page {
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  padding: 24px;
+  background: var(--page-background);
+}

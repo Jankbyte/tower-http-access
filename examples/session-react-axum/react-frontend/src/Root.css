@@ -1,0 +1,9 @@
+body {
+  margin: 0;
+}
+
+.app-layout {
+  min-height: 100dvh;
+  display: grid;
+  grid-template-rows: auto 1fr;
+}

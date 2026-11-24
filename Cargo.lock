@@ -143,6 +143,7 @@ dependencies = [
  "tokio",
  "tower",
  "tower-http-access-authorizers",
+ "tower-http-access-basic",
  "tower-http-access-core",
  "tower-http-access-form-login",
  "tower-http-access-session",

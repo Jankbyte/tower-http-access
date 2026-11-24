@@ -1,5 +1,5 @@
-import type ApiClient from '../api/ApiClient';
 import type { LoginCredentials } from '../login/LoginForm';
+import type CookieService from '../service/cookie.service';
 
 export type CurrentUser = {
   username: string;
@@ -7,14 +7,18 @@ export type CurrentUser = {
 };
 
 export default class AuthService {
-  private readonly apiClient: ApiClient;
+  private readonly cookieService: Pick<CookieService, 'getCookie'>;
 
-  constructor(apiClient: ApiClient) {
-    this.apiClient = apiClient;
+  constructor(cookieService: Pick<CookieService, 'getCookie'>) {
+    this.cookieService = cookieService;
   }
 
   async getCurrentUser(): Promise<CurrentUser | null> {
-    const response = await this.apiClient.request('/v1/ui/auth/me', { cache: 'no-store' });
+    const response = await fetch('/v1/ui/auth/me', {
+      cache: 'no-store',
+      credentials: 'same-origin',
+      redirect: 'error',
+    });
     if (response.status === 401) return null;
     if (!response.ok) {
       throw new Error('Unable to load the current user. Please try again.');
@@ -23,14 +27,40 @@ export default class AuthService {
   }
 
   async authenticate(credentials: LoginCredentials): Promise<void> {
-    const response = await this.apiClient.post('/v1/ui/auth/login', new URLSearchParams({
-      username: credentials.username,
-      password: credentials.password,
-      remember_me: String(credentials.rememberme),
-    }));
+    const csrfToken = this.cookieService.getCookie('XSRF-TOKEN');
+    if (!csrfToken) {
+      throw new Error('CSRF token is missing. Please reload the page and try again.');
+    }
+    const response = await fetch('/v1/ui/auth/login', {
+      method: 'POST',
+      credentials: 'same-origin',
+      redirect: 'error',
+      headers: { 'x-xsrf-token': csrfToken },
+      // fetch supplies application/x-www-form-urlencoded for URLSearchParams.
+      body: new URLSearchParams({
+        username: credentials.username,
+        password: credentials.password,
+        remember_me: String(credentials.rememberme),
+      }),
+    });
 
     if (!response.ok) {
       throw new Error('Login failed. Please check your credentials and try again.');
+    }
+  }
+
+  async logout(): Promise<void> {
+    const csrfToken = this.cookieService.getCookie('XSRF-TOKEN');
+    if (!csrfToken) throw new Error('CSRF token is missing. Please reload the page and try again.');
+    const response = await fetch('/v1/ui/auth/logout', {
+      method: 'POST',
+      credentials: 'same-origin',
+      redirect: 'error',
+      headers: { 'x-xsrf-token': csrfToken },
+    });
+    // An expired session is already logged out.
+    if (!response.ok && response.status !== 401) {
+      throw new Error('Unable to log out. Please try again.');
     }
   }
 }

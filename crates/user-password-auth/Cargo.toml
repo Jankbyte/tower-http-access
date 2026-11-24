@@ -12,9 +12,9 @@ categories = ["authentication"]
 
 [dependencies]
 futures-util = { workspace = true, features = ["alloc"] }
-password-hash = { workspace = true, features = ["getrandom", "phc"] }
-tokio = { workspace = true, features = ["rt", "sync"] }
-thiserror.workspace = true
+password-hash = { workspace = true, optional = true, features = ["getrandom", "phc"] }
+tokio = { workspace = true, optional = true, features = ["rt", "sync"] }
+thiserror = { workspace = true, optional = true }
 serde = { workspace = true, optional = true, features = ["derive"] }
 tracing = { workspace = true, optional = true }
 
@@ -24,8 +24,9 @@ tokio = { workspace = true, features = ["full"] }
 
 [features]
 default = []
-user_details = []
-serde = ["dep:serde"]
+password = ["dep:password-hash", "dep:tokio", "dep:thiserror"]
+user_details = ["password"]
+serde = ["dep:serde", "user_details"]
 tracing = ["dep:tracing"]
 
 [package.metadata.docs.rs]

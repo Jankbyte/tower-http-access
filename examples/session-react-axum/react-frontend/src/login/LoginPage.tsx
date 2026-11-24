@@ -1,27 +1,29 @@
 import { useState } from 'react';
-import type AuthService from '../auth/AuthService';
+import { Navigate, useLocation } from 'react-router';
+import type AuthStore from '../auth/AuthStore';
+import useAuth from '../auth/useAuth';
+import AuthStatus from '../auth/AuthStatus';
+import { returnPath } from '../auth/navigation';
 import LoginForm, { type LoginCredentials } from './LoginForm';
-import './LoginPage.css';
+import CenteredPage from '../components/centered/CenteredPage';
 
 type LoginPageProps = {
-  authService: AuthService;
+  authStore: AuthStore;
 };
 
-function LoginPage({ authService }: LoginPageProps) {
+function LoginPage({ authStore }: LoginPageProps) {
+  const auth = useAuth(authStore);
+  const location = useLocation();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
   async function handleLogin(credentials: LoginCredentials) {
     if (isSubmitting) return;
     setIsSubmitting(true);
-    setMessage('');
     setError('');
 
     try {
-      await authService.authenticate(credentials);
-
-      setMessage('Login successful.');
+      await authStore.authenticate(credentials);
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Unable to log in. Please try again.');
     } finally {
@@ -29,17 +31,26 @@ function LoginPage({ authService }: LoginPageProps) {
     }
   }
 
-  return (
-    <main className="login-page">
-      <LoginForm
-        onLogin={handleLogin}
-        buttonLabel={isSubmitting ? 'Logging in…' : 'Log in'}
-        disabled={isSubmitting}
-        error={error}
-        message={message}
-      />
-    </main>
-  )
+  switch (auth.status) {
+    case 'loading':
+    case 'error':
+      return <AuthStatus authStore={authStore} />;
+
+    case 'authenticated':
+      return <Navigate to={returnPath(location.search)} replace />;
+
+    case 'unauthenticated':
+      return (
+        <CenteredPage>
+          <LoginForm
+            onLogin={handleLogin}
+            buttonLabel={isSubmitting ? 'Logging in…' : 'Log in'}
+            disabled={isSubmitting}
+            error={error}
+          />
+        </CenteredPage>
+      );
+  }
 }
 
 export default LoginPage;
