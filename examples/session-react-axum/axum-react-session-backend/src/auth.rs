@@ -23,7 +23,11 @@ pub(crate) fn router<P>(
     provider: P,
 ) -> Result<Router, Box<dyn std::error::Error + Send + Sync>>
 where
-    P: UsernamePasswordAuthenticationProvider<Authentication = UserDetail> + Clone + 'static,
+    P: UsernamePasswordAuthenticationProvider<
+            Authentication = UserDetail,
+            Error: Send + Sync + 'static,
+        > + Clone
+        + 'static,
 {
     let login = create_form_login_layer(session_auth_key, provider)?.layer(service_fn(
         |_: Request<Body>| async {
@@ -53,7 +57,10 @@ fn create_form_login_layer<P>(
     Box<dyn std::error::Error + Send + Sync>,
 >
 where
-    P: UsernamePasswordAuthenticationProvider<Authentication = UserDetail> + Clone,
+    P: UsernamePasswordAuthenticationProvider<
+            Authentication = UserDetail,
+            Error: Send + Sync + 'static,
+        > + Clone,
 {
     Ok(FormLoginLayer::new(provider)
         .request_matcher(PathPatternRequestMatcher::new(LOGIN_PATH)?.with_method(Method::POST))

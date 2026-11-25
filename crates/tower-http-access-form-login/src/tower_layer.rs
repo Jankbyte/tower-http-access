@@ -196,6 +196,8 @@ where
     S::Future: Send + 'static,
     S::Error: Send + 'static,
     P: UsernamePasswordAuthenticationProvider + Clone + 'static,
+    P::Authentication: Send + 'static,
+    P::Error: Send + Sync + 'static,
     M: RequestMatcher + Clone + 'static,
     H: SuccessHandler<P::Authentication> + Clone + 'static,
     F: FailureHandler + Clone + 'static,

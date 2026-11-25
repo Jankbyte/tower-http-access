@@ -71,7 +71,10 @@ pub(crate) fn create_form_login_layer<P>(
     Box<dyn std::error::Error + Send + Sync>,
 >
 where
-    P: UsernamePasswordAuthenticationProvider<Authentication = UserDetail> + Clone,
+    P: UsernamePasswordAuthenticationProvider<
+            Authentication = UserDetail,
+            Error: Send + Sync + 'static,
+        > + Clone,
 {
     let map_identity: fn(&UserDetail) -> SessionIdentity = |identity| SessionIdentity {
         username: identity.username.clone(),

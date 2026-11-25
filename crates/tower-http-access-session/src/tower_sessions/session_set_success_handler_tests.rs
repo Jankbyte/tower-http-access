@@ -60,6 +60,8 @@ async fn run<P, M, H, F>(
 ) -> Response<Bytes>
 where
     P: UsernamePasswordAuthenticationProvider + Clone + 'static,
+    P::Authentication: Send + 'static,
+    P::Error: Send + Sync + 'static,
     M: RequestMatcher + Clone + 'static,
     H: SuccessHandler<P::Authentication> + Clone + 'static,
     F: FailureHandler + Clone + 'static,

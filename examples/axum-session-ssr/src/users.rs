@@ -10,7 +10,10 @@ use user_password_auth::{
 pub(crate) async fn create_up_provider(
     concurrency: usize,
     users: Vec<UserDetail>,
-) -> impl UsernamePasswordAuthenticationProvider<Authentication = UserDetail> + Clone {
+) -> impl UsernamePasswordAuthenticationProvider<
+    Authentication = UserDetail,
+    Error: Send + Sync + 'static,
+> + Clone {
     let password_hasher = create_password_hasher(concurrency);
     let users_service = create_users_service(users, &password_hasher).await;
     UserDetailAuthenticationProvider::new(password_hasher, users_service)

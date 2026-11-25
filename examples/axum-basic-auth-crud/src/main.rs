@@ -208,7 +208,8 @@ async fn create_basic_authenticator()
 }
 
 async fn create_up_provider()
--> impl UsernamePasswordAuthenticationProvider<Authentication = UserDetail> {
+-> impl UsernamePasswordAuthenticationProvider<Authentication = UserDetail, Error: Send + Sync + 'static>
+{
     let password_hasher = create_password_hasher(5);
     let users_service = create_users_service(&password_hasher).await;
     UserDetailAuthenticationProvider::new(password_hasher, users_service)
