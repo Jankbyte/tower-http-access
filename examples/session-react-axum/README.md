@@ -28,7 +28,7 @@ Build the client first, then the server:
 ```bash
 npm --prefix examples/session-react-axum/react-frontend ci
 npm --prefix examples/session-react-axum/react-frontend run build
-cargo build --release --bin axum-react-session-backend
+cargo build --release --features embedded-frontend --bin axum-react-session-backend
 ```
 
 Run it:

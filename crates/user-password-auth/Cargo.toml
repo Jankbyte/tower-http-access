@@ -31,3 +31,18 @@ tracing = ["dep:tracing"]
 
 [package.metadata.docs.rs]
 all-features = true
+
+[[example]]
+name = "simple_authenticator"
+
+[[example]]
+name = "password_hasher_verify"
+required-features = ["password"]
+
+[[example]]
+name = "user_details_service"
+required-features = ["user_details"]
+
+[[example]]
+name = "custom_user_detail_service"
+required-features = ["user_details"]

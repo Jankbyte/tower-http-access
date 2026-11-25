@@ -9,6 +9,7 @@ mod user_detail;
 
 pub use authentication::UsernamePasswordAuthenticationProvider;
 pub use credentials::Credentials;
+
 #[cfg(feature = "password")]
 pub use password::{
     AsyncPasswordError, AsyncPasswordHasher, AsyncPasswordVerifier, AsyncStringPasswordManager,

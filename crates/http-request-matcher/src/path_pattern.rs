@@ -7,7 +7,7 @@ use crate::core::RequestMatcher;
 #[error("invalid request path pattern: {0}")]
 pub struct InvalidRequestPattern(pub String);
 
-/// A compiled, case-sensitive URI path pattern using `matchit` syntax.
+/// A compiled, case-sensitive URI path pattern using [`matchit`] syntax.
 ///
 /// `{name}` matches a nonempty segment. A final `/{*rest}` matches a
 /// nonempty remainder, excluding the base path and its trailing slash.
@@ -29,6 +29,8 @@ pub struct InvalidRequestPattern(pub String);
 /// assert!(matcher.matches(&parts));
 /// # Ok::<(), http_request_matcher::InvalidRequestPattern>(())
 /// ```
+///
+/// [`matchit`]: https://docs.rs/matchit/latest/matchit/
 #[derive(Clone)]
 pub struct PathPatternRequestMatcher {
     router: matchit::Router<()>,

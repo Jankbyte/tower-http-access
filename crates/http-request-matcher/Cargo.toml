@@ -5,13 +5,18 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Composable HTTP request matching by path, method, and media type"
+description = "HTTP request matching components."
 readme = "README.md"
 keywords = ["http", "request", "matcher", "routing"]
 categories = ["web-programming::http-server"]
 
 [dependencies]
 http.workspace = true
-matchit.workspace = true
-mime.workspace = true
-thiserror.workspace = true
+matchit = { optional = true, workspace = true }
+mime = { optional = true, workspace = true }
+thiserror = { optional = true, workspace = true }
+
+[features]
+default = ["path"]
+media_type = ["dep:mime"]
+path = ["dep:matchit", "dep:thiserror"]

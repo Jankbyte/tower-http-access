@@ -2,11 +2,26 @@ use http::request::Parts;
 
 use crate::core::RequestMatcher;
 
-/// Matches every request, regardless of method, path, headers, or extensions.
+/// Matches every request as accepted (`matches` everytime returns *true*).
 ///
-/// Use as the last matcher in an ordered chain or policy to handle all remaining
-/// requests. Placing it first prevents later entries from being selected.
-/// Matching selects a policy; it does not itself grant access.
+/// # Examples
+///
+/// ```rust
+/// use http_request_matcher::{RequestMatcher, AnyRequestMatcher};
+/// use http::Request;
+///
+/// let matcher = AnyRequestMatcher;
+///
+/// let (parts, _) = Request::builder()
+///     .method("GET")
+///     .uri("/v1/test")
+///     .body(())
+///     .unwrap()
+///     .into_parts();
+/// let matched = matcher.matches(&parts);
+/// assert!(matched);
+/// ```
+///
 #[derive(Clone, Copy, Debug, Default)]
 pub struct AnyRequestMatcher;
 

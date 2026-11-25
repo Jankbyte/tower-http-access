@@ -1,5 +1,5 @@
 mod auth;
-#[cfg(not(debug_assertions))]
+#[cfg(feature = "embedded-frontend")]
 mod frontend;
 mod note;
 mod principal;
@@ -93,9 +93,9 @@ async fn main() -> Result<(), Box<dyn StdError + Send + Sync>> {
 
     let browser_matcher = BrowserRequestMatcher::new(session::SESSION_COOKIE);
 
-    // Vite serves the initial HTML in development, so the first backend fetch
+    // When the frontend is served separately, the first backend fetch
     // needs to enter the browser stack before a session cookie exists.
-    #[cfg(debug_assertions)]
+    #[cfg(not(feature = "embedded-frontend"))]
     let browser_matcher = http_request_matcher::OrRequestMatcher::new(
         browser_matcher,
         http_request_matcher::PathPatternRequestMatcher::new("/v1/ui/{*path}")?,
@@ -106,8 +106,8 @@ async fn main() -> Result<(), Box<dyn StdError + Send + Sync>> {
         .fallback(api_security_stack)
         .build()?;
 
-    #[cfg(not(debug_assertions))]
-    let router = router.merge(frontend::router()); // add frontend (/ui) routes only for release
+    #[cfg(feature = "embedded-frontend")]
+    let router = router.merge(frontend::router());
     let router = router.merge(note_api_router);
     let router = router.layer(filter_chain);
 

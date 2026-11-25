@@ -1,3 +1,9 @@
+//! This example demonstrate how to use password hasher and verifier.
+//!
+//! ```bash
+//! cargo run --example password_hasher_verify --features password --package user-password-auth
+//! ```
+//!
 use argon2::Argon2;
 use std::num::NonZeroUsize;
 use tokio::runtime::Handle;

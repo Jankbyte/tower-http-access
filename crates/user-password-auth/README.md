@@ -1,6 +1,6 @@
 # Username/password auth abstractions
 
-Abstractions for implementing username/password authentication in HTTP-based
+Abstractions for implementing username/password authentication (like *basic*, *form-login*) in HTTP-based
 applications, including HTTP Basic authentication and form login.
 
 # Base abstractions
@@ -15,7 +15,7 @@ The default/demo implementation [`UserDetailAuthenticationProvider`] can be enab
 The feature `password` will enable [`AsyncPasswordHasher`]/[`AsyncPasswordVerifier`] - abstractions for hashing and
 verifing passwords.
 
-It has base implementation [`AsyncStringPasswordManager`] that wraps *[password-hash](https://docs.rs/password-hash/latest/password_hash/)* implementations (like *[argon2](https://docs.rs/argon2/latest/argon2/)*).
+It has base implementation [`PlainHashPasswordManager`] for testing and concepts. For production usage recommend [`AsyncStringPasswordManager`] that wraps *[password-hash](https://docs.rs/password-hash/latest/password_hash/)* implementations (like *[argon2](https://docs.rs/argon2/latest/argon2/)*).
 
 # Features
 
@@ -36,3 +36,4 @@ Available features:
 [`AsyncPasswordHasher`]: crate::AsyncPasswordHasher
 [`AsyncPasswordVerifier`]: crate::AsyncPasswordVerifier
 [`AsyncStringPasswordManager`]: crate::AsyncStringPasswordManager
+[`PlainHashPasswordManager`]: crate::PlainHashPasswordManager

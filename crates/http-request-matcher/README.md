@@ -1,24 +1,21 @@
-# http-request-matcher
+# HTTP-request matcher
 
-Synchronous HTTP request matching for routing, middleware selection, and policies.
-Matchers inspect `http::request::Parts` without consuming the request body.
+The collection of HTTP-request matchers for matching [`Parts`]. It can be used
+with components for filtering incoming HTTP-requests.
 
-- [`RequestMatcher`] - shared matching interface, with support for `Arc`.
-- [`PathPatternRequestMatcher`] - compiled path patterns with optional method restrictions.
-- [`MediaTypeRequestMatcher`] - matching against the request's `Accept` headers.
-- [`OrRequestMatcher`] - combines two matchers with short-circuit evaluation.
-- [`AnyRequestMatcher`] - matches every request.
+Inspired by [Spring security RequestMatcher].
 
-```rust
-use http::{Method, Request};
-use http_request_matcher::{RequestMatcher, PathPatternRequestMatcher};
+# Features
 
-let matcher = PathPatternRequestMatcher::new("/notes/{id}")?
-    .with_method(Method::GET);
-let (parts, _) = Request::builder().uri("/notes/42").body(())?.into_parts();
-assert!(matcher.matches(&parts));
-# Ok::<(), Box<dyn std::error::Error>>(())
-```
+Available features:
 
-Matchers select behavior; they do not authenticate requests or grant access.
-The crate has no dependency on Tower or an authentication library.
+| Name             | Description                           |
+|------------------|---------------------------------------|
+| `media_type`     | Enable [`MediaTypeRequestMatcher`].   |
+| `path` (default) | Enable [`PathPatternRequestMatcher`]. |
+
+
+[`MediaTypeRequestMatcher`]: crate::MediaTypeRequestMatcher
+[`PathPatternRequestMatcher`]: crate::PathPatternRequestMatcher
+[`Parts`]: https://docs.rs/http/latest/http/request/struct.Parts.html
+[Spring security request matchers]: https://docs.spring.io/spring-security/reference/api/java/org/springframework/security/web/util/matcher/RequestMatcher.html
