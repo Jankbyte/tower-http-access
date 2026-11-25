@@ -195,7 +195,7 @@ where
     S: Service<Request<B>, Response = Response<R>> + Clone + Send + 'static,
     S::Future: Send + 'static,
     S::Error: Send + 'static,
-    P: UsernamePasswordAuthenticationProvider + Clone + 'static,
+    P: UsernamePasswordAuthenticationProvider + Clone + Send + Sync + 'static,
     P::Authentication: Send + 'static,
     P::Error: Send + Sync + 'static,
     M: RequestMatcher + Clone + 'static,

@@ -6,7 +6,7 @@ use std::{error::Error, sync::Arc};
 ///
 /// `Ok(Some(authentication))` means the credentials are valid, `Ok(None)` means they are invalid,
 /// and `Err(error)` represents an internal backend failure.
-pub trait UsernamePasswordAuthenticationProvider: Send + Sync {
+pub trait UsernamePasswordAuthenticationProvider {
     /// Identity produced by successful authentication.
     type Authentication;
     /// Internal authentication backend error.
@@ -50,7 +50,7 @@ mod tests {
         }
     }
     impl Error for LocalError {}
-    struct Provider;
+    struct Provider(Rc<()>);
     impl UsernamePasswordAuthenticationProvider for Provider {
         type Authentication = LocalIdentity;
         type Error = LocalError;
@@ -58,12 +58,13 @@ mod tests {
             &'a self,
             _: &'a Credentials,
         ) -> BoxFuture<'a, Result<Option<LocalIdentity>, LocalError>> {
+            assert_eq!(Rc::strong_count(&self.0), 1);
             Box::pin(async { Ok(Some(LocalIdentity(Rc::new(())))) })
         }
     }
     #[tokio::test]
     async fn provider_accepts_non_clone_non_send_identity_and_local_error() {
-        let identity = Provider
+        let identity = Provider(Rc::new(()))
             .authenticate(&Credentials::new("user", "password"))
             .await
             .unwrap()

@@ -44,7 +44,7 @@ async fn run<P, M, H, F>(
     request: Request<Full<Bytes>>,
 ) -> Response<Bytes>
 where
-    P: UsernamePasswordAuthenticationProvider + Clone + 'static,
+    P: UsernamePasswordAuthenticationProvider + Clone + Send + Sync + 'static,
     P::Authentication: Send + 'static,
     P::Error: Send + Sync + 'static,
     M: RequestMatcher + Clone + 'static,
@@ -332,7 +332,9 @@ async fn shared_trait_objects_support_non_clone_components() {
         }
     }
     let provider: Arc<
-        dyn UsernamePasswordAuthenticationProvider<Authentication = String, Error = std::io::Error>,
+        dyn UsernamePasswordAuthenticationProvider<Authentication = String, Error = std::io::Error>
+            + Send
+            + Sync,
     > = Arc::new(SharedProvider);
     let matcher: Arc<dyn RequestMatcher> = Arc::new(LoginMatcher);
     let handlers = Arc::new(Handlers(AtomicUsize::new(0)));

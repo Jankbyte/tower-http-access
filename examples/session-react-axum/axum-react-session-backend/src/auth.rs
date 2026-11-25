@@ -27,6 +27,8 @@ where
             Authentication = UserDetail,
             Error: Send + Sync + 'static,
         > + Clone
+        + Send
+        + Sync
         + 'static,
 {
     let login = create_form_login_layer(session_auth_key, provider)?.layer(service_fn(
