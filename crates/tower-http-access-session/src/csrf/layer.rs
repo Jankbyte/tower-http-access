@@ -276,6 +276,7 @@ where
     S::Future: Send + 'static,
     S::Error: Send + 'static,
     R: CsrfTokenRepository + Clone + 'static,
+    R::Error: Send,
     M: RequestMatcher + Clone + 'static,
     H: CsrfFailureHandler<R::Error> + Clone + 'static,
     B: http_body::Body<Data = Bytes> + Send + 'static,

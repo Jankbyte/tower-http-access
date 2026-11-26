@@ -274,6 +274,7 @@ request extensions. A login page can render it without JavaScript:
 fn login_app<R>(repository: R) -> axum::Router
 where
     R: tower_http_access_session::csrf::CsrfTokenRepository + Clone + 'static,
+    R::Error: Send,
 {
     use axum::{extract::Extension, response::Html, routing::get, Router};
     use tower_http_access_session::csrf::{CsrfLayer, CsrfToken};

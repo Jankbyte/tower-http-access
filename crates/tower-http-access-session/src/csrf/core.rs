@@ -23,7 +23,7 @@ pub trait CsrfTokenRepository: Send + Sync {
     /// An operational failure, such as unavailable storage, invalid stored data,
     /// or a failure to obtain secure randomness. Missing, expired, or mismatched
     /// tokens are not repository errors.
-    type Error: StdError + Send + Sync + 'static;
+    type Error: StdError;
 
     /// Generate a fresh, unpredictable token and its header and form field names.
     ///
@@ -81,5 +81,46 @@ impl<R: CsrfTokenRepository + ?Sized> CsrfTokenRepository for std::sync::Arc<R> 
         token: Option<&'a CsrfToken>,
     ) -> BoxFuture<'a, Result<(), Self::Error>> {
         self.as_ref().save_token(request, token)
+    }
+}
+
+#[cfg(test)]
+mod relaxed_error_tests {
+    use super::*;
+    use std::{fmt, rc::Rc};
+    #[derive(Debug)]
+    struct LocalError(Rc<()>);
+    impl fmt::Display for LocalError {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            write!(f, "local error ({})", Rc::strong_count(&self.0))
+        }
+    }
+    impl StdError for LocalError {}
+    struct Repository;
+    impl CsrfTokenRepository for Repository {
+        type Error = LocalError;
+        fn generate_token(&self) -> Result<CsrfToken, LocalError> {
+            Err(LocalError(Rc::new(())))
+        }
+        fn load_token<'a>(
+            &'a self,
+            _: &'a Parts,
+        ) -> BoxFuture<'a, Result<Option<CsrfToken>, LocalError>> {
+            Box::pin(async { Err(LocalError(Rc::new(()))) })
+        }
+        fn save_token<'a>(
+            &'a self,
+            _: &'a Parts,
+            _: Option<&'a CsrfToken>,
+        ) -> BoxFuture<'a, Result<(), LocalError>> {
+            Box::pin(async { Err(LocalError(Rc::new(()))) })
+        }
+    }
+    #[tokio::test]
+    async fn repository_accepts_non_send_non_sync_errors() {
+        let (parts, _) = http::Request::new(()).into_parts();
+        assert!(Repository.generate_token().is_err());
+        assert!(Repository.load_token(&parts).await.is_err());
+        assert!(Repository.save_token(&parts, None).await.is_err());
     }
 }
