@@ -185,7 +185,7 @@ pub trait RequestAuthenticator: Send + Sync {
     /// The result of success authentication.
     ///
     /// For example, it may username or session ID.
-    type Authentication: Clone + Send + Sync + 'static;
+    type Authentication;
 
     /// Authenticate target request and get result.
     fn authenticate<'a>(
@@ -232,7 +232,6 @@ impl<T, F, A> RequestAuthenticator for MapAuthentication<T, F>
 where
     T: RequestAuthenticator,
     F: Fn(T::Authentication) -> A + Send + Sync,
-    A: Clone + Send + Sync + 'static,
 {
     type Authentication = A;
 
@@ -265,7 +264,6 @@ impl<F, Fut, A> RequestAuthenticator for F
 where
     F: Fn(&Parts) -> Fut + Send + Sync,
     Fut: Future<Output = Result<AuthenticationAttempt<A>, AuthenticatorError>> + Send + 'static,
-    A: Clone + Send + Sync + 'static,
 {
     type Authentication = A;
 

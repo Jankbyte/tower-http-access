@@ -92,7 +92,6 @@ impl<P> BasicRequestAuthenticator<P> {
 impl<P> RequestAuthenticator for BasicRequestAuthenticator<P>
 where
     P: UsernamePasswordAuthenticationProvider + Send + Sync,
-    P::Authentication: Clone + Send + Sync + 'static,
     P::Error: Send + Sync + 'static,
 {
     type Authentication = P::Authentication;

@@ -119,3 +119,20 @@ async fn arc_authenticators_forward_attempts_errors_and_request_metadata() {
         check(erased, attempt).await;
     }
 }
+
+#[tokio::test]
+async fn authenticator_and_mapper_accept_non_send_non_clone_identities() {
+    use std::rc::Rc;
+    struct Identity(Rc<()>);
+    let authenticator = |_: &http::request::Parts| async {
+        Ok(AuthenticationAttempt::Authenticated(Identity(Rc::new(()))))
+    };
+    let mapped = authenticator.map(|identity: Identity| identity);
+    let (parts, _) = http::Request::new(()).into_parts();
+    match mapped.authenticate(&parts).await.unwrap() {
+        AuthenticationAttempt::Authenticated(identity) => {
+            assert_eq!(Rc::strong_count(&identity.0), 1)
+        }
+        _ => panic!("expected identity"),
+    }
+}

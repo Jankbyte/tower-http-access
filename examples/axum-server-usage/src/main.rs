@@ -65,6 +65,7 @@ fn create_security_layer<A, S, B, R>(
                  + 'static,
 > + Clone
 where
+    A::Authentication: Clone + Send + Sync + 'static,
     A: RequestAuthenticator + AuthenticationEntryPoint + Clone + 'static,
     B: Send + 'static,
     R: From<bytes::Bytes> + 'static,

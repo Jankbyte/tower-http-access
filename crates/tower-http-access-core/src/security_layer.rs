@@ -97,6 +97,8 @@ struct Components<A, P, H, E, R, C> {
 #[cfg(feature = "authorizers")]
 impl<A: RequestAuthenticator>
     SecurityLayer<A, AuthenticatedAuthorizationProvider<A::Authentication>>
+where
+    A::Authentication: Send + Sync,
 {
     /// Require successful authentication without additional authorization checks.
     /// Available with the default-enabled `authorizers` feature.
@@ -336,6 +338,7 @@ where
     ResBody: 'static,
     R: SecurityResponseAdapter<ResBody> + Clone + Send + Sync + 'static,
     A: RequestAuthenticator + Clone + 'static,
+    A::Authentication: Send,
     P: AuthorizationProvider<Authentication = A::Authentication> + Clone + 'static,
     P::Error: 'static,
     H: AuthorizationFailureHandler<P::Error>,
