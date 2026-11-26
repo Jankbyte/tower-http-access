@@ -16,9 +16,9 @@ use std::{marker::PhantomData, sync::Arc};
 ///
 pub trait AuthorizationProvider: Send + Sync {
     /// The authentication type.
-    type Authentication: Send + Sync;
+    type Authentication;
     /// Error produced by `authorize` method.
-    type Error: std::error::Error + Send + Sync;
+    type Error: std::error::Error;
 
     fn authorize<'a>(
         &'a self,
@@ -99,7 +99,7 @@ pub trait AuthorizationProviderExt: AuthorizationProvider + Sized {
     /// need a custom provider implementation.
     fn map<A, F>(self, mapper: F) -> MapAuthorization<Self, F, A>
     where
-        A: Send + Sync,
+        A: Sync,
         F: Fn(&A) -> Self::Authentication + Send + Sync,
     {
         MapAuthorization {
@@ -132,7 +132,8 @@ impl<P: Clone, F: Clone, A> Clone for MapAuthorization<P, F, A> {
 impl<P, F, A> AuthorizationProvider for MapAuthorization<P, F, A>
 where
     P: AuthorizationProvider,
-    A: Send + Sync,
+    P::Authentication: Send,
+    A: Sync,
     F: Fn(&A) -> P::Authentication + Send + Sync,
 {
     type Authentication = A;
@@ -228,5 +229,48 @@ impl<E> AuthorizationFailureHandler<E> for DefaultAuthorizationFailureHandler {
             AuthorizationFailure::Provider(_) => StatusCode::INTERNAL_SERVER_ERROR,
             AuthorizationFailure::Denied(AuthorizationDenial::Custom(response)) => return response,
         })
+    }
+}
+
+#[cfg(test)]
+mod relaxed_bounds_tests {
+    use super::*;
+    use std::{fmt, rc::Rc};
+    struct Provider;
+    #[derive(Debug)]
+    struct LocalError(Rc<()>);
+    impl fmt::Display for LocalError {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            write!(f, "local error ({})", Rc::strong_count(&self.0))
+        }
+    }
+    impl std::error::Error for LocalError {}
+    impl AuthorizationProvider for Provider {
+        type Authentication = Rc<()>;
+        type Error = LocalError;
+        fn authorize<'a>(
+            &'a self,
+            identity: Option<&'a Rc<()>>,
+            _: &'a Parts,
+        ) -> BoxFuture<'a, Result<AuthorizationDecision, LocalError>> {
+            let authenticated = identity.is_some();
+            Box::pin(async move {
+                if authenticated {
+                    Ok(AuthorizationDecision::Allow)
+                } else {
+                    Err(LocalError(Rc::new(())))
+                }
+            })
+        }
+    }
+    #[tokio::test]
+    async fn accepts_local_identity_and_error() {
+        let (parts, _) = http::Request::new(()).into_parts();
+        let identity = Rc::new(());
+        assert!(matches!(
+            Provider.authorize(Some(&identity), &parts).await,
+            Ok(AuthorizationDecision::Allow)
+        ));
+        assert!(Provider.authorize(None, &parts).await.is_err());
     }
 }

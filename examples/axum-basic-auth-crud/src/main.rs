@@ -86,7 +86,8 @@ async fn get_authenticated(maybe_user_detail: Option<Authenticated<Auth<UserDeta
     }
 }
 
-fn create_authorizer() -> impl AuthorizationProvider<Authentication = Auth<UserDetail>> {
+fn create_authorizer() -> impl AuthorizationProvider<Authentication = Auth<UserDetail>, Error: Send>
+{
     RequestAuthorizationProvider::builder()
         .method_matchers(Method::GET, "/v1/notes/1")
         .permit_all() // any user can read first note
@@ -155,7 +156,7 @@ where
         + Clone
         + 'static,
     P: AuthorizationProvider<Authentication = Auth<UserDetail>> + Clone + 'static,
-    P::Error: 'static,
+    P::Error: Send + 'static,
 {
     SecurityLayer::new_with_entry_point(authenticator, authorizer)
 }

@@ -83,7 +83,8 @@ async fn create_app() -> Result<Router, Box<dyn StdError + Send + Sync>> {
     Ok(app)
 }
 
-fn create_authorizer() -> impl AuthorizationProvider<Authentication = SessionIdentity> {
+fn create_authorizer() -> impl AuthorizationProvider<Authentication = SessionIdentity, Error: Send>
+{
     RequestAuthorizationProvider::builder()
         .method_matchers(Method::POST, LOGIN_PAGE_PATH)
         .anonymous() // do not allow authentication while authenticated

@@ -25,7 +25,7 @@ struct ProviderAdapter<P>(P);
 impl<P> AuthorizationProvider for ProviderAdapter<P>
 where
     P: AuthorizationProvider,
-    P::Error: 'static,
+    P::Error: Send + Sync + 'static,
 {
     type Authentication = P::Authentication;
     type Error = AllAuthorizationError;
@@ -35,13 +35,11 @@ where
         authentication: Option<&'a Self::Authentication>,
         request: &'a Parts,
     ) -> BoxFuture<'a, Result<AuthorizationDecision, Self::Error>> {
+        let future = self.0.authorize(authentication, request);
         Box::pin(async move {
-            self.0
-                .authorize(authentication, request)
-                .await
-                .map_err(|error| AllAuthorizationError {
-                    source: Box::new(error),
-                })
+            future.await.map_err(|error| AllAuthorizationError {
+                source: Box::new(error),
+            })
         })
     }
 }
@@ -92,7 +90,7 @@ impl<A> AllAuthorizationProviderBuilder<A> {
     pub fn with<P>(mut self, provider: P) -> Self
     where
         P: AuthorizationProvider<Authentication = A> + 'static,
-        P::Error: 'static,
+        P::Error: Send + Sync + 'static,
     {
         self.providers.push(Box::new(ProviderAdapter(provider)));
         self

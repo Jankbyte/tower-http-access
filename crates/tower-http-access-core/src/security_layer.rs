@@ -340,7 +340,7 @@ where
     A: RequestAuthenticator + Clone + 'static,
     A::Authentication: Send,
     P: AuthorizationProvider<Authentication = A::Authentication> + Clone + 'static,
-    P::Error: 'static,
+    P::Error: Send + 'static,
     H: AuthorizationFailureHandler<P::Error>,
     E: AuthenticationEntryPoint + Clone,
     C: AuthenticationSuccessHandler<A::Authentication> + Clone,

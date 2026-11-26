@@ -64,7 +64,7 @@ struct RuleProviderAdapter<M>(M);
 impl<M> AuthorizationProvider for RuleProviderAdapter<M>
 where
     M: AuthorizationProvider,
-    M::Error: 'static,
+    M::Error: Send + Sync + 'static,
 {
     type Authentication = M::Authentication;
     type Error = RequestAuthorizationError;
@@ -74,13 +74,11 @@ where
         authentication: Option<&'a Self::Authentication>,
         request: &'a Parts,
     ) -> BoxFuture<'a, Result<AuthorizationDecision, Self::Error>> {
+        let future = self.0.authorize(authentication, request);
         Box::pin(async move {
-            self.0
-                .authorize(authentication, request)
-                .await
-                .map_err(|error| RequestAuthorizationError {
-                    source: Box::new(error),
-                })
+            future.await.map_err(|error| RequestAuthorizationError {
+                source: Box::new(error),
+            })
         })
     }
 }
@@ -239,7 +237,7 @@ impl<A: Send + Sync + 'static> PendingRuleBuilder<A> {
     pub fn access<M>(self, manager: M) -> RequestAuthorizationBuilder<A>
     where
         M: AuthorizationProvider<Authentication = A> + 'static,
-        M::Error: 'static,
+        M::Error: Send + Sync + 'static,
     {
         let mut builder = self.builder;
         builder
