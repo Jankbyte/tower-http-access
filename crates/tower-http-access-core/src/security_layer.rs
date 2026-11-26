@@ -341,7 +341,7 @@ where
     A::Authentication: Send,
     P: AuthorizationProvider<Authentication = A::Authentication> + Clone + 'static,
     P::Error: Send + 'static,
-    H: AuthorizationFailureHandler<P::Error>,
+    H: AuthorizationFailureHandler<P::Error> + Clone + 'static,
     E: AuthenticationEntryPoint + Clone + 'static,
     C: AuthenticationSuccessHandler<A::Authentication> + Clone,
 {

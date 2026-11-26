@@ -200,13 +200,13 @@ pub enum AuthorizationFailure<E> {
 }
 
 /// Renders authorization failures using borrowed request metadata and a byte-backed response.
-pub trait AuthorizationFailureHandler<E>: Clone + Send + Sync + 'static {
+pub trait AuthorizationFailureHandler<E>: Send + Sync {
     fn handle(&self, request: &Parts, failure: AuthorizationFailure<E>) -> SecurityResponse;
 }
 
 impl<E, F> AuthorizationFailureHandler<E> for F
 where
-    F: Fn(&Parts, AuthorizationFailure<E>) -> SecurityResponse + Clone + Send + Sync + 'static,
+    F: Fn(&Parts, AuthorizationFailure<E>) -> SecurityResponse + Send + Sync,
 {
     fn handle(&self, request: &Parts, failure: AuthorizationFailure<E>) -> SecurityResponse {
         self(request, failure)
@@ -272,5 +272,41 @@ mod relaxed_bounds_tests {
             Ok(AuthorizationDecision::Allow)
         ));
         assert!(Provider.authorize(None, &parts).await.is_err());
+    }
+}
+
+#[cfg(test)]
+mod borrowed_failure_handler_tests {
+    use super::*;
+    use std::{convert::Infallible, rc::Rc};
+
+    struct BorrowedHandler<'a>(&'a str);
+    impl<E> AuthorizationFailureHandler<E> for BorrowedHandler<'_> {
+        fn handle(&self, _: &Parts, _: AuthorizationFailure<E>) -> SecurityResponse {
+            assert_eq!(self.0, "denied");
+            empty_response(StatusCode::FORBIDDEN)
+        }
+    }
+
+    #[test]
+    fn handlers_can_borrow_local_data_and_consume_local_errors() {
+        let message = String::from("denied");
+        let (parts, _) = http::Request::new(()).into_parts();
+        let handler = BorrowedHandler(&message);
+        let response = handler.handle(&parts, AuthorizationFailure::Provider(Rc::new(())));
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        let closure = |_: &Parts, _: AuthorizationFailure<Infallible>| {
+            assert_eq!(message, "denied");
+            empty_response(StatusCode::FORBIDDEN)
+        };
+        assert_eq!(
+            closure
+                .handle(
+                    &parts,
+                    AuthorizationFailure::Denied(AuthorizationDenial::InsufficientPermissions)
+                )
+                .status(),
+            StatusCode::FORBIDDEN
+        );
     }
 }
