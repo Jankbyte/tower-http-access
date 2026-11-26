@@ -124,22 +124,6 @@ async fn cookie_session_round_trip_and_logout() {
 }
 
 #[tokio::test]
-async fn initialization_creates_anonymous_session_without_rewriting_existing_session() {
-    let store = Arc::new(MemoryStore::default());
-    let session = Session::new(None, Arc::clone(&store), None);
-    initialize_session(&session).await.unwrap();
-    assert!(session.get::<String>("user_id").await.unwrap().is_none());
-    session.save().await.unwrap();
-    let id = session.id();
-    let loaded = Session::new(id, store, None);
-    initialize_session(&loaded).await.unwrap();
-    assert_eq!(loaded.id(), id);
-    assert!(!loaded.is_modified());
-    loaded.flush().await.unwrap();
-    assert!(loaded.is_empty().await);
-}
-
-#[tokio::test]
 async fn login_entry_point_redirects_only_when_authentication_is_required() {
     for path in ["/login", "/account/login?next=%2Fprivate"] {
         let auth = Arc::new(SessionRequestAuthenticator::new(Users));

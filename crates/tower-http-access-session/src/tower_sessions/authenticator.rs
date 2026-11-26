@@ -11,21 +11,6 @@ type SessionIdExtractor<Id> = dyn Fn(Session) -> BoxFuture<'static, Result<Optio
     + Send
     + Sync;
 
-/// Initializes an anonymous session without establishing an authenticated identity.
-///
-/// Call before the inner handler, after `SessionManagerLayer` has installed the
-/// session. A reserved marker makes a new session nonempty; the session manager
-/// then saves it and sets its cookie on eligible responses. Sessions already carrying the marker are
-/// not modified. This does not eagerly allocate an ID or save the session itself.
-/// Calling before the handler also allows logout to flush the session normally.
-pub async fn initialize_session(session: &Session) -> Result<(), tower_sessions::session::Error> {
-    const KEY: &str = "tower_http_access_session.initialized";
-    if session.get::<bool>(KEY).await?.is_none() {
-        session.insert(KEY, true).await?;
-    }
-    Ok(())
-}
-
 /// Loads a current identity from the identifier stored in a server-side session.
 ///
 /// This provider is separate from the `tower-sessions` storage backend. The session
@@ -47,9 +32,9 @@ pub async fn initialize_session(session: &Session) -> Result<(), tower_sessions:
 /// To use a complete identity already stored in the session without another lookup,
 /// use [`SessionStoredIdentity`](crate::tower_sessions::SessionStoredIdentity).
 pub trait SessionIdentityProvider: Send + Sync {
-    type Id: Send;
-    type Identity: Clone + Send + Sync + 'static;
-    type Error: Error + Send + Sync + 'static;
+    type Id;
+    type Identity;
+    type Error: Error;
 
     /// Look up the current identity using an identifier extracted from the session.
     ///
@@ -118,7 +103,10 @@ fn internal(error: impl Error + Send + Sync + 'static) -> AuthenticatorError {
     AuthenticatorError::internal(error)
 }
 
-impl<P: SessionIdentityProvider> RequestAuthenticator for SessionRequestAuthenticator<P> {
+impl<P: SessionIdentityProvider> RequestAuthenticator for SessionRequestAuthenticator<P>
+where
+    P::Error: Send + Sync + 'static,
+{
     type Authentication = P::Identity;
 
     fn authenticate<'a>(
@@ -160,3 +148,43 @@ impl<P: SessionIdentityProvider> RequestAuthenticator for SessionRequestAuthenti
 #[cfg(test)]
 #[path = "tests.rs"]
 mod tests;
+
+#[cfg(test)]
+mod relaxed_bounds_tests {
+    use super::*;
+    use std::{fmt, rc::Rc};
+
+    struct Provider;
+    struct Identity(Rc<()>);
+    #[derive(Debug)]
+    struct LocalError(Rc<()>);
+    impl fmt::Display for LocalError {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            write!(f, "local error ({})", Rc::strong_count(&self.0))
+        }
+    }
+    impl Error for LocalError {}
+    impl SessionIdentityProvider for Provider {
+        type Id = Rc<()>;
+        type Identity = Identity;
+        type Error = LocalError;
+        fn load_identity<'a>(
+            &'a self,
+            id: Rc<()>,
+        ) -> BoxFuture<'a, Result<Option<Identity>, LocalError>> {
+            let exists = Rc::strong_count(&id) > 0;
+            Box::pin(async move {
+                if exists {
+                    Ok(Some(Identity(Rc::new(()))))
+                } else {
+                    Err(LocalError(Rc::new(())))
+                }
+            })
+        }
+    }
+    #[tokio::test]
+    async fn provider_accepts_local_ids_identities_and_errors() {
+        let identity = Provider.load_identity(Rc::new(())).await.unwrap().unwrap();
+        assert_eq!(Rc::strong_count(&identity.0), 1);
+    }
+}

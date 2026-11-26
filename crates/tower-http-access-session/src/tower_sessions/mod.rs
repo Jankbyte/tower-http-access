@@ -1,5 +1,5 @@
 mod authenticator;
-pub use authenticator::{SessionIdentityProvider, SessionRequestAuthenticator, initialize_session};
+pub use authenticator::{SessionIdentityProvider, SessionRequestAuthenticator};
 
 mod stored_identity;
 pub use stored_identity::SessionStoredIdentity;
