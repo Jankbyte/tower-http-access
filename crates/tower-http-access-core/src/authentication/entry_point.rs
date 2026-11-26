@@ -16,7 +16,7 @@ use std::{future::Future, sync::Arc};
 ///
 /// For example, if endpoint requires `Basic` authentication, but credentials (header) is not provided,
 /// service will execute this endpoint, that returns response with `WWW-Authenticate` header.
-pub trait AuthenticationEntryPoint: Send + Sync + 'static {
+pub trait AuthenticationEntryPoint: Send + Sync {
     fn commence<'a>(&'a self, request: &'a Parts) -> BoxFuture<'a, SecurityResponse>;
 }
 
@@ -26,7 +26,7 @@ pub trait AuthenticationEntryPoint: Send + Sync + 'static {
 /// before entering its async block; custom trait implementations may borrow it.
 impl<F, Fut> AuthenticationEntryPoint for F
 where
-    F: Fn(&Parts) -> Fut + Send + Sync + 'static,
+    F: Fn(&Parts) -> Fut + Send + Sync,
     Fut: Future<Output = SecurityResponse> + Send + 'static,
 {
     fn commence<'a>(&'a self, request: &'a Parts) -> BoxFuture<'a, SecurityResponse> {
@@ -58,3 +58,37 @@ where
 pub use super::delegating::{
     DelegatingAuthenticationEntryPoint, DelegatingAuthenticationEntryPointBuilder,
 };
+
+#[cfg(test)]
+mod borrowed_tests {
+    use super::*;
+
+    struct BorrowedEntryPoint<'a>(&'a str);
+    impl AuthenticationEntryPoint for BorrowedEntryPoint<'_> {
+        fn commence<'a>(&'a self, _: &'a Parts) -> BoxFuture<'a, SecurityResponse> {
+            Box::pin(async move {
+                assert_eq!(self.0, "local challenge");
+                empty_response(StatusCode::UNAUTHORIZED)
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn entry_points_and_closures_can_borrow_local_data() {
+        let message = String::from("local challenge");
+        let (parts, _) = http::Request::new(()).into_parts();
+        let entry = BorrowedEntryPoint(&message);
+        assert_eq!(
+            entry.commence(&parts).await.status(),
+            StatusCode::UNAUTHORIZED
+        );
+        let closure = |_: &Parts| {
+            assert_eq!(message, "local challenge");
+            async { empty_response(StatusCode::UNAUTHORIZED) }
+        };
+        assert_eq!(
+            closure.commence(&parts).await.status(),
+            StatusCode::UNAUTHORIZED
+        );
+    }
+}

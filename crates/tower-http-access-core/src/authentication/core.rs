@@ -252,7 +252,7 @@ where
 impl<T, F> AuthenticationEntryPoint for MapAuthentication<T, F>
 where
     T: AuthenticationEntryPoint,
-    F: Send + Sync + 'static,
+    F: Send + Sync,
 {
     fn commence<'a>(&'a self, request: &'a Parts) -> BoxFuture<'a, SecurityResponse> {
         self.inner.commence(request)

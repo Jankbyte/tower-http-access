@@ -39,7 +39,7 @@ impl DelegatingAuthenticationEntryPointBuilder {
     pub fn entry_point<M, E>(mut self, matcher: M, entry_point: E) -> Self
     where
         M: RequestMatcher + 'static,
-        E: AuthenticationEntryPoint,
+        E: AuthenticationEntryPoint + 'static,
     {
         self.entries
             .push((Arc::new(matcher), Arc::new(entry_point)));
@@ -47,7 +47,7 @@ impl DelegatingAuthenticationEntryPointBuilder {
     }
 
     /// Complete configuration with an explicit fallback.
-    pub fn fallback<E: AuthenticationEntryPoint>(
+    pub fn fallback<E: AuthenticationEntryPoint + 'static>(
         self,
         fallback: E,
     ) -> DelegatingAuthenticationEntryPoint {

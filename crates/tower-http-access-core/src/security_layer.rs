@@ -342,7 +342,7 @@ where
     P: AuthorizationProvider<Authentication = A::Authentication> + Clone + 'static,
     P::Error: Send + 'static,
     H: AuthorizationFailureHandler<P::Error>,
-    E: AuthenticationEntryPoint + Clone,
+    E: AuthenticationEntryPoint + Clone + 'static,
     C: AuthenticationSuccessHandler<A::Authentication> + Clone,
 {
     type Response = Response<ResBody>;
