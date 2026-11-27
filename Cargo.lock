@@ -669,7 +669,7 @@ dependencies = [
 
 [[package]]
 name = "http-request-matcher"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "http",
  "matchit",
@@ -1692,7 +1692,7 @@ checksum = "a2c754d6c33795a1c324727428e5a7dedb5b06195f9890bdbcba760d3e246563"
 
 [[package]]
 name = "user-password-auth"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "argon2",
  "futures-util",

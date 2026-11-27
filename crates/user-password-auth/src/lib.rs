@@ -13,7 +13,7 @@ pub use credentials::Credentials;
 #[cfg(feature = "password")]
 pub use password::{
     AsyncPasswordError, AsyncPasswordHasher, AsyncPasswordVerifier, AsyncStringPasswordManager,
-    PlainHashPasswordManager,
+    PasswordQueuePolicy, PlainHashPasswordManager,
 };
 #[cfg(feature = "user_details")]
 pub use user_detail::{

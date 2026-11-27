@@ -48,7 +48,7 @@ tracing = ["dep:tracing", "user-password-auth/tracing", "tower-http-access-core/
 default = ["tower_sessions"]
 tower_sessions = ["dep:tower-sessions"]
 form_login = ["dep:tower-http-access-form-login"]
-browser_matcher = ["dep:http-request-matcher", "session_matcher"]
+browser_matcher = ["dep:http-request-matcher", "session_matcher", "http-request-matcher/media_type"]
 session_matcher = ["dep:http-request-matcher"]
 csrf = [
     "dep:bytes", "dep:http-body", "dep:http-body-util",

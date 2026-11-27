@@ -1,14 +1,20 @@
-use std::{future::Future, num::NonZeroUsize, pin::Pin, sync::Arc};
+use std::{future::Future, num::NonZeroUsize, pin::Pin, sync::Arc, time::Duration};
 
 use password_hash::{PasswordHasher, PasswordVerifier, phc::PasswordHash};
 use tokio::runtime::Handle;
-use tokio::sync::Semaphore;
+use tokio::sync::{OwnedSemaphorePermit, Semaphore, TryAcquireError};
 
 type AsyncPasswordResult<T> = Result<T, AsyncPasswordError>;
 
 /// Errors list that occurrs while using [`AsyncPasswordVerifier`] and [`AsyncPasswordHasher`].
 #[derive(Debug, thiserror::Error)]
 pub enum AsyncPasswordError {
+    /// No capacity was available under the reject policy.
+    #[error("password manager is overloaded")]
+    Overloaded,
+    /// Waiting for password processing capacity exceeded the queue timeout.
+    #[error("password processing queue timed out")]
+    QueueTimeout,
     /// Error occurred when hashing password is failed.
     #[error("password hashing failed: {0}")]
     PasswordHash(#[from] password_hash::Error),
@@ -18,6 +24,18 @@ pub enum AsyncPasswordError {
     /// Error occurred when semaphore is closed.
     #[error("password concurrency limiter closed: {0}")]
     ConcurrencyLimiter(#[from] tokio::sync::AcquireError),
+}
+
+/// Controls waiting for capacity before a blocking password operation starts.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum PasswordQueuePolicy {
+    /// Wait indefinitely. This preserves the default behavior.
+    #[default]
+    Wait,
+    /// Limit queue waiting time; this does not cancel work already started.
+    Timeout(Duration),
+    /// Reject immediately when all permits are occupied.
+    Reject,
 }
 
 /// The password hasher that should be used by compontents for encoding
@@ -111,6 +129,7 @@ pub struct AsyncStringPasswordManager<H> {
     handle: Handle,
     hasher: H,
     semaphore: Arc<Semaphore>,
+    queue_policy: PasswordQueuePolicy,
 }
 
 impl<H> AsyncStringPasswordManager<H> {
@@ -120,6 +139,33 @@ impl<H> AsyncStringPasswordManager<H> {
             handle,
             hasher,
             semaphore: Arc::new(Semaphore::new(max_concurrent.get())),
+            queue_policy: PasswordQueuePolicy::Wait,
+        }
+    }
+
+    /// Configure queue admission. Clones share capacity but retain their own policy.
+    /// Timeout limits waiting duration, not the number of queued requests.
+    #[must_use]
+    pub fn queue_policy(mut self, policy: PasswordQueuePolicy) -> Self {
+        self.queue_policy = policy;
+        self
+    }
+
+    async fn acquire_permit(&self) -> AsyncPasswordResult<OwnedSemaphorePermit> {
+        let semaphore = Arc::clone(&self.semaphore);
+        match self.queue_policy {
+            PasswordQueuePolicy::Wait => Ok(semaphore.acquire_owned().await?),
+            PasswordQueuePolicy::Timeout(duration) => {
+                tokio::time::timeout(duration, semaphore.acquire_owned())
+                    .await
+                    .map_err(|_| AsyncPasswordError::QueueTimeout)?
+                    .map_err(Into::into)
+            }
+            PasswordQueuePolicy::Reject => match Arc::clone(&semaphore).try_acquire_owned() {
+                Ok(permit) => Ok(permit),
+                Err(TryAcquireError::NoPermits) => Err(AsyncPasswordError::Overloaded),
+                Err(TryAcquireError::Closed) => Ok(semaphore.acquire_owned().await?),
+            },
         }
     }
 }
@@ -181,13 +227,11 @@ where
         &'a self,
         password: &'a str,
     ) -> Pin<Box<dyn Future<Output = AsyncPasswordResult<String>> + Send + 'a>> {
-        let hasher = self.hasher.clone();
-        let handle = self.handle.clone();
-        let semaphore = Arc::clone(&self.semaphore);
-        let password = password.as_bytes().to_owned();
-
         Box::pin(async move {
-            let permit = semaphore.acquire_owned().await?;
+            let permit = self.acquire_permit().await?;
+            let hasher = self.hasher.clone();
+            let handle = self.handle.clone();
+            let password = password.as_bytes().to_owned();
             handle
                 .spawn_blocking(move || {
                     let _permit = permit;
@@ -212,14 +256,12 @@ where
         password: &'a str,
         password_hash: &'a str,
     ) -> Pin<Box<dyn Future<Output = AsyncPasswordResult<bool>> + Send + 'a>> {
-        let hasher = self.hasher.clone();
-        let handle = self.handle.clone();
-        let semaphore = Arc::clone(&self.semaphore);
-        let password = password.as_bytes().to_owned();
-        let password_hash = password_hash.to_owned();
-
         Box::pin(async move {
-            let permit = semaphore.acquire_owned().await?;
+            let permit = self.acquire_permit().await?;
+            let hasher = self.hasher.clone();
+            let handle = self.handle.clone();
+            let password = password.as_bytes().to_owned();
+            let password_hash = password_hash.to_owned();
             handle
                 .spawn_blocking(move || {
                     let _permit = permit;
@@ -255,5 +297,71 @@ mod tests {
         assert!(hash.starts_with("$argon2i$"));
         assert!(manager.matches("correct password", &hash).await.unwrap());
         assert!(!manager.matches("wrong password", &hash).await.unwrap());
+    }
+}
+
+#[cfg(test)]
+mod queue_tests {
+    use super::*;
+    use argon2::Argon2;
+
+    fn manager(policy: PasswordQueuePolicy) -> AsyncStringPasswordManager<Argon2<'static>> {
+        AsyncStringPasswordManager::new(
+            Handle::current(),
+            Argon2::default(),
+            NonZeroUsize::new(1).unwrap(),
+        )
+        .queue_policy(policy)
+    }
+
+    #[tokio::test]
+    async fn reject_applies_to_hashing_and_verification_and_clones_share_capacity() {
+        let manager = manager(PasswordQueuePolicy::Reject);
+        let permit = manager.acquire_permit().await.unwrap();
+        let clone = manager.clone();
+        assert!(matches!(
+            clone.hash_password("password").await,
+            Err(AsyncPasswordError::Overloaded)
+        ));
+        assert!(matches!(
+            clone.matches("password", "unused").await,
+            Err(AsyncPasswordError::Overloaded)
+        ));
+        drop(permit);
+        assert!(clone.acquire_permit().await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn timeout_and_closed_limiter_are_distinct() {
+        let manager = manager(PasswordQueuePolicy::Timeout(Duration::from_millis(1)));
+        let permit = manager.acquire_permit().await.unwrap();
+        assert!(matches!(
+            manager.hash_password("password").await,
+            Err(AsyncPasswordError::QueueTimeout)
+        ));
+        drop(permit);
+        manager.semaphore.close();
+        for policy in [
+            PasswordQueuePolicy::Wait,
+            PasswordQueuePolicy::Reject,
+            PasswordQueuePolicy::Timeout(Duration::from_secs(1)),
+        ] {
+            assert!(matches!(
+                manager.clone().queue_policy(policy).acquire_permit().await,
+                Err(AsyncPasswordError::ConcurrencyLimiter(_))
+            ));
+        }
+    }
+
+    #[tokio::test]
+    async fn default_waits_and_cancelled_waiter_does_not_consume_capacity() {
+        let manager = manager(PasswordQueuePolicy::default());
+        let permit = manager.acquire_permit().await.unwrap();
+        let mut waiting = Box::pin(manager.acquire_permit());
+        let mut context = std::task::Context::from_waker(std::task::Waker::noop());
+        assert!(waiting.as_mut().poll(&mut context).is_pending());
+        drop(waiting);
+        drop(permit);
+        assert!(manager.acquire_permit().await.is_ok());
     }
 }

@@ -26,13 +26,13 @@ repository = "https://github.com/Jankbyte/tower-http-access"
 [workspace.dependencies]
 include_dir = "0.7"
 mime_guess = "2"
-http-request-matcher = { version = "0.0.1", path = "crates/http-request-matcher" }
+http-request-matcher = { version = "0.0.2", path = "crates/http-request-matcher" }
 tower-http-access-core = { version = "0.0.1", path = "crates/tower-http-access-core" }
 tower-http-access-authorizers = { version = "0.0.1", path = "crates/tower-http-access-authorizers" }
 tower-http-access-basic = { version = "0.0.1", path = "crates/tower-http-access-basic" }
 tower-http-access-form-login = { version = "0.0.1", path = "crates/tower-http-access-form-login" }
 tower-http-access-session = { version = "0.0.1", path = "crates/tower-http-access-session" }
-user-password-auth = { version = "0.0.1", path = "crates/user-password-auth" }
+user-password-auth = { version = "0.0.2", path = "crates/user-password-auth" }
 
 criterion = "0.7"
 tower-sessions = { version = "0.15", default-features = false }
